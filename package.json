@@ -23,6 +23,8 @@
   },
   "devDependencies": {
     "@biomejs/biome": "2.3.6",
+    "@commitlint/cli": "^20.1.0",
+    "@commitlint/config-conventional": "^20.0.0",
     "@types/bun": "latest",
     "arktype": "^2.1.27",
     "lefthook": "^2.0.4",

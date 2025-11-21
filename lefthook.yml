@@ -1,12 +1,28 @@
 pre-commit:
-  jobs:
-    - run: bun x ultracite fix
-      glob: 
-        - "*.js"
-        - "*.jsx"
-        - "*.ts"
-        - "*.tsx"
-        - "*.json"
-        - "*.jsonc"
-        - "*.css"
+  parallel: true
+  commands:
+    lint-fix:
+      glob: "*.{js,jsx,ts,tsx,json,jsonc,css}"
+      run: bun x ultracite fix {staged_files}
       stage_fixed: true
+
+    typecheck:
+      glob: "*.{ts,tsx}"
+      run: bun run typecheck
+
+pre-push:
+  parallel: true
+  commands:
+    typecheck:
+      run: bun run typecheck
+
+    lint:
+      run: bun run lint
+
+    test:
+      run: bun test
+
+commit-msg:
+  commands:
+    commitlint:
+      run: bunx commitlint --edit {1}
