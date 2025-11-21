@@ -3,6 +3,7 @@ import type { QueryOptions } from "./query-options-types.js"
 import type {
   QueryTranslator,
   QueryTranslatorResult,
+  SQLiteBindValue,
 } from "./query-translator-types.js"
 import type { QueryFilter } from "./query-types.js"
 import type { SchemaDefinition, SchemaField } from "./schema-types.js"
@@ -96,6 +97,31 @@ export class SQLiteQueryTranslator<T extends Document>
   }
 
   /**
+   * Validates and converts a value to a SQLite bind parameter.
+   *
+   * @param value - The value to validate
+   * @returns The value as SQLiteBindValue
+   * @throws TypeError if value is not a valid SQLite bind type
+   *
+   * @internal
+   */
+  private toBindValue(value: unknown): SQLiteBindValue {
+    if (
+      value === null ||
+      typeof value === "string" ||
+      typeof value === "number" ||
+      typeof value === "boolean" ||
+      typeof value === "bigint" ||
+      value instanceof Uint8Array
+    ) {
+      return value
+    }
+    throw new TypeError(
+      `Invalid SQLite bind value: ${typeof value}. Expected string, number, boolean, null, bigint, or Uint8Array.`
+    )
+  }
+
+  /**
    * Translates a StrataDB query filter to parameterized SQLite SQL.
    *
    * @param filter - The query filter to translate
@@ -106,7 +132,7 @@ export class SQLiteQueryTranslator<T extends Document>
    * parameterized SQL. All user values are extracted into the params array.
    */
   translate(filter: QueryFilter<T>): QueryTranslatorResult {
-    const params: unknown[] = []
+    const params: SQLiteBindValue[] = []
 
     // Empty filter matches all documents
     if (!filter || Object.keys(filter).length === 0) {
@@ -130,7 +156,10 @@ export class SQLiteQueryTranslator<T extends Document>
    *
    * @internal
    */
-  private translateFilter(filter: QueryFilter<T>, params: unknown[]): string {
+  private translateFilter(
+    filter: QueryFilter<T>,
+    params: SQLiteBindValue[]
+  ): string {
     const conditions: string[] = []
 
     for (const [key, value] of Object.entries(filter)) {
@@ -156,27 +185,33 @@ export class SQLiteQueryTranslator<T extends Document>
   private translateFilterEntry(
     key: string,
     value: unknown,
-    params: unknown[]
+    params: SQLiteBindValue[]
   ): string | null {
     // Handle logical operators
     if (key === "$and") {
-      const andConditions = (value as readonly QueryFilter<T>[]).map((f) =>
-        this.translateFilter(f, params)
-      )
+      const filters = value as readonly QueryFilter<T>[]
+      if (filters.length === 0) {
+        return "1=1" // Empty $and matches everything (vacuous truth)
+      }
+      const andConditions = filters.map((f) => this.translateFilter(f, params))
       return `(${andConditions.join(" AND ")})`
     }
 
     if (key === "$or") {
-      const orConditions = (value as readonly QueryFilter<T>[]).map((f) =>
-        this.translateFilter(f, params)
-      )
+      const filters = value as readonly QueryFilter<T>[]
+      if (filters.length === 0) {
+        return "1=1" // Empty $or matches everything
+      }
+      const orConditions = filters.map((f) => this.translateFilter(f, params))
       return `(${orConditions.join(" OR ")})`
     }
 
     if (key === "$nor") {
-      const norConditions = (value as readonly QueryFilter<T>[]).map((f) =>
-        this.translateFilter(f, params)
-      )
+      const filters = value as readonly QueryFilter<T>[]
+      if (filters.length === 0) {
+        return "1=1" // Empty $nor matches everything
+      }
+      const norConditions = filters.map((f) => this.translateFilter(f, params))
       return `NOT (${norConditions.join(" OR ")})`
     }
 
@@ -202,7 +237,7 @@ export class SQLiteQueryTranslator<T extends Document>
   private translateFieldCondition(
     fieldName: keyof T,
     value: unknown,
-    params: unknown[]
+    params: SQLiteBindValue[]
   ): string | null {
     const fieldSql = this.resolveFieldName(fieldName)
 
@@ -213,7 +248,7 @@ export class SQLiteQueryTranslator<T extends Document>
       typeof value === "number" ||
       typeof value === "boolean"
     ) {
-      params.push(value)
+      params.push(this.toBindValue(value))
       return `${fieldSql} = ?`
     }
 
@@ -243,7 +278,7 @@ export class SQLiteQueryTranslator<T extends Document>
   private translateFieldOperators(
     fieldSql: string,
     operators: Record<string, unknown>,
-    params: unknown[]
+    params: SQLiteBindValue[]
   ): string {
     const conditions: string[] = []
 
@@ -276,32 +311,32 @@ export class SQLiteQueryTranslator<T extends Document>
     op: string
     value: unknown
     operators: Record<string, unknown>
-    params: unknown[]
+    params: SQLiteBindValue[]
   }): string | null {
     const { fieldSql, op, value, operators, params } = context
     switch (op) {
       case "$eq":
-        params.push(value)
+        params.push(this.toBindValue(value))
         return `${fieldSql} = ?`
 
       case "$ne":
-        params.push(value)
+        params.push(this.toBindValue(value))
         return `${fieldSql} != ?`
 
       case "$gt":
-        params.push(value)
+        params.push(this.toBindValue(value))
         return `${fieldSql} > ?`
 
       case "$gte":
-        params.push(value)
+        params.push(this.toBindValue(value))
         return `${fieldSql} >= ?`
 
       case "$lt":
-        params.push(value)
+        params.push(this.toBindValue(value))
         return `${fieldSql} < ?`
 
       case "$lte":
-        params.push(value)
+        params.push(this.toBindValue(value))
         return `${fieldSql} <= ?`
 
       case "$in":
@@ -321,17 +356,17 @@ export class SQLiteQueryTranslator<T extends Document>
         return null
 
       case "$like":
-        params.push(value)
+        params.push(this.toBindValue(value))
         return `${fieldSql} LIKE ?`
 
       case "$startsWith": {
-        const pattern = `${value}%`
+        const pattern = `${this.toBindValue(value)}%`
         params.push(pattern)
         return `${fieldSql} LIKE ?`
       }
 
       case "$endsWith": {
-        const pattern = `%${value}`
+        const pattern = `%${this.toBindValue(value)}`
         params.push(pattern)
         return `${fieldSql} LIKE ?`
       }
@@ -372,7 +407,7 @@ export class SQLiteQueryTranslator<T extends Document>
   private translateInOperator(
     fieldSql: string,
     values: unknown,
-    params: unknown[]
+    params: SQLiteBindValue[]
   ): string {
     const valuesArray = values as readonly unknown[]
     if (valuesArray.length === 0) {
@@ -382,7 +417,7 @@ export class SQLiteQueryTranslator<T extends Document>
 
     const placeholders = valuesArray.map(() => "?").join(", ")
     for (const v of valuesArray) {
-      params.push(v)
+      params.push(this.toBindValue(v))
     }
     return `${fieldSql} IN (${placeholders})`
   }
@@ -400,7 +435,7 @@ export class SQLiteQueryTranslator<T extends Document>
   private translateNotInOperator(
     fieldSql: string,
     values: unknown,
-    params: unknown[]
+    params: SQLiteBindValue[]
   ): string {
     const valuesArray = values as readonly unknown[]
     if (valuesArray.length === 0) {
@@ -410,7 +445,7 @@ export class SQLiteQueryTranslator<T extends Document>
 
     const placeholders = valuesArray.map(() => "?").join(", ")
     for (const v of valuesArray) {
-      params.push(v)
+      params.push(this.toBindValue(v))
     }
     return `${fieldSql} NOT IN (${placeholders})`
   }
@@ -435,7 +470,7 @@ export class SQLiteQueryTranslator<T extends Document>
     fieldSql: string,
     regex: unknown,
     options: unknown,
-    params: unknown[]
+    params: SQLiteBindValue[]
   ): string {
     // Extract pattern from RegExp or use string directly
     let pattern: string
@@ -507,7 +542,7 @@ export class SQLiteQueryTranslator<T extends Document>
   private translateAllOperator(
     fieldSql: string,
     values: unknown,
-    params: unknown[]
+    params: SQLiteBindValue[]
   ): string {
     const valuesArray = values as readonly unknown[]
     if (valuesArray.length === 0) {
@@ -517,7 +552,7 @@ export class SQLiteQueryTranslator<T extends Document>
 
     const conditions: string[] = []
     for (const v of valuesArray) {
-      params.push(v)
+      params.push(this.toBindValue(v))
       // Check if value exists in the array using json_each
       conditions.push(
         `EXISTS (SELECT 1 FROM json_each(${fieldSql}) WHERE json_each.value = ?)`
@@ -544,9 +579,9 @@ export class SQLiteQueryTranslator<T extends Document>
   private translateSizeOperator(
     fieldSql: string,
     size: unknown,
-    params: unknown[]
+    params: SQLiteBindValue[]
   ): string {
-    params.push(size)
+    params.push(this.toBindValue(size))
     return `json_array_length(${fieldSql}) = ?`
   }
 
@@ -568,7 +603,7 @@ export class SQLiteQueryTranslator<T extends Document>
   private translateElemMatchOperator(
     fieldSql: string,
     elementFilter: unknown,
-    params: unknown[]
+    params: SQLiteBindValue[]
   ): string {
     // Extract the nested filter conditions
     const filter = elementFilter as Record<string, unknown>
@@ -610,7 +645,7 @@ export class SQLiteQueryTranslator<T extends Document>
   private translateIndexOperator(
     fieldSql: string,
     indexFilter: unknown,
-    params: unknown[]
+    params: SQLiteBindValue[]
   ): string {
     const filter = indexFilter as { index: number; condition: unknown }
     const index = filter.index
@@ -730,7 +765,7 @@ export class SQLiteQueryTranslator<T extends Document>
    * ```
    */
   translateOptions(options: QueryOptions<T>): QueryTranslatorResult {
-    const params: unknown[] = []
+    const params: SQLiteBindValue[] = []
     const clauses: string[] = []
 
     // Handle sort (ORDER BY clause)
