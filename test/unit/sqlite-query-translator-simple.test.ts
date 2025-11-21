@@ -76,7 +76,7 @@ describe("SQLiteQueryTranslator - Comparison Operators", () => {
     const filter: QueryFilter<User> = { active: true }
     const result = userTranslator.translate(filter)
 
-    expect(result.sql).toBe("jsonb_extract(data, '$.active') = ?")
+    expect(result.sql).toBe("jsonb_extract(body, '$.active') = ?")
     expect(result.params).toEqual([true])
   })
 
@@ -84,7 +84,7 @@ describe("SQLiteQueryTranslator - Comparison Operators", () => {
     const filter: QueryFilter<User> = { status: null }
     const result = userTranslator.translate(filter)
 
-    expect(result.sql).toBe("jsonb_extract(data, '$.status') = ?")
+    expect(result.sql).toBe("jsonb_extract(body, '$.status') = ?")
     expect(result.params).toEqual([null])
   })
 
@@ -100,7 +100,7 @@ describe("SQLiteQueryTranslator - Comparison Operators", () => {
     const filter: QueryFilter<User> = { status: { $ne: "inactive" } }
     const result = userTranslator.translate(filter)
 
-    expect(result.sql).toBe("(jsonb_extract(data, '$.status') != ?)")
+    expect(result.sql).toBe("(jsonb_extract(body, '$.status') != ?)")
     expect(result.params).toEqual(["inactive"])
   })
 
@@ -158,7 +158,7 @@ describe("SQLiteQueryTranslator - Comparison Operators", () => {
     }
     const result = userTranslator.translate(filter)
 
-    expect(result.sql).toBe("(jsonb_extract(data, '$.status') NOT IN (?, ?))")
+    expect(result.sql).toBe("(jsonb_extract(body, '$.status') NOT IN (?, ?))")
     expect(result.params).toEqual(["inactive", "suspended"])
   })
 
@@ -269,7 +269,7 @@ describe("SQLiteQueryTranslator - Array Operators", () => {
     const result = userTranslator.translate(filter)
 
     expect(result.sql).toBe(
-      "((EXISTS (SELECT 1 FROM json_each(jsonb_extract(data, '$.tags')) WHERE json_each.value = ?) AND EXISTS (SELECT 1 FROM json_each(jsonb_extract(data, '$.tags')) WHERE json_each.value = ?)))"
+      "((EXISTS (SELECT 1 FROM json_each(jsonb_extract(body, '$.tags')) WHERE json_each.value = ?) AND EXISTS (SELECT 1 FROM json_each(jsonb_extract(body, '$.tags')) WHERE json_each.value = ?)))"
     )
     expect(result.params).toEqual(["developer", "typescript"])
   })
@@ -287,7 +287,7 @@ describe("SQLiteQueryTranslator - Array Operators", () => {
     const result = userTranslator.translate(filter)
 
     expect(result.sql).toBe(
-      "(json_array_length(jsonb_extract(data, '$.tags')) = ?)"
+      "(json_array_length(jsonb_extract(body, '$.tags')) = ?)"
     )
     expect(result.params).toEqual([3])
   })
@@ -297,7 +297,7 @@ describe("SQLiteQueryTranslator - Array Operators", () => {
     const result = userTranslator.translate(filter)
 
     expect(result.sql).toBe(
-      "(json_array_length(jsonb_extract(data, '$.tags')) = ?)"
+      "(json_array_length(jsonb_extract(body, '$.tags')) = ?)"
     )
     expect(result.params).toEqual([0])
   })
@@ -309,7 +309,7 @@ describe("SQLiteQueryTranslator - Array Operators", () => {
     const result = userTranslator.translate(filter)
 
     expect(result.sql).toBe(
-      "(EXISTS (SELECT 1 FROM json_each(jsonb_extract(data, '$.tags')) WHERE json_each.value REGEXP ?))"
+      "(EXISTS (SELECT 1 FROM json_each(jsonb_extract(body, '$.tags')) WHERE json_each.value REGEXP ?))"
     )
     expect(result.params).toEqual(["(?i)^premium"])
   })
@@ -331,7 +331,7 @@ describe("SQLiteQueryTranslator - Logical Operators", () => {
     const result = userTranslator.translate(filter)
 
     expect(result.sql).toBe(
-      "((_age >= ?) AND jsonb_extract(data, '$.active') = ? AND jsonb_extract(data, '$.status') = ?)"
+      "((_age >= ?) AND jsonb_extract(body, '$.active') = ? AND jsonb_extract(body, '$.status') = ?)"
     )
     expect(result.params).toEqual([18, true, "active"])
   })
@@ -343,7 +343,7 @@ describe("SQLiteQueryTranslator - Logical Operators", () => {
     const result = userTranslator.translate(filter)
 
     expect(result.sql).toBe(
-      "(jsonb_extract(data, '$.status') = ? OR jsonb_extract(data, '$.status') = ? OR jsonb_extract(data, '$.active') = ?)"
+      "(jsonb_extract(body, '$.status') = ? OR jsonb_extract(body, '$.status') = ? OR jsonb_extract(body, '$.active') = ?)"
     )
     expect(result.params).toEqual(["active", "pending", true])
   })
@@ -355,7 +355,7 @@ describe("SQLiteQueryTranslator - Logical Operators", () => {
     const result = userTranslator.translate(filter)
 
     expect(result.sql).toBe(
-      "NOT (jsonb_extract(data, '$.status') = ? OR jsonb_extract(data, '$.active') = ?)"
+      "NOT (jsonb_extract(body, '$.status') = ? OR jsonb_extract(body, '$.active') = ?)"
     )
     expect(result.params).toEqual(["inactive", false])
   })
@@ -366,7 +366,7 @@ describe("SQLiteQueryTranslator - Logical Operators", () => {
     }
     const result = userTranslator.translate(filter)
 
-    expect(result.sql).toBe("NOT (jsonb_extract(data, '$.status') = ?)")
+    expect(result.sql).toBe("NOT (jsonb_extract(body, '$.status') = ?)")
     expect(result.params).toEqual(["inactive"])
   })
 
@@ -422,7 +422,7 @@ describe("SQLiteQueryTranslator - Nested Queries", () => {
     // - NOT: NOT (condition) without extra outer parens
     // This ensures predictable SQL generation with proper precedence
     expect(result.sql).toBe(
-      "((_name != ?) AND (((_age >= ?) AND (_age < ?)) OR NOT (jsonb_extract(data, '$.status') = ?)))"
+      "((_name != ?) AND (((_age >= ?) AND (_age < ?)) OR NOT (jsonb_extract(body, '$.status') = ?)))"
     )
     expect(result.params).toEqual(["System", 18, 65, "suspended"])
   })
@@ -452,7 +452,7 @@ describe("SQLiteQueryTranslator - Query Options", () => {
     const result = userTranslator.translateOptions(options)
 
     expect(result.sql).toBe(
-      "ORDER BY _age DESC, _name ASC, jsonb_extract(data, '$.status') ASC"
+      "ORDER BY _age DESC, _name ASC, jsonb_extract(body, '$.status') ASC"
     )
     expect(result.params).toEqual([])
   })
@@ -464,7 +464,7 @@ describe("SQLiteQueryTranslator - Query Options", () => {
     const result = userTranslator.translateOptions(options)
 
     expect(result.sql).toBe(
-      "ORDER BY jsonb_extract(data, '$.status') ASC, jsonb_extract(data, '$.active') DESC"
+      "ORDER BY jsonb_extract(body, '$.status') ASC, jsonb_extract(body, '$.active') DESC"
     )
     expect(result.params).toEqual([])
   })

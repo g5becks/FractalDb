@@ -522,7 +522,7 @@ export class SQLiteQueryTranslator<T extends Document>
     }
 
     // Non-indexed field uses jsonb_extract
-    return `jsonb_extract(data, '$.${String(fieldName)}')`
+    return `jsonb_extract(body, '$.${String(fieldName)}')`
   }
 
   /**
@@ -653,7 +653,7 @@ export class SQLiteQueryTranslator<T extends Document>
 
     // Extract the element at the specified index
     // For generated columns: json_extract(_field, '$[index]')
-    // For non-indexed: json_extract(jsonb_extract(data, '$.field'), '$[index]')
+    // For non-indexed: json_extract(jsonb_extract(body, '$.field'), '$[index]')
     const elementSql = `json_extract(${fieldSql}, '$[${index}]')`
 
     // Handle the condition on that element
