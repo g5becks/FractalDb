@@ -33,6 +33,7 @@
     "type-fest": "^5.2.0",
     "typescript": "^5.9.3",
     "ultracite": "6.3.4",
+    "valibot": "^1.1.0",
     "zod": "^4.1.12"
   },
   "tsd": {
