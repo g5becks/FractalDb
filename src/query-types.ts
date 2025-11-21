@@ -241,7 +241,7 @@ export type ArrayOperator<T> = T extends readonly (infer U)[]
  */
 export type ExistenceOperator = {
   /** Field exists in document (true) or doesn't exist (false) */
-  readonly $exists: boolean
+  readonly $exists?: boolean
 }
 
 /**

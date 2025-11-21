@@ -73,9 +73,16 @@ export type {
 } from "./query-options-types.js"
 // Query types
 export type {
+  ArrayOperator,
+  ComparisonOperator,
+  EqualityOperators,
+  ExistenceOperator,
   FieldOperator,
   LogicalOperator,
+  MembershipOperators,
+  OrderingOperators,
   QueryFilter,
+  StringOperator,
 } from "./query-types.js"
 export { createSchema } from "./schema-builder.js"
 export type { SchemaBuilder } from "./schema-builder-types.js"
