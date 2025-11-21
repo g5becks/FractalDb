@@ -174,3 +174,120 @@ export type CompoundIndex<T> = {
   /** Whether to enforce uniqueness across the combination of fields */
   readonly unique?: boolean
 }
+
+/**
+ * Configuration for automatic timestamp management.
+ *
+ * @remarks
+ * Controls whether documents automatically receive createdAt and updatedAt timestamps
+ * when inserted or updated. This simplifies audit trail management and is commonly
+ * used in document databases.
+
+ * @example
+ * ```typescript
+ * // Enable both timestamps (default behavior)
+ * const timestamps: TimestampConfig = true;
+ *
+ * // Explicit configuration
+ * const timestamps: TimestampConfig = {
+ *   createdAt: true,
+ *   updatedAt: true
+ * };
+ *
+ * // Only track creation time
+ * const timestamps: TimestampConfig = {
+ *   createdAt: true,
+ *   updatedAt: false
+ * };
+ *
+ * // Disable automatic timestamps
+ * const timestamps: TimestampConfig = false;
+ * ```
+ */
+export type TimestampConfig =
+  | {
+      /** Whether to automatically add createdAt timestamp on document creation */
+      readonly createdAt?: boolean
+
+      /** Whether to automatically update updatedAt timestamp on document modification */
+      readonly updatedAt?: boolean
+    }
+  | boolean
+
+/**
+ * Complete schema definition for a document collection.
+ *
+ * @typeParam T - The document type this schema defines
+
+ * @remarks
+ * The SchemaDefinition type brings together all schema configuration elements
+ * to create a complete, type-safe collection definition. It combines field definitions,
+ * compound indexes, timestamp configuration, and optional validation logic.
+
+ * This type serves as the foundation for collection creation and ensures that
+ * all database operations maintain schema consistency and type safety throughout
+ * the library.
+
+ * @example
+ * ```typescript
+ * type User = Document<{
+ *   name: string;
+ *   email: string;
+ *   age: number;
+ *   profile: {
+ *     bio: string;
+ *     settings: {
+ *       theme: 'light' | 'dark';
+ *     };
+ *   };
+ *   createdAt: Date;
+ *   updatedAt: Date;
+ * }>;
+
+ * const userSchema: SchemaDefinition<User> = {
+ *   // Field definitions for indexing and constraints
+ *   fields: [
+ *     { name: 'name', type: 'TEXT', indexed: true },
+ *     { name: 'email', type: 'TEXT', indexed: true, unique: true, nullable: false },
+ *     { name: 'age', type: 'INTEGER', indexed: true },
+ *     { name: 'profile.bio', type: 'TEXT', indexed: true },
+ *     { name: 'profile.settings.theme', type: 'TEXT', indexed: true }
+ *   ],
+ *
+ *   // Compound indexes for multi-field queries
+ *   compoundIndexes: [
+ *     { name: 'name_age', fields: ['name', 'age'] },
+ *     { name: 'email_status', fields: ['email', 'status'], unique: true }
+ *   ],
+ *
+ *   // Automatic timestamp management
+ *   timestamps: {
+ *     createdAt: true,
+ *     updatedAt: true
+ *   },
+ *
+ *   // Optional validation using Standard Schema
+ *   validate: (doc: unknown): doc is User => {
+ *     return typeof doc === 'object' && doc !== null &&
+ *            'name' in doc && typeof doc.name === 'string' &&
+ *            'email' in doc && typeof doc.email === 'string';
+ *   }
+ * };
+ *
+ * // Usage with collection
+ * const users = db.collection('users', userSchema);
+ * ```
+ */
+export type SchemaDefinition<T> = {
+  /** Array of field definitions for indexing and constraints */
+  readonly fields: readonly SchemaField<T, keyof T>[]
+
+  /** Array of compound index definitions for multi-field queries */
+  readonly compoundIndexes?: readonly CompoundIndex<T>[]
+
+  /** Configuration for automatic timestamp management */
+  readonly timestamps?: TimestampConfig
+
+  /** Optional validation function using Standard Schema type predicate signature */
+  readonly validate?: (doc: unknown) => doc is T
+}
