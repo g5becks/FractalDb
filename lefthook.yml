@@ -19,8 +19,9 @@ pre-push:
     lint:
       run: bun run lint
 
-    test:
-      run: bun test
+    # test:
+    #   run: bun test
+    # TODO: Uncomment when tests are implemented
 
 commit-msg:
   commands:
