@@ -1,3 +1,4 @@
+import type { SQLQueryBindings } from "bun:sqlite"
 import type { Document } from "./core-types.js"
 import type { QueryOptions } from "./query-options-types.js"
 import type { QueryFilter } from "./query-types.js"
@@ -6,36 +7,12 @@ import type { QueryFilter } from "./query-types.js"
  * Valid SQLite bind parameter types.
  *
  * @remarks
- * SQLite supports a limited set of types for parameterized query values.
- * This type ensures type safety when building parameterized queries.
+ * Re-exported from `bun:sqlite` for consistency with Bun's SQLite bindings.
+ * This ensures proper type compatibility when spreading query parameters.
  *
- * **Supported Types:**
- * - `string` - Text values
- * - `number` - Numeric values (integers and floats)
- * - `boolean` - Boolean values (converted to 0/1)
- * - `null` - NULL values
- * - `bigint` - Large integers
- * - `Uint8Array` - Binary data (BLOB)
- *
- * @example
- * ```typescript
- * const params: SQLiteBindValue[] = [
- *   'Alice',           // string
- *   42,                // number
- *   true,              // boolean
- *   null,              // null
- *   BigInt(123456789), // bigint
- *   new Uint8Array([1, 2, 3]) // Uint8Array
- * ];
- * ```
+ * @see {@link https://bun.sh/docs/api/sqlite#query-parameters}
  */
-export type SQLiteBindValue =
-  | string
-  | number
-  | boolean
-  | null
-  | bigint
-  | Uint8Array
+export type SQLiteBindValue = SQLQueryBindings
 
 /**
  * Result of translating a StrataDB query to SQL.
@@ -68,7 +45,7 @@ export type QueryTranslatorResult = {
   readonly sql: string
 
   /** Array of parameter values to bind to the SQL placeholders */
-  readonly params: readonly unknown[]
+  readonly params: SQLiteBindValue[]
 }
 
 /**

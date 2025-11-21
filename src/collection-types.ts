@@ -371,9 +371,10 @@ export type Collection<T extends Document> = {
    * ```
    */
   updateOne(
-    filter: QueryFilter<T>,
-    update: Record<string, unknown>
-  ): Promise<UpdateResult>
+    id: string,
+    update: Omit<Partial<T>, "id" | "createdAt" | "updatedAt">,
+    options?: { upsert?: boolean }
+  ): Promise<T | null>
 
   /**
    * Replace a single document matching the query filter.
@@ -407,9 +408,9 @@ export type Collection<T extends Document> = {
    * ```
    */
   replaceOne(
-    filter: QueryFilter<T>,
+    id: string,
     doc: Omit<T, "id" | "createdAt" | "updatedAt">
-  ): Promise<UpdateResult>
+  ): Promise<T | null>
 
   /**
    * Delete a single document matching the query filter.
@@ -431,7 +432,7 @@ export type Collection<T extends Document> = {
    * }
    * ```
    */
-  deleteOne(filter: QueryFilter<T>): Promise<DeleteResult>
+  deleteOne(id: string): Promise<boolean>
 
   // ===== Batch Write Operations =====
 
@@ -496,7 +497,7 @@ export type Collection<T extends Document> = {
    */
   updateMany(
     filter: QueryFilter<T>,
-    update: Record<string, unknown>
+    update: Omit<Partial<T>, "id" | "createdAt" | "updatedAt">
   ): Promise<UpdateResult>
 
   /**
@@ -557,7 +558,7 @@ export type Collection<T extends Document> = {
    * }
    * ```
    */
-  validate(doc: unknown): Promise<boolean>
+  validate(doc: unknown): Promise<T>
 
   /**
    * Validate a document against the schema (sync).
@@ -582,5 +583,5 @@ export type Collection<T extends Document> = {
    * }
    * ```
    */
-  validateSync(doc: unknown): boolean
+  validateSync(doc: unknown): T
 }

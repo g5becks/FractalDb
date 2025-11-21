@@ -4,6 +4,7 @@
   "javascript": {
     "formatter": {
       "semicolons": "asNeeded"
-    }
+    },
+    "globals": ["Bun"]
   }
 }
