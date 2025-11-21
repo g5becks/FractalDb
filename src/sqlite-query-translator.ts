@@ -60,6 +60,19 @@ import type { SchemaDefinition, SchemaField } from "./schema-types.js"
  * // ✅ IN operator with multiple values
  * const result4 = translator.translate({ age: { $in: [25, 30, 35] } });
  * // => { sql: "_age IN (?, ?, ?)", params: [25, 30, 35] }
+ *
+ * // ✅ String operators
+ * const result5 = translator.translate({ email: { $regex: /@example\\.com$/i } });
+ * // => { sql: "_email REGEXP ?", params: ['(?i)@example\\.com$'] }
+ *
+ * const result6 = translator.translate({ name: { $startsWith: 'Admin' } });
+ * // => { sql: "_name LIKE ?", params: ['Admin%'] }
+ *
+ * const result7 = translator.translate({ email: { $endsWith: '@company.com' } });
+ * // => { sql: "_email LIKE ?", params: ['%@company.com'] }
+ *
+ * const result8 = translator.translate({ name: { $like: '%Smith%' } });
+ * // => { sql: "_name LIKE ?", params: ['%Smith%'] }
  * ```
  */
 export class SQLiteQueryTranslator<T extends Document>
@@ -234,12 +247,13 @@ export class SQLiteQueryTranslator<T extends Document>
     const conditions: string[] = []
 
     for (const [op, value] of Object.entries(operators)) {
-      const condition = this.translateSingleOperator(
+      const condition = this.translateSingleOperator({
         fieldSql,
         op,
         value,
-        params
-      )
+        operators,
+        params,
+      })
       if (condition) {
         conditions.push(condition)
       }
@@ -251,20 +265,19 @@ export class SQLiteQueryTranslator<T extends Document>
   /**
    * Translates a single operator to SQL.
    *
-   * @param fieldSql - The SQL representation of the field
-   * @param op - The operator name
-   * @param value - The operator value
-   * @param params - Array to collect parameter values
+   * @param context - Translation context containing field, operator, value, and params
    * @returns SQL string fragment or null
    *
    * @internal
    */
-  private translateSingleOperator(
-    fieldSql: string,
-    op: string,
-    value: unknown,
+  private translateSingleOperator(context: {
+    fieldSql: string
+    op: string
+    value: unknown
+    operators: Record<string, unknown>
     params: unknown[]
-  ): string | null {
+  }): string | null {
+    const { fieldSql, op, value, operators, params } = context
     switch (op) {
       case "$eq":
         params.push(value)
@@ -291,18 +304,36 @@ export class SQLiteQueryTranslator<T extends Document>
         return `${fieldSql} <= ?`
 
       case "$in":
-        return this.translateInOperator(
-          fieldSql,
-          value as readonly unknown[],
-          params
-        )
+        return this.translateInOperator(fieldSql, value, params)
 
       case "$nin":
-        return this.translateNotInOperator(
-          fieldSql,
-          value as readonly unknown[],
-          params
-        )
+        return this.translateNotInOperator(fieldSql, value, params)
+
+      case "$regex": {
+        const regex = value
+        const options = operators.$options
+        return this.translateRegexOperator(fieldSql, regex, options, params)
+      }
+
+      case "$options":
+        // Handled together with $regex
+        return null
+
+      case "$like":
+        params.push(value)
+        return `${fieldSql} LIKE ?`
+
+      case "$startsWith": {
+        const pattern = `${value}%`
+        params.push(pattern)
+        return `${fieldSql} LIKE ?`
+      }
+
+      case "$endsWith": {
+        const pattern = `%${value}`
+        params.push(pattern)
+        return `${fieldSql} LIKE ?`
+      }
 
       // Additional operators will be added in subsequent tasks
 
@@ -324,16 +355,17 @@ export class SQLiteQueryTranslator<T extends Document>
    */
   private translateInOperator(
     fieldSql: string,
-    values: readonly unknown[],
+    values: unknown,
     params: unknown[]
   ): string {
-    if (values.length === 0) {
+    const valuesArray = values as readonly unknown[]
+    if (valuesArray.length === 0) {
       // Empty IN clause matches nothing
       return "0=1"
     }
 
-    const placeholders = values.map(() => "?").join(", ")
-    for (const v of values) {
+    const placeholders = valuesArray.map(() => "?").join(", ")
+    for (const v of valuesArray) {
       params.push(v)
     }
     return `${fieldSql} IN (${placeholders})`
@@ -351,19 +383,71 @@ export class SQLiteQueryTranslator<T extends Document>
    */
   private translateNotInOperator(
     fieldSql: string,
-    values: readonly unknown[],
+    values: unknown,
     params: unknown[]
   ): string {
-    if (values.length === 0) {
+    const valuesArray = values as readonly unknown[]
+    if (valuesArray.length === 0) {
       // Empty NOT IN clause matches everything
       return "1=1"
     }
 
-    const placeholders = values.map(() => "?").join(", ")
-    for (const v of values) {
+    const placeholders = valuesArray.map(() => "?").join(", ")
+    for (const v of valuesArray) {
       params.push(v)
     }
     return `${fieldSql} NOT IN (${placeholders})`
+  }
+
+  /**
+   * Translates $regex operator to SQL.
+   *
+   * @param fieldSql - The SQL representation of the field
+   * @param regex - The regex pattern (RegExp or string or unknown)
+   * @param options - Optional flags (currently only 'i' for case-insensitive)
+   * @param params - Array to collect parameter values
+   * @returns SQL string fragment
+   *
+   * @remarks
+   * SQLite's REGEXP operator requires a custom function to be registered.
+   * For case-insensitive matching, we convert the pattern using the i flag.
+   * RegExp objects are converted to their pattern string.
+   *
+   * @internal
+   */
+  private translateRegexOperator(
+    fieldSql: string,
+    regex: unknown,
+    options: unknown,
+    params: unknown[]
+  ): string {
+    // Extract pattern from RegExp or use string directly
+    let pattern: string
+    let caseInsensitive = false
+
+    if (regex instanceof RegExp) {
+      pattern = regex.source
+      caseInsensitive = regex.flags.includes("i")
+    } else if (typeof regex === "string") {
+      pattern = regex
+    } else {
+      // Invalid regex value
+      pattern = String(regex)
+    }
+
+    // Override with explicit $options if provided
+    if (options === "i") {
+      caseInsensitive = true
+    }
+
+    // For case-insensitive matching, we use SQLite's case-insensitive REGEXP
+    // by prefixing the pattern with (?i)
+    if (caseInsensitive) {
+      pattern = `(?i)${pattern}`
+    }
+
+    params.push(pattern)
+    return `${fieldSql} REGEXP ?`
   }
 
   /**
