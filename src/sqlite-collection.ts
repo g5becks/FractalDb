@@ -8,7 +8,8 @@ import type {
   UpdateResult,
 } from "./collection-types.js"
 import type { Document } from "./core-types.js"
-import { deepMergeTyped } from "./deep-merge.js"
+import { mergeDocumentUpdate } from "./deep-merge.js"
+import { buildCompleteDocument } from "./document-builder.js"
 import { UniqueConstraintError, ValidationError } from "./errors.js"
 import type { QueryOptions } from "./query-options-types.js"
 import type { QueryFilter } from "./query-types.js"
@@ -450,12 +451,11 @@ export class SQLiteCollection<T extends Document> implements Collection<T> {
     const id = doc.id ?? this.idGenerator()
 
     // Build the full document
-    const fullDoc = {
-      ...doc,
+    const fullDoc = buildCompleteDocument<T>(doc, {
       id,
       createdAt: now,
       updatedAt: now,
-    } as unknown as T
+    })
 
     // Validate using schema validator if provided
     if (this.schema.validate && !this.schema.validate(fullDoc)) {
@@ -530,12 +530,11 @@ export class SQLiteCollection<T extends Document> implements Collection<T> {
     if (!existing) {
       if (options?.upsert) {
         // Create new document
-        const newDoc = {
-          ...update,
+        const newDoc = buildCompleteDocument<T>(update, {
           id,
           createdAt: now,
           updatedAt: now,
-        } as unknown as T
+        })
 
         if (this.schema.validate && !this.schema.validate(newDoc)) {
           throw new Error("Document validation failed")
@@ -556,11 +555,14 @@ export class SQLiteCollection<T extends Document> implements Collection<T> {
 
     // Deep merge existing with update
     const existingDoc = JSON.parse(existing.body) as Omit<T, "id">
-    const mergedDoc = deepMergeTyped(existingDoc, {
+    const mergedDoc = mergeDocumentUpdate<
+      T,
+      typeof update & { id: string; updatedAt: number }
+    >(existingDoc, {
       ...update,
       id: existing.id,
       updatedAt: now,
-    }) as unknown as T
+    })
 
     if (this.schema.validate && !this.schema.validate(mergedDoc)) {
       throw new Error("Document validation failed")
@@ -614,16 +616,18 @@ export class SQLiteCollection<T extends Document> implements Collection<T> {
       return Promise.resolve(null)
     }
 
-    const existingDoc = JSON.parse(existing.body) as T
+    const existingDoc = JSON.parse(existing.body) as Omit<T, "id"> & {
+      createdAt: number
+      updatedAt: number
+    }
     const now = Date.now()
 
     // Build full document with preserved id and createdAt
-    const fullDoc = {
-      ...doc,
+    const fullDoc = buildCompleteDocument<T>(doc, {
       id: existing.id,
       createdAt: existingDoc.createdAt,
       updatedAt: now,
-    } as unknown as T
+    })
 
     if (this.schema.validate && !this.schema.validate(fullDoc)) {
       throw new Error("Document validation failed")
@@ -741,12 +745,11 @@ export class SQLiteCollection<T extends Document> implements Collection<T> {
 
       try {
         const id = doc.id ?? this.idGenerator()
-        const fullDoc = {
-          ...doc,
+        const fullDoc = buildCompleteDocument<T>(doc, {
           id,
           createdAt: now,
           updatedAt: now,
-        } as unknown as T
+        })
 
         // Validate if validator is provided
         if (this.schema.validate && !this.schema.validate(fullDoc)) {
@@ -834,11 +837,14 @@ export class SQLiteCollection<T extends Document> implements Collection<T> {
     // Prepare all updated documents and validate before committing
     for (const row of rows) {
       const existingDoc = JSON.parse(row.body) as Omit<T, "id">
-      const mergedDoc = deepMergeTyped(existingDoc, {
+      const mergedDoc = mergeDocumentUpdate<
+        T,
+        typeof update & { id: string; updatedAt: number }
+      >(existingDoc, {
         ...update,
         id: row.id,
         updatedAt: now,
-      }) as unknown as T
+      })
 
       if (this.schema.validate && !this.schema.validate(mergedDoc)) {
         throw new Error(`Document validation failed for id: ${row.id}`)

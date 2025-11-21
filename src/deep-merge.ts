@@ -82,58 +82,71 @@ export const deepMerge = deepmergeCustom({
 })
 
 /**
- * Type-safe deep merge function for document updates.
+ * Type-safe deep merge function for document updates in collections.
  *
- * @typeParam T - The target document type
- * @typeParam U - The update object type (typically Partial<T>)
+ * @typeParam T - The complete document type including metadata fields
  *
- * @param target - The existing document to merge into
- * @param update - The partial update to merge
- * @returns A new object with merged values (inputs are not mutated)
+ * @param existingBody - The existing document body without metadata (Omit<T, "id">)
+ * @param metadata - Required metadata fields (id, updatedAt) plus optional update fields
+ * @returns Complete document of type T with all fields properly merged
  *
  * @remarks
- * This is a type-safe wrapper around the custom deepmerge function.
- * It ensures that the return type correctly reflects the merge operation.
+ * This function is specifically designed for merging partial updates with existing
+ * documents in StrataDB collections. It handles the common pattern where:
+ * 1. We read the document body (without id) from storage
+ * 2. We have metadata fields (id, updatedAt, etc.) to add back
+ * 3. We have partial update fields to merge in
+ * 4. We need a complete document as the result
  *
  * **Type Safety:**
- * - Target and update types are preserved
- * - Return type is inferred as T & U
- * - No type assertions needed in calling code
+ * - No type assertions needed at call sites
+ * - TypeScript infers the complete document type automatically
+ * - Ensures all required fields are present in the result
  *
- * **Immutability:**
- * - Neither target nor update is mutated
- * - Returns a new object with merged values
- * - Safe to use in concurrent operations
+ * **Deep Merge Behavior:**
+ * - Nested objects are merged recursively
+ * - Arrays are replaced (not concatenated)
+ * - Undefined values preserved for deletion
  *
  * @example
  * ```typescript
- * type User = {
+ * type User = Document<{
  *   name: string;
- *   profile: {
- *     age: number;
- *     city: string;
- *   };
+ *   profile: { age: number; city: string };
  *   tags: string[];
- * };
+ * }>;
  *
- * const user: User = {
+ * const existingBody: Omit<User, "id"> = {
  *   name: 'Alice',
  *   profile: { age: 25, city: 'NYC' },
- *   tags: ['user']
+ *   tags: ['user'],
+ *   createdAt: 1000,
+ *   updatedAt: 1000
  * };
  *
- * const update: Partial<User> = {
- *   profile: { age: 26 }
- * };
+ * const merged = mergeDocumentUpdate<User>(existingBody, {
+ *   id: 'user-123',
+ *   updatedAt: 2000,
+ *   profile: { age: 26 }  // Partial update
+ * });
  *
- * const merged = deepMergeTyped(user, update);
- * // Type: User & Partial<User>
- * // Value: { name: 'Alice', profile: { age: 26, city: 'NYC' }, tags: ['user'] }
+ * // Type: User (no casting needed!)
+ * // Value: {
+ * //   id: 'user-123',
+ * //   name: 'Alice',
+ * //   profile: { age: 26, city: 'NYC' },  // Deep merged
+ * //   tags: ['user'],
+ * //   createdAt: 1000,
+ * //   updatedAt: 2000
+ * // }
  * ```
  */
-export function deepMergeTyped<T extends object, U extends object>(
-  target: T,
-  update: U
-): T & U {
-  return deepMerge(target, update) as T & U
+export function mergeDocumentUpdate<
+  T extends { id: string },
+  U extends { id: string },
+>(existingBody: Omit<T, "id">, metadata: U): T {
+  // deepmerge-ts returns a complex inferred type that represents the merge result
+  // For our use case (merging document body with metadata), the runtime result IS type T
+  // TypeScript cannot prove this statically due to the complexity of deep merge inference
+  return deepMerge(existingBody, metadata) as T
 }
