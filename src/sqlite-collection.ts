@@ -8,6 +8,7 @@ import type {
   UpdateResult,
 } from "./collection-types.js"
 import type { Document } from "./core-types.js"
+import { deepMergeTyped } from "./deep-merge.js"
 import { UniqueConstraintError, ValidationError } from "./errors.js"
 import type { QueryOptions } from "./query-options-types.js"
 import type { QueryFilter } from "./query-types.js"
@@ -553,14 +554,13 @@ export class SQLiteCollection<T extends Document> implements Collection<T> {
       return Promise.resolve(null)
     }
 
-    // Merge existing with update
+    // Deep merge existing with update
     const existingDoc = JSON.parse(existing.body) as Omit<T, "id">
-    const mergedDoc = {
-      ...existingDoc,
+    const mergedDoc = deepMergeTyped(existingDoc, {
       ...update,
       id: existing.id,
       updatedAt: now,
-    } as unknown as T
+    }) as unknown as T
 
     if (this.schema.validate && !this.schema.validate(mergedDoc)) {
       throw new Error("Document validation failed")
@@ -834,12 +834,11 @@ export class SQLiteCollection<T extends Document> implements Collection<T> {
     // Prepare all updated documents and validate before committing
     for (const row of rows) {
       const existingDoc = JSON.parse(row.body) as Omit<T, "id">
-      const mergedDoc = {
-        ...existingDoc,
+      const mergedDoc = deepMergeTyped(existingDoc, {
         ...update,
         id: row.id,
         updatedAt: now,
-      } as unknown as T
+      }) as unknown as T
 
       if (this.schema.validate && !this.schema.validate(mergedDoc)) {
         throw new Error(`Document validation failed for id: ${row.id}`)
