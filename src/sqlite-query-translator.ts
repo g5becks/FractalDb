@@ -1,4 +1,5 @@
 import type { Document } from "./core-types.js"
+import type { QueryOptions } from "./query-options-types.js"
 import type {
   QueryTranslator,
   QueryTranslatorResult,
@@ -684,14 +685,107 @@ export class SQLiteQueryTranslator<T extends Document>
    * Translates query options to SQL clauses.
    *
    * @param options - The query options to translate
-   * @returns Object containing SQL clauses and parameters
+   * @returns Object containing SQL clauses (ORDER BY, LIMIT, OFFSET) and parameters
    *
    * @remarks
-   * This is a placeholder implementation. Full implementation will be added
-   * in task 21 (Implement query options SQL translation).
+   * Query options are translated to SQL clauses that control result ordering and pagination.
+   * The projection option is handled by the collection layer, not by the translator.
+   *
+   * **Generated SQL Clauses:**
+   * - `sort`: Generates ORDER BY clause with field names and ASC/DESC
+   * - `limit`: Generates LIMIT clause with parameterized value
+   * - `skip`: Generates OFFSET clause with parameterized value
+   *
+   * **Field Resolution:**
+   * Sort fields use the same resolution as query filters:
+   * - Indexed fields: Use generated column `_fieldname`
+   * - Non-indexed fields: Use `jsonb_extract(data, '$.fieldname')`
+   *
+   * **Sort Direction:**
+   * - `1`: Ascending order (ASC)
+   * - `-1`: Descending order (DESC)
+   *
+   * @example
+   * ```typescript
+   * // Sort by age descending, then name ascending
+   * translator.translateOptions({
+   *   sort: { age: -1, name: 1 },
+   *   limit: 10,
+   *   skip: 20
+   * });
+   * // => {
+   * //   sql: "ORDER BY _age DESC, _name ASC LIMIT ? OFFSET ?",
+   * //   params: [10, 20]
+   * // }
+   *
+   * // Sort with non-indexed field
+   * translator.translateOptions({
+   *   sort: { status: 1 },
+   *   limit: 5
+   * });
+   * // => {
+   * //   sql: "ORDER BY jsonb_extract(data, '$.status') ASC LIMIT ?",
+   * //   params: [5]
+   * // }
+   * ```
    */
-  translateOptions(): QueryTranslatorResult {
-    // Placeholder - will be implemented in task 21
-    return { sql: "", params: [] }
+  translateOptions(options: QueryOptions<T>): QueryTranslatorResult {
+    const params: unknown[] = []
+    const clauses: string[] = []
+
+    // Handle sort (ORDER BY clause)
+    if (options.sort) {
+      const orderBy = this.translateSort(options.sort)
+      if (orderBy) {
+        clauses.push(orderBy)
+      }
+    }
+
+    // Handle limit (LIMIT clause)
+    if (options.limit !== undefined) {
+      params.push(options.limit)
+      clauses.push("LIMIT ?")
+    }
+
+    // Handle skip (OFFSET clause)
+    if (options.skip !== undefined) {
+      params.push(options.skip)
+      clauses.push("OFFSET ?")
+    }
+
+    // Note: projection is handled by the collection layer during SELECT construction
+
+    return {
+      sql: clauses.join(" "),
+      params,
+    }
+  }
+
+  /**
+   * Translates sort specification to ORDER BY clause.
+   *
+   * @param sort - Sort specification object
+   * @returns ORDER BY SQL string fragment
+   *
+   * @remarks
+   * Converts MongoDB-style sort specification to SQL ORDER BY clause.
+   * Uses the same field resolution as query filters to ensure consistency.
+   *
+   * @internal
+   */
+  private translateSort(sort: QueryOptions<T>["sort"]): string {
+    if (!sort) {
+      return ""
+    }
+
+    const sortFields: string[] = []
+
+    for (const [fieldName, direction] of Object.entries(sort)) {
+      const fieldSql = this.resolveFieldName(fieldName as keyof T)
+      const dir = direction === 1 ? "ASC" : "DESC"
+      sortFields.push(`${fieldSql} ${dir}`)
+    }
+
+    return sortFields.length > 0 ? `ORDER BY ${sortFields.join(", ")}` : ""
   }
 }
