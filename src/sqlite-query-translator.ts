@@ -335,6 +335,21 @@ export class SQLiteQueryTranslator<T extends Document>
         return `${fieldSql} LIKE ?`
       }
 
+      case "$all":
+        return this.translateAllOperator(fieldSql, value, params)
+
+      case "$size":
+        return this.translateSizeOperator(fieldSql, value, params)
+
+      case "$elemMatch":
+        return this.translateElemMatchOperator(fieldSql, value, params)
+
+      case "$index":
+        return this.translateIndexOperator(fieldSql, value, params)
+
+      case "$exists":
+        return this.translateExistsOperator(fieldSql, value)
+
       // Additional operators will be added in subsequent tasks
 
       default:
@@ -472,6 +487,197 @@ export class SQLiteQueryTranslator<T extends Document>
 
     // Non-indexed field uses jsonb_extract
     return `jsonb_extract(data, '$.${String(fieldName)}')`
+  }
+
+  /**
+   * Translates $all operator to SQL.
+   *
+   * @param fieldSql - The SQL representation of the field
+   * @param values - Array of values that must all be present
+   * @param params - Array to collect parameter values
+   * @returns SQL string fragment
+   *
+   * @remarks
+   * The $all operator matches arrays that contain all specified values.
+   * Uses SQLite's json_each to iterate over array elements.
+   *
+   * @internal
+   */
+  private translateAllOperator(
+    fieldSql: string,
+    values: unknown,
+    params: unknown[]
+  ): string {
+    const valuesArray = values as readonly unknown[]
+    if (valuesArray.length === 0) {
+      // Empty $all matches everything (vacuous truth)
+      return "1=1"
+    }
+
+    const conditions: string[] = []
+    for (const v of valuesArray) {
+      params.push(v)
+      // Check if value exists in the array using json_each
+      conditions.push(
+        `EXISTS (SELECT 1 FROM json_each(${fieldSql}) WHERE json_each.value = ?)`
+      )
+    }
+
+    return `(${conditions.join(" AND ")})`
+  }
+
+  /**
+   * Translates $size operator to SQL.
+   *
+   * @param fieldSql - The SQL representation of the field
+   * @param size - Expected array size
+   * @param params - Array to collect parameter values
+   * @returns SQL string fragment
+   *
+   * @remarks
+   * The $size operator matches arrays with the specified length.
+   * Uses SQLite's json_array_length function.
+   *
+   * @internal
+   */
+  private translateSizeOperator(
+    fieldSql: string,
+    size: unknown,
+    params: unknown[]
+  ): string {
+    params.push(size)
+    return `json_array_length(${fieldSql}) = ?`
+  }
+
+  /**
+   * Translates $elemMatch operator to SQL.
+   *
+   * @param fieldSql - The SQL representation of the field
+   * @param elementFilter - Query filter to match array elements
+   * @param params - Array to collect parameter values
+   * @returns SQL string fragment
+   *
+   * @remarks
+   * The $elemMatch operator matches arrays where at least one element
+   * satisfies all the specified query criteria. This requires recursively
+   * translating the nested query filter.
+   *
+   * @internal
+   */
+  private translateElemMatchOperator(
+    fieldSql: string,
+    elementFilter: unknown,
+    params: unknown[]
+  ): string {
+    // Extract the nested filter conditions
+    const filter = elementFilter as Record<string, unknown>
+    const conditions: string[] = []
+
+    for (const [op, value] of Object.entries(filter)) {
+      // Use json_each.value to reference array elements
+      const elementSql = "json_each.value"
+      const condition = this.translateSingleOperator({
+        fieldSql: elementSql,
+        op,
+        value,
+        operators: filter,
+        params,
+      })
+      if (condition) {
+        conditions.push(condition)
+      }
+    }
+
+    const whereClause = conditions.join(" AND ")
+    return `EXISTS (SELECT 1 FROM json_each(${fieldSql}) WHERE ${whereClause})`
+  }
+
+  /**
+   * Translates $index operator to SQL.
+   *
+   * @param fieldSql - The SQL representation of the field
+   * @param indexFilter - Object with index and condition
+   * @param params - Array to collect parameter values
+   * @returns SQL string fragment
+   *
+   * @remarks
+   * The $index operator accesses a specific array element by index.
+   * Uses SQLite's json_extract with array index syntax.
+   *
+   * @internal
+   */
+  private translateIndexOperator(
+    fieldSql: string,
+    indexFilter: unknown,
+    params: unknown[]
+  ): string {
+    const filter = indexFilter as { index: number; condition: unknown }
+    const index = filter.index
+    const condition = filter.condition
+
+    // Extract the element at the specified index
+    // For generated columns: json_extract(_field, '$[index]')
+    // For non-indexed: json_extract(jsonb_extract(data, '$.field'), '$[index]')
+    const elementSql = `json_extract(${fieldSql}, '$[${index}]')`
+
+    // Handle the condition on that element
+    if (
+      condition === null ||
+      typeof condition === "string" ||
+      typeof condition === "number" ||
+      typeof condition === "boolean"
+    ) {
+      params.push(condition)
+      return `${elementSql} = ?`
+    }
+
+    // Handle operator conditions
+    if (typeof condition === "object" && condition !== null) {
+      const operators = condition as Record<string, unknown>
+      const conditions: string[] = []
+
+      for (const [op, value] of Object.entries(operators)) {
+        const cond = this.translateSingleOperator({
+          fieldSql: elementSql,
+          op,
+          value,
+          operators,
+          params,
+        })
+        if (cond) {
+          conditions.push(cond)
+        }
+      }
+
+      return conditions.length > 0 ? `(${conditions.join(" AND ")})` : "1=1"
+    }
+
+    return "1=1"
+  }
+
+  /**
+   * Translates $exists operator to SQL.
+   *
+   * @param fieldSql - The SQL representation of the field
+   * @param shouldExist - Whether field should exist (true) or not (false)
+   * @returns SQL string fragment
+   *
+   * @remarks
+   * The $exists operator checks whether a field exists in the document.
+   * Uses SQLite's json_type which returns NULL for non-existent fields.
+   *
+   * @internal
+   */
+  private translateExistsOperator(
+    fieldSql: string,
+    shouldExist: unknown
+  ): string {
+    if (shouldExist === true) {
+      // Field exists if json_type is not NULL
+      return `json_type(${fieldSql}) IS NOT NULL`
+    }
+    // Field doesn't exist if json_type is NULL
+    return `json_type(${fieldSql}) IS NULL`
   }
 
   /**
