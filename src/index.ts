@@ -99,3 +99,12 @@ export type {
 } from "./schema-types.js"
 // Main database class
 export { StrataDBClass } from "./stratadb.js"
+// Timestamp utilities
+export {
+  dateToTimestamp,
+  isTimestampInRange,
+  isValidTimestamp,
+  nowTimestamp,
+  timestampDiff,
+  timestampToDate,
+} from "./timestamps.js"
