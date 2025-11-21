@@ -10,6 +10,7 @@ import type {
   StrataDB as StrataDBInterface,
   Transaction,
 } from "./database-types.js"
+import { generateId } from "./id-generator.js"
 import type { SchemaDefinition } from "./schema-types.js"
 import { SQLiteCollection } from "./sqlite-collection.js"
 
@@ -69,7 +70,7 @@ export class StrataDBClass implements StrataDBInterface {
       this.sqliteDb = options.database
     }
 
-    this.idGeneratorFn = options.idGenerator ?? (() => Bun.randomUUIDv7())
+    this.idGeneratorFn = options.idGenerator ?? generateId
     this.onCloseCallback = options.onClose
     this.debug = options.debug ?? false
 
