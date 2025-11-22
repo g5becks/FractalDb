@@ -1,6 +1,46 @@
 # Schemas
 
-Schemas define your document structure, indexes, and validation rules.
+Schemas define which fields get **generated columns** for fast querying. Fields not in the schema are still stored - they just live in the JSONB blob.
+
+## How Storage Works
+
+Every document is stored as JSONB. When you define a field in your schema, StrataDB creates a **generated column** that extracts that value for efficient querying:
+
+```typescript
+type User = Document<{
+  email: string      // Will have generated column (defined in schema)
+  password: string   // Stored in JSONB only (not in schema)
+  profile: {         // Stored in JSONB only
+    bio: string
+    avatar: string
+  }
+}>
+
+const schema = createSchema<User>()
+  .field('email', { type: 'TEXT', indexed: true, unique: true })
+  .build()
+```
+
+In this example:
+- `email` → Generated column + index (fast lookups, unique constraint)
+- `password`, `profile` → Stored in JSONB blob (no generated column)
+
+You can still store and retrieve `password` and `profile` - they're part of your document. You just can't efficiently query them with operators like `$eq` or `$gt`.
+
+## Generated Columns vs Indexes
+
+These are **separate concepts**:
+
+| Option | What it does | Use case |
+|--------|--------------|----------|
+| `.field('x', { type: 'TEXT' })` | Creates generated column only | Extracting for unique constraints, sorting |
+| `.field('x', { type: 'TEXT', indexed: true })` | Generated column + B-tree index | Fast queries on this field |
+| `.field('x', { type: 'TEXT', unique: true })` | Generated column + unique constraint | Enforce uniqueness (no index) |
+| `.field('x', { type: 'TEXT', indexed: true, unique: true })` | All three | Fast unique lookups |
+
+::: tip Why not auto-index every field?
+Indexes have costs: write overhead and storage. You might define a field just for unique constraints or computed sorting without needing query performance. StrataDB keeps these concerns separate so you choose explicitly.
+:::
 
 ## Creating a Schema
 

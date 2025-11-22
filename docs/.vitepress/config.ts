@@ -1,7 +1,10 @@
-import { defineConfig } from "vitepress"
+import { defineConfigWithTheme } from "vitepress"
+import type { ThemeConfig } from "vitepress-carbon/config"
+import baseConfig from "vitepress-carbon/config"
 import typedocSidebar from "../api/typedoc-sidebar.json"
 
-export default defineConfig({
+export default defineConfigWithTheme<ThemeConfig>({
+  extends: baseConfig,
   title: "StrataDB",
   description: "Type-safe embedded document database for Bun",
   base: "/StrataDB/",
@@ -61,10 +64,6 @@ export default defineConfig({
 
     footer: {
       message: "Released under the MIT License.",
-    },
-
-    search: {
-      provider: "local",
     },
   },
 })
