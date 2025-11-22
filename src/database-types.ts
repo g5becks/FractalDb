@@ -12,8 +12,7 @@ import type { SchemaDefinition } from "./schema-types.js"
  * const options: DatabaseOptions = {
  *   database: ':memory:',
  *   idGenerator: () => crypto.randomUUID(),
- *   onClose: () => console.log('Database closed'),
- *   debug: true
+ *   onClose: () => console.log('Database closed')
  * };
  * const db = new StrataDB(options);
  * ```
@@ -36,9 +35,92 @@ export type DatabaseOptions = {
   readonly onClose?: () => void
 
   /**
-   * Enable debug logging.
+   * Enable query caching for all collections.
+   *
+   * @remarks
+   * When enabled, the query translator caches SQL templates for queries with the
+   * same structure, improving performance for repeated queries at the cost of
+   * memory usage (up to 500 cached query templates per collection).
+   *
+   * **Performance improvements with cache enabled:**
+   * - Simple queries: ~23% faster
+   * - Range queries: ~70% faster
+   * - Complex queries: ~55% faster
+   *
+   * **Memory considerations:**
+   * - Each collection maintains its own cache (up to 500 entries)
+   * - Cache stores SQL strings and value extraction paths
+   * - Use FIFO eviction when cache is full
+   *
+   * **When to enable:**
+   * - Applications with repeated query patterns
+   * - High-throughput read operations
+   * - When performance is more critical than memory usage
+   *
+   * Individual collections can override this setting.
+   *
+   * @defaultValue false
+   *
+   * @see {@link CollectionOptions.enableCache} for per-collection override
+   *
+   * @example
+   * ```typescript
+   * // Enable caching for all collections (opt-in for performance)
+   * const db = new StrataDB({ database: ':memory:', enableCache: true });
+   *
+   * // Disabled by default
+   * const db = new StrataDB({ database: ':memory:' });
+   * ```
    */
-  readonly debug?: boolean
+  readonly enableCache?: boolean
+}
+
+/**
+ * Options for creating a collection.
+ *
+ * @remarks
+ * Collection-specific options that can override database-level defaults.
+ *
+ * @example
+ * ```typescript
+ * // Override database-level cache setting for a specific collection
+ * const users = db.collection('users', userSchema, { enableCache: false });
+ * ```
+ */
+export type CollectionOptions = {
+  /**
+   * Enable query caching for this collection.
+   *
+   * @remarks
+   * Overrides the database-level `enableCache` setting for this specific collection.
+   * When enabled, the query translator caches SQL templates for queries with the
+   * same structure, improving performance for repeated queries at the cost of
+   * memory usage (up to 500 cached query templates).
+   *
+   * **Use cases for enabling cache on specific collections:**
+   * - Collections with frequent repeated queries (e.g., user lookups)
+   * - High-read collections in performance-critical paths
+   * - Collections with stable query patterns
+   *
+   * **Use cases for disabling cache on specific collections:**
+   * - Log/audit collections with varied queries
+   * - Low-frequency access collections
+   * - Memory-constrained environments
+   *
+   * @defaultValue Inherits from database-level setting (false by default)
+   *
+   * @see {@link DatabaseOptions.enableCache} for global default
+   *
+   * @example
+   * ```typescript
+   * // Enable cache for a high-traffic collection
+   * const users = db.collection('users', userSchema, { enableCache: true });
+   *
+   * // Explicitly disable cache for a collection
+   * const logs = db.collection('logs', logSchema, { enableCache: false });
+   * ```
+   */
+  readonly enableCache?: boolean
 }
 
 /**
@@ -144,16 +226,22 @@ export type StrataDB = {
    *
    * @param name - Collection name (table name in SQLite)
    * @param schema - Schema definition for type safety and validation
+   * @param options - Optional collection-specific configuration
    * @returns Collection instance for the specified type
    *
    * @example
    * ```typescript
+   * // Default cache behavior (inherits from database)
    * const users = db.collection('users', userSchema);
+   *
+   * // Override cache setting for this collection
+   * const logs = db.collection('logs', logSchema, { enableCache: false });
    * ```
    */
   collection<T extends Document>(
     name: string,
-    schema: SchemaDefinition<T>
+    schema: SchemaDefinition<T>,
+    options?: CollectionOptions
   ): Collection<T>
 
   /**

@@ -103,21 +103,24 @@ export class SQLiteCollection<T extends Document> implements Collection<T> {
    * @param name - Collection name (table name)
    * @param schema - Schema definition for the document type
    * @param idGenerator - Function to generate unique document IDs
+   * @param enableCache - Whether to enable query caching (default: false)
    *
    * @remarks
    * The constructor automatically creates the table and indexes if they don't exist.
    */
+  // biome-ignore lint/nursery/useMaxParams: required parameters for collection initialization
   constructor(
     db: SQLiteDatabase,
     name: string,
     schema: SchemaDefinition<T>,
-    idGenerator: () => string
+    idGenerator: () => string,
+    enableCache = false
   ) {
     this.db = db
     this.name = name
     this.schema = schema
     this.idGenerator = idGenerator
-    this.translator = new SQLiteQueryTranslator(schema)
+    this.translator = new SQLiteQueryTranslator(schema, { enableCache })
 
     // Initialize table and indexes
     this.createTable()
@@ -260,6 +263,8 @@ export class SQLiteCollection<T extends Document> implements Collection<T> {
    * @param id - The document ID to search for
    * @returns Promise resolving to the document if found, or null if not found
    *
+   * @throws {DatabaseError} If the SQLite query execution fails
+   *
    * @remarks
    * This method uses a prepared statement for efficient ID lookups.
    * The JSONB body is converted to a JavaScript object using SQLite's json() function.
@@ -294,6 +299,9 @@ export class SQLiteCollection<T extends Document> implements Collection<T> {
    * @param filter - Query filter to match documents
    * @param options - Optional query options (sort, limit, skip)
    * @returns Promise resolving to array of matching documents
+   *
+   * @throws {QueryError} If query translation fails or contains invalid operators
+   * @throws {DatabaseError} If the SQLite query execution fails
    *
    * @remarks
    * Uses the query translator to convert type-safe filters to SQL WHERE clauses.
@@ -375,6 +383,9 @@ export class SQLiteCollection<T extends Document> implements Collection<T> {
    * @param options - Optional query options (sort only, no limit/skip)
    * @returns Promise resolving to the first matching document or null
    *
+   * @throws {QueryError} If query translation fails or contains invalid operators
+   * @throws {DatabaseError} If the SQLite query execution fails
+   *
    * @example
    * ```typescript
    * const admin = await users.findOne({ role: 'admin' });
@@ -396,6 +407,9 @@ export class SQLiteCollection<T extends Document> implements Collection<T> {
    *
    * @param filter - Query filter to match documents
    * @returns Promise resolving to the count of matching documents
+   *
+   * @throws {QueryError} If query translation fails or contains invalid operators
+   * @throws {DatabaseError} If the SQLite query execution fails
    *
    * @example
    * ```typescript
@@ -459,7 +473,12 @@ export class SQLiteCollection<T extends Document> implements Collection<T> {
 
     // Validate using schema validator if provided
     if (this.schema.validate && !this.schema.validate(fullDoc)) {
-      throw new Error("Document validation failed")
+      throw new ValidationError(
+        "Document validation failed: Document does not match the schema. " +
+          "Check that all required fields are present and have correct types.",
+        undefined,
+        fullDoc
+      )
     }
 
     // Serialize body (excludes id which is stored separately)
@@ -485,11 +504,21 @@ export class SQLiteCollection<T extends Document> implements Collection<T> {
         // Extract field name from error message
         const match = error.message.match(UNIQUE_CONSTRAINT_REGEX)
         const field = match?.[1]?.replace(UNDERSCORE_PREFIX_REGEX, "") // Remove underscore prefix from generated columns
-        throw new UniqueConstraintError(
-          `Duplicate value for unique field '${field}'`,
-          field,
-          undefined
-        )
+
+        // Get the value that violated the constraint
+        const value = field
+          ? (fullDoc as Record<string, unknown>)[field]
+          : undefined
+
+        // Use helper to build actionable error message
+        const message = field
+          ? `Duplicate value for unique field '${field}': ${JSON.stringify(value)} in collection '${this.name}'. ` +
+            "A document with this value already exists. " +
+            "Use updateOne() with { upsert: true } to update existing documents, " +
+            "or use findOne() to check for existence before inserting."
+          : "Unique constraint violation occurred"
+
+        throw new UniqueConstraintError(message, field, value)
       }
       throw error
     }
@@ -502,6 +531,9 @@ export class SQLiteCollection<T extends Document> implements Collection<T> {
    * @param update - Partial document with fields to update
    * @param options - Update options (upsert: create if not exists)
    * @returns Promise resolving to updated document or null if not found
+   *
+   * @throws {ValidationError} If the updated document fails schema validation
+   * @throws {DatabaseError} If the SQLite update operation fails
    *
    * @example
    * ```typescript
@@ -537,7 +569,12 @@ export class SQLiteCollection<T extends Document> implements Collection<T> {
         })
 
         if (this.schema.validate && !this.schema.validate(newDoc)) {
-          throw new Error("Document validation failed")
+          throw new ValidationError(
+            "Document validation failed during upsert: Document does not match the schema. " +
+              "Check that all required fields are present and have correct types.",
+            undefined,
+            newDoc
+          )
         }
 
         const { id: _newId, ...newBodyData } = newDoc
@@ -565,7 +602,12 @@ export class SQLiteCollection<T extends Document> implements Collection<T> {
     })
 
     if (this.schema.validate && !this.schema.validate(mergedDoc)) {
-      throw new Error("Document validation failed")
+      throw new ValidationError(
+        `Document validation failed after merge for id '${id}': Document does not match the schema. ` +
+          "Check that all required fields are present and have correct types.",
+        undefined,
+        mergedDoc
+      )
     }
 
     const { id: _mergedId, ...mergedBodyData } = mergedDoc
@@ -585,6 +627,9 @@ export class SQLiteCollection<T extends Document> implements Collection<T> {
    * @param id - Document ID to replace
    * @param doc - Complete new document (id excluded via type)
    * @returns Promise resolving to replaced document or null if not found
+   *
+   * @throws {ValidationError} If the replacement document fails schema validation
+   * @throws {DatabaseError} If the SQLite update operation fails
    *
    * @remarks
    * Unlike updateOne which merges fields, replaceOne completely replaces
@@ -630,7 +675,12 @@ export class SQLiteCollection<T extends Document> implements Collection<T> {
     })
 
     if (this.schema.validate && !this.schema.validate(fullDoc)) {
-      throw new Error("Document validation failed")
+      throw new ValidationError(
+        `Document validation failed during replace for id '${id}': Document does not match the schema. ` +
+          "Check that all required fields are present and have correct types.",
+        undefined,
+        fullDoc
+      )
     }
 
     const { id: _docId, ...bodyData } = fullDoc
@@ -649,6 +699,8 @@ export class SQLiteCollection<T extends Document> implements Collection<T> {
    *
    * @param id - Document ID to delete
    * @returns Promise resolving to true if deleted, false if not found
+   *
+   * @throws {DatabaseError} If the SQLite delete operation fails
    *
    * @example
    * ```typescript
@@ -700,6 +752,10 @@ export class SQLiteCollection<T extends Document> implements Collection<T> {
    * @param docs - Array of documents to insert
    * @param options - Insertion options (ordered: stop on first error if true)
    * @returns Promise resolving to bulk write result with success/failure details
+   *
+   * @throws {ValidationError} If any document fails schema validation
+   * @throws {UniqueConstraintError} If any document violates a unique constraint
+   * @throws {DatabaseError} If the SQLite insert operation fails
    *
    * @example
    * ```typescript
@@ -753,7 +809,12 @@ export class SQLiteCollection<T extends Document> implements Collection<T> {
 
         // Validate if validator is provided
         if (this.schema.validate && !this.schema.validate(fullDoc)) {
-          throw new Error("Document validation failed")
+          throw new ValidationError(
+            `Document validation failed in batch insert at index ${i}: Document does not match the schema. ` +
+              "Check that all required fields are present and have correct types.",
+            undefined,
+            fullDoc
+          )
         }
 
         const { id: _id, ...bodyData } = fullDoc
@@ -783,6 +844,10 @@ export class SQLiteCollection<T extends Document> implements Collection<T> {
    * @param filter - Query filter to find documents to update
    * @param update - Partial document with fields to update
    * @returns Promise resolving to update result with modifiedCount
+   *
+   * @throws {ValidationError} If any updated document fails schema validation
+   * @throws {QueryError} If query translation fails or contains invalid operators
+   * @throws {DatabaseError} If the SQLite update operation fails
    *
    * @remarks
    * Uses a transaction to ensure all-or-nothing semantics. All matching documents
@@ -847,7 +912,12 @@ export class SQLiteCollection<T extends Document> implements Collection<T> {
       })
 
       if (this.schema.validate && !this.schema.validate(mergedDoc)) {
-        throw new Error(`Document validation failed for id: ${row.id}`)
+        throw new ValidationError(
+          `Document validation failed during batch update for id '${row.id}': Document does not match the schema. ` +
+            "Check that all required fields are present and have correct types.",
+          undefined,
+          mergedDoc
+        )
       }
 
       updatedDocs.push(mergedDoc)
@@ -883,6 +953,9 @@ export class SQLiteCollection<T extends Document> implements Collection<T> {
    *
    * @param filter - Query filter to match documents to delete
    * @returns Promise resolving to delete result with deletedCount
+   *
+   * @throws {QueryError} If query translation fails or contains invalid operators
+   * @throws {DatabaseError} If the SQLite delete operation fails
    *
    * @remarks
    * Uses a transaction to ensure atomic deletion of all matching documents.
@@ -926,7 +999,8 @@ export class SQLiteCollection<T extends Document> implements Collection<T> {
    *
    * @param doc - Document to validate
    * @returns Promise resolving to the validated document typed as T
-   * @throws ValidationError if document fails validation
+   *
+   * @throws {ValidationError} If the document fails schema validation
    *
    * @example
    * ```typescript
@@ -958,7 +1032,8 @@ export class SQLiteCollection<T extends Document> implements Collection<T> {
    *
    * @param doc - Document to validate
    * @returns The validated document typed as T
-   * @throws ValidationError if document fails validation
+   *
+   * @throws {ValidationError} If the document fails schema validation
    *
    * @example
    * ```typescript

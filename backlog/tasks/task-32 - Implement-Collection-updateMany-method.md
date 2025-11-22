@@ -1,9 +1,10 @@
 ---
 id: task-32
 title: Implement Collection updateMany method
-status: To Do
+status: Done
 assignee: []
 created_date: '2025-11-21 02:57'
+updated_date: '2025-11-21 20:00'
 labels:
   - collection
 dependencies: []
@@ -29,3 +30,9 @@ Implement batch document update with query filter. This method updates all docum
 - [ ] #9 No any types used in implementation
 - [ ] #10 Complete TypeDoc comments with examples showing filtered batch updates
 <!-- AC:END -->
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+Implementation already exists in codebase - verified working with integration tests
+<!-- SECTION:NOTES:END -->

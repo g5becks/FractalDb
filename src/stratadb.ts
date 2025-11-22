@@ -6,6 +6,7 @@ import {
 import type { Collection } from "./collection-types.js"
 import type { Document } from "./core-types.js"
 import type {
+  CollectionOptions,
   DatabaseOptions,
   StrataDB as StrataDBInterface,
   Transaction,
@@ -54,7 +55,7 @@ export class StrataDBClass implements StrataDBInterface {
 
   private readonly idGeneratorFn: () => string
   private readonly onCloseCallback: (() => void) | undefined
-  private readonly debug: boolean
+  private readonly enableCacheDefault: boolean
   private readonly collections = new Map<string, Collection<Document>>()
 
   /**
@@ -72,11 +73,7 @@ export class StrataDBClass implements StrataDBInterface {
 
     this.idGeneratorFn = options.idGenerator ?? generateId
     this.onCloseCallback = options.onClose
-    this.debug = options.debug ?? false
-
-    if (this.debug) {
-      console.log("[StrataDB] Database initialized")
-    }
+    this.enableCacheDefault = options.enableCache ?? false
   }
 
   /**
@@ -93,7 +90,8 @@ export class StrataDBClass implements StrataDBInterface {
    */
   collection<T extends Document>(
     name: string,
-    schema: SchemaDefinition<T>
+    schema: SchemaDefinition<T>,
+    options?: CollectionOptions
   ): Collection<T>
 
   /**
@@ -106,17 +104,16 @@ export class StrataDBClass implements StrataDBInterface {
    */
   collection<T extends Document>(
     name: string,
-    schema?: SchemaDefinition<T>
+    schema?: SchemaDefinition<T>,
+    options?: CollectionOptions
   ): Collection<T> | CollectionBuilder<T> {
     if (!schema) {
       // Return builder for fluent schema definition
-      if (this.debug) {
-        console.log(`[StrataDB] Creating collection builder for '${name}'`)
-      }
       return new CollectionBuilderImpl<T>(
         this.sqliteDb,
         name,
-        this.idGeneratorFn
+        this.idGeneratorFn,
+        this.enableCacheDefault
       )
     }
 
@@ -125,17 +122,17 @@ export class StrataDBClass implements StrataDBInterface {
       return existing as Collection<T>
     }
 
+    // Determine cache setting: collection option > database default
+    const enableCache = options?.enableCache ?? this.enableCacheDefault
+
     const collection = new SQLiteCollection<T>(
       this.sqliteDb,
       name,
       schema,
-      this.idGeneratorFn
+      this.idGeneratorFn,
+      enableCache
     )
     this.collections.set(name, collection as Collection<Document>)
-
-    if (this.debug) {
-      console.log(`[StrataDB] Collection '${name}' created`)
-    }
 
     return collection
   }
@@ -148,10 +145,6 @@ export class StrataDBClass implements StrataDBInterface {
   transaction(): Transaction {
     this.sqliteDb.exec("BEGIN TRANSACTION")
 
-    if (this.debug) {
-      console.log("[StrataDB] Transaction started")
-    }
-
     let committed = false
 
     const tx: Transaction = {
@@ -163,17 +156,11 @@ export class StrataDBClass implements StrataDBInterface {
       commit: () => {
         this.sqliteDb.exec("COMMIT")
         committed = true
-        if (this.debug) {
-          console.log("[StrataDB] Transaction committed")
-        }
       },
 
       rollback: () => {
         if (!committed) {
           this.sqliteDb.exec("ROLLBACK")
-          if (this.debug) {
-            console.log("[StrataDB] Transaction rolled back")
-          }
         }
       },
 
@@ -209,10 +196,6 @@ export class StrataDBClass implements StrataDBInterface {
    * Closes the database connection.
    */
   close(): void {
-    if (this.debug) {
-      console.log("[StrataDB] Closing database")
-    }
-
     this.onCloseCallback?.()
     this.sqliteDb.close()
   }

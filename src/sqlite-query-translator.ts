@@ -1,9 +1,11 @@
 import type { Document } from "./core-types.js"
+import { QueryError } from "./errors.js"
 import type { QueryOptions } from "./query-options-types.js"
-import type {
-  QueryTranslator,
-  QueryTranslatorResult,
-  SQLiteBindValue,
+import {
+  createQueryResult,
+  type QueryTranslator,
+  type QueryTranslatorResult,
+  type SQLiteBindValue,
 } from "./query-translator-types.js"
 import type { QueryFilter } from "./query-types.js"
 import type { SchemaDefinition, SchemaField } from "./schema-types.js"
@@ -83,17 +85,44 @@ export class SQLiteQueryTranslator<T extends Document>
   /** Map of field names to their schema definitions */
   private readonly fieldMap: Map<keyof T, SchemaField<T, keyof T>>
 
+  /** Cache for query SQL templates to avoid repeated translation */
+  private readonly queryCache: Map<
+    string,
+    { sql: string; valuePaths: string[] }
+  > | null
+
+  /** Maximum cache size before eviction */
+  // biome-ignore lint/correctness/noUnusedPrivateClassMembers: used for cache eviction logic
+  private static readonly MAX_CACHE_SIZE = 500
+
   /**
    * Creates a new SQLite query translator.
    *
    * @param schema - The schema definition for the document type
+   * @param options - Optional configuration options
+   * @param options.enableCache - Whether to enable query caching (default: true)
+   *
+   * @example
+   * ```typescript
+   * // With caching (default)
+   * const translator = new SQLiteQueryTranslator(schema);
+   *
+   * // Without caching
+   * const translator = new SQLiteQueryTranslator(schema, { enableCache: false });
+   * ```
    */
-  constructor(schema: SchemaDefinition<T>) {
+  constructor(
+    schema: SchemaDefinition<T>,
+    options?: { enableCache?: boolean }
+  ) {
     // Build field map for quick lookups
     this.fieldMap = new Map()
     for (const field of schema.fields) {
       this.fieldMap.set(field.name, field)
     }
+
+    // Initialize query cache (enabled by default, null when disabled)
+    this.queryCache = options?.enableCache !== false ? new Map() : null
   }
 
   /**
@@ -101,7 +130,7 @@ export class SQLiteQueryTranslator<T extends Document>
    *
    * @param value - The value to validate
    * @returns The value as SQLiteBindValue
-   * @throws TypeError if value is not a valid SQLite bind type
+   * @throws {QueryError} If value is not a valid SQLite bind type
    *
    * @internal
    */
@@ -116,8 +145,10 @@ export class SQLiteQueryTranslator<T extends Document>
     ) {
       return value
     }
-    throw new TypeError(
-      `Invalid SQLite bind value: ${typeof value}. Expected string, number, boolean, null, bigint, or Uint8Array.`
+    throw new QueryError(
+      `Invalid SQLite bind value: cannot bind ${typeof value} type. ` +
+        "Expected string, number, boolean, null, bigint, or Uint8Array. " +
+        `Received value: ${JSON.stringify(value)}`
     )
   }
 
@@ -127,24 +158,291 @@ export class SQLiteQueryTranslator<T extends Document>
    * @param filter - The query filter to translate
    * @returns Object containing SQL WHERE clause and parameter values
    *
+   * @throws {QueryError} If the filter contains invalid operators or unsupported value types
+   *
    * @remarks
    * This method recursively processes the query filter and generates
    * parameterized SQL. All user values are extracted into the params array.
+   *
+   * **Caching:**
+   * Queries with the same structure are cached. On cache hit, only parameter
+   * extraction is performed, skipping SQL generation entirely.
+   * Note: Queries with $regex (RegExp objects), $elemMatch, or $index are not cached
+   * due to their complex value extraction requirements.
    */
   translate(filter: QueryFilter<T>): QueryTranslatorResult {
-    const params: SQLiteBindValue[] = []
-
     // Empty filter matches all documents
     if (!filter || Object.keys(filter).length === 0) {
-      return { sql: "1=1", params: [] }
+      return createQueryResult("1=1", [])
     }
 
+    // If caching is disabled, do direct translation
+    if (!this.queryCache) {
+      const params: SQLiteBindValue[] = []
+      const sql = this.translateFilter(filter, params)
+      return createQueryResult(sql, params)
+    }
+
+    // Check if query contains non-cacheable operators
+    if (this.containsNonCacheableOperators(filter)) {
+      // Skip cache for complex operators
+      const params: SQLiteBindValue[] = []
+      const sql = this.translateFilter(filter, params)
+      return createQueryResult(sql, params)
+    }
+
+    // Generate cache key from query structure
+    const cacheKey = this.generateCacheKey(filter)
+    const cached = this.queryCache.get(cacheKey)
+
+    if (cached) {
+      // Cache hit: extract values using stored paths
+      const params = this.extractValuesFromPaths(filter, cached.valuePaths)
+      return createQueryResult(cached.sql, params)
+    }
+
+    // Cache miss: full translation
+    const params: SQLiteBindValue[] = []
     const sql = this.translateFilter(filter, params)
 
-    return {
-      sql,
-      params,
+    // Store in cache with value paths
+    const valuePaths = this.collectValuePaths(filter)
+
+    // Evict if necessary (simple FIFO)
+    if (this.queryCache.size >= SQLiteQueryTranslator.MAX_CACHE_SIZE) {
+      const firstKey = this.queryCache.keys().next().value
+      if (firstKey) {
+        this.queryCache.delete(firstKey)
+      }
     }
+
+    this.queryCache.set(cacheKey, { sql, valuePaths })
+
+    return createQueryResult(sql, params)
+  }
+
+  /**
+   * Checks if a filter contains operators that can't be cached.
+   *
+   * @param filter - The query filter
+   * @returns true if filter contains non-cacheable operators
+   *
+   * @internal
+   */
+  // biome-ignore lint/complexity/noExcessiveCognitiveComplexity: recursive query filter traversal requires complex logic
+  private containsNonCacheableOperators(filter: QueryFilter<T>): boolean {
+    for (const [key, value] of Object.entries(filter)) {
+      // Check logical operators recursively
+      if (key === "$and" || key === "$or" || key === "$nor") {
+        const filters = value as readonly QueryFilter<T>[]
+        for (const f of filters) {
+          if (this.containsNonCacheableOperators(f as QueryFilter<T>)) {
+            return true
+          }
+        }
+      } else if (key === "$not") {
+        if (this.containsNonCacheableOperators(value as QueryFilter<T>)) {
+          return true
+        }
+      } else if (this.isOperatorObject(value)) {
+        // Check for non-cacheable operators in field conditions
+        const ops = value as Record<string, unknown>
+        if (
+          "$regex" in ops ||
+          "$elemMatch" in ops ||
+          "$index" in ops ||
+          "$all" in ops
+        ) {
+          return true
+        }
+      }
+    }
+    return false
+  }
+
+  /**
+   * Generates a cache key from query structure (ignoring actual values).
+   *
+   * @param value - Any query value
+   * @returns Cache key string representing the structure
+   *
+   * @internal
+   */
+  private generateCacheKey(value: unknown): string {
+    if (value === null) {
+      return "null"
+    }
+
+    if (Array.isArray(value)) {
+      return `[${value.map((v) => this.generateCacheKey(v)).join(",")}]`
+    }
+
+    if (typeof value === "object") {
+      const obj = value as Record<string, unknown>
+      const keys = Object.keys(obj).sort()
+      const parts = keys.map((k) => `${k}:${this.generateCacheKey(obj[k])}`)
+      return `{${parts.join(",")}}`
+    }
+
+    // For primitive values, just mark the type
+    // This allows { name: "Alice" } and { name: "Bob" } to have same key
+    return typeof value
+  }
+
+  /**
+   * Collects all value paths from a query for parameter extraction.
+   *
+   * @param filter - The query filter
+   * @param prefix - Current path prefix
+   * @returns Array of paths to values in parameter order
+   *
+   * @internal
+   */
+  // biome-ignore lint/complexity/noExcessiveCognitiveComplexity: recursive query filter traversal requires complex logic
+  private collectValuePaths(filter: QueryFilter<T>, prefix = ""): string[] {
+    const paths: string[] = []
+
+    for (const [key, value] of Object.entries(filter)) {
+      const currentPath = prefix ? `${prefix}.${key}` : key
+
+      if (this.isLogicalOperator(key)) {
+        // Logical operators contain arrays of filters
+        const filters = value as readonly QueryFilter<T>[]
+        for (let i = 0; i < filters.length; i++) {
+          const subPaths = this.collectValuePaths(
+            filters[i] as QueryFilter<T>,
+            `${currentPath}.[${i}]`
+          )
+          paths.push(...subPaths)
+        }
+      } else if (key === "$not") {
+        const subPaths = this.collectValuePaths(
+          value as QueryFilter<T>,
+          currentPath
+        )
+        paths.push(...subPaths)
+      } else if (this.isOperatorObject(value)) {
+        // Operator object like { $gt: 18, $lt: 65 }
+        for (const [op, opValue] of Object.entries(
+          value as Record<string, unknown>
+        )) {
+          if (op === "$options" || op === "$exists") {
+            // Skip $options (handled with $regex) and $exists (no value)
+            continue
+          }
+
+          if (Array.isArray(opValue)) {
+            // Array values like $in: [1, 2, 3]
+            for (let i = 0; i < opValue.length; i++) {
+              paths.push(`${currentPath}.${op}.[${i}]`)
+            }
+          } else {
+            paths.push(`${currentPath}.${op}`)
+          }
+        }
+      } else {
+        // Direct value comparison like { name: "Alice" }
+        paths.push(currentPath)
+      }
+    }
+
+    return paths
+  }
+
+  /**
+   * Extracts values from query filter using stored paths.
+   *
+   * @param filter - The query filter
+   * @param paths - Paths to extract values from
+   * @returns Array of values in parameter order
+   *
+   * @internal
+   */
+  private extractValuesFromPaths(
+    filter: QueryFilter<T>,
+    paths: string[]
+  ): SQLiteBindValue[] {
+    const values: SQLiteBindValue[] = []
+
+    for (const path of paths) {
+      const value = this.getValueAtPath(filter, path)
+      values.push(this.toBindValue(value))
+    }
+
+    return values
+  }
+
+  /**
+   * Gets a value from a nested object using a dot-separated path.
+   *
+   * @param obj - The object to traverse
+   * @param path - Dot-separated path (e.g., "age.$gt" or "name")
+   * @returns The value at the path
+   *
+   * @internal
+   */
+  private getValueAtPath(obj: unknown, path: string): unknown {
+    const parts = path.split(".")
+    let current: unknown = obj
+
+    for (const part of parts) {
+      if (current === null || current === undefined) {
+        return
+      }
+
+      if (part.startsWith("[") && part.endsWith("]")) {
+        // Array index
+        const index = Number.parseInt(part.slice(1, -1), 10)
+        current = (current as unknown[])[index]
+      } else {
+        current = (current as Record<string, unknown>)[part]
+      }
+    }
+
+    return current
+  }
+
+  /**
+   * Checks if a key is a logical operator.
+   *
+   * @internal
+   */
+  private isLogicalOperator(key: string): boolean {
+    return key === "$and" || key === "$or" || key === "$nor"
+  }
+
+  /**
+   * Checks if a value is an operator object (contains $ keys).
+   *
+   * @internal
+   */
+  private isOperatorObject(value: unknown): boolean {
+    if (typeof value !== "object" || value === null || Array.isArray(value)) {
+      return false
+    }
+    return Object.keys(value).some((k) => k.startsWith("$"))
+  }
+
+  /**
+   * Clears the query cache.
+   *
+   * @remarks
+   * Useful for testing or when schema changes require fresh translation.
+   * Does nothing if caching is disabled.
+   */
+  clearCache(): void {
+    this.queryCache?.clear()
+  }
+
+  /**
+   * Returns the current cache size.
+   *
+   * @remarks
+   * Useful for monitoring cache utilization.
+   * Returns 0 if caching is disabled.
+   */
+  get cacheSize(): number {
+    return this.queryCache?.size ?? 0
   }
 
   /**
@@ -790,10 +1088,7 @@ export class SQLiteQueryTranslator<T extends Document>
 
     // Note: projection is handled by the collection layer during SELECT construction
 
-    return {
-      sql: clauses.join(" "),
-      params,
-    }
+    return createQueryResult(clauses.join(" "), params)
   }
 
   /**

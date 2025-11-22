@@ -11,7 +11,7 @@
  * try {
  *   await users.insertOne(invalidUser);
  * } catch (error) {
- *   if (error instanceof DocDBError) {
+ *   if (error instanceof StrataDBError) {
  *     console.log(`Error: ${error.code} in category: ${error.category}`);
  *
  *     switch (error.category) {
@@ -32,7 +32,7 @@
  * }
  * ```
  */
-export abstract class DocDBError extends Error {
+export abstract class StrataDBError extends Error {
   /** Unique error code for programmatic identification */
   abstract readonly code: string
 
@@ -73,7 +73,7 @@ export abstract class DocDBError extends Error {
  * }
  * ```
  */
-export class ValidationError extends DocDBError {
+export class ValidationError extends StrataDBError {
   readonly category = "validation" as const
   readonly code = "VALIDATION_ERROR"
 
@@ -109,7 +109,7 @@ export class ValidationError extends DocDBError {
  * }
  * ```
  */
-export class SchemaValidationError extends DocDBError {
+export class SchemaValidationError extends StrataDBError {
   readonly category = "validation" as const
   readonly code = "SCHEMA_VALIDATION_ERROR"
 
@@ -145,7 +145,7 @@ export class SchemaValidationError extends DocDBError {
  * }
  * ```
  */
-export class QueryError extends DocDBError {
+export class QueryError extends StrataDBError {
   readonly category = "query" as const
   readonly code = "QUERY_ERROR"
 
@@ -176,7 +176,7 @@ export class QueryError extends DocDBError {
  * }
  * ```
  */
-export class InvalidQueryOperatorError extends DocDBError {
+export class InvalidQueryOperatorError extends StrataDBError {
   readonly category = "query" as const
   readonly code = "INVALID_QUERY_OPERATOR"
 
@@ -208,7 +208,7 @@ export class InvalidQueryOperatorError extends DocDBError {
  * }
  * ```
  */
-export class TypeMismatchError extends DocDBError {
+export class TypeMismatchError extends StrataDBError {
   readonly category = "query" as const
   readonly code = "TYPE_MISMATCH"
 
@@ -262,7 +262,7 @@ export class TypeMismatchError extends DocDBError {
  * }
  * ```
  */
-export class DatabaseError extends DocDBError {
+export class DatabaseError extends StrataDBError {
   readonly category = "database" as const
   readonly code = "DATABASE_ERROR"
 
@@ -292,7 +292,7 @@ export class DatabaseError extends DocDBError {
  * }
  * ```
  */
-export class ConnectionError extends DocDBError {
+export class ConnectionError extends StrataDBError {
   readonly category = "database" as const
   readonly code = "CONNECTION_ERROR"
 
@@ -322,7 +322,7 @@ export class ConnectionError extends DocDBError {
  * }
  * ```
  */
-export class ConstraintError extends DocDBError {
+export class ConstraintError extends StrataDBError {
   readonly category = "database" as const
   readonly code = "CONSTRAINT_ERROR"
 
@@ -357,7 +357,7 @@ export class ConstraintError extends DocDBError {
  * }
  * ```
  */
-export class UniqueConstraintError extends DocDBError {
+export class UniqueConstraintError extends StrataDBError {
   readonly category = "database" as const
   readonly code = "UNIQUE_CONSTRAINT_ERROR"
 
@@ -402,7 +402,7 @@ export class UniqueConstraintError extends DocDBError {
  * }
  * ```
  */
-export class TransactionError extends DocDBError {
+export class TransactionError extends StrataDBError {
   readonly category = "transaction" as const
   readonly code = "TRANSACTION_ERROR"
 }
@@ -429,7 +429,7 @@ export class TransactionError extends DocDBError {
  * }
  * ```
  */
-export class TransactionAbortedError extends DocDBError {
+export class TransactionAbortedError extends StrataDBError {
   readonly category = "transaction" as const
   readonly code = "TRANSACTION_ABORTED"
 }

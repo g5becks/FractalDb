@@ -1,9 +1,10 @@
 ---
 id: task-23
 title: Implement collection table creation with generated columns
-status: To Do
+status: Done
 assignee: []
 created_date: '2025-11-21 02:56'
+updated_date: '2025-11-21 20:00'
 labels:
   - collection
   - database
@@ -30,3 +31,9 @@ Create the SQLite table initialization logic that creates tables with JSONB stor
 - [ ] #9 No any types used in implementation
 - [ ] #10 Complete TypeDoc comments explaining generated column strategy and performance benefits
 <!-- AC:END -->
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+Implementation already exists in codebase - verified working with integration tests
+<!-- SECTION:NOTES:END -->

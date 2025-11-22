@@ -1,0 +1,67 @@
+[stratadb](../index.md) / SortSpec
+
+# Type Alias: SortSpec\<T\>
+
+```ts
+type SortSpec<T> = { readonly [K in keyof T]?: 1 | -1 };
+```
+
+Defined in: [src/query-options-types.ts:52](https://github.com/g5becks/StrataDB/blob/89bee4bbe54bb52f1f1308d5950da4d385abbe16/src/query-options-types.ts#L52)
+
+Sort specification for query result ordering.
+
+## Type Parameters
+
+### T
+
+`T`
+
+The document type being queried
+
+## Remarks
+
+Defines sort order for query results using MongoDB-style sort syntax.
+Each field can be sorted in ascending (1) or descending (-1) order.
+Multiple fields can be specified for multi-level sorting.
+
+Sort order matters: fields are sorted left-to-right as specified.
+
+## Example
+
+```typescript
+type User = Document<{
+  name: string;
+  age: number;
+  createdAt: Date;
+  status: 'active' | 'inactive';
+}>;
+
+// ✅ Single field sort
+const byAge: SortSpec<User> = {
+  age: 1  // Ascending order
+};
+
+// ✅ Descending order
+const byNewest: SortSpec<User> = {
+  createdAt: -1  // Most recent first
+};
+
+// ✅ Multi-field sort
+const byStatusThenAge: SortSpec<User> = {
+  status: 1,   // First by status (ascending)
+  age: -1      // Then by age (descending)
+};
+
+// ✅ Complex sort
+const complexSort: SortSpec<User> = {
+  status: 1,      // Active users first
+  createdAt: -1,  // Then newest first
+  name: 1         // Then alphabetically
+};
+
+// Usage with collection
+const results = await users.find(
+  { status: 'active' },
+  { sort: { createdAt: -1, name: 1 } }
+);
+```

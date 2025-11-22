@@ -1,0 +1,168 @@
+[
+  {
+    "text": "Classes",
+    "collapsed": false,
+    "items": [
+      {
+        "text": "ConnectionError",
+        "link": "/api/classes/ConnectionError.md"
+      },
+      {
+        "text": "DocDBError",
+        "link": "/api/classes/DocDBError.md"
+      },
+      {
+        "text": "QueryError",
+        "link": "/api/classes/QueryError.md"
+      },
+      {
+        "text": "StrataDBClass",
+        "link": "/api/classes/StrataDBClass.md"
+      },
+      {
+        "text": "TransactionError",
+        "link": "/api/classes/TransactionError.md"
+      },
+      {
+        "text": "UniqueConstraintError",
+        "link": "/api/classes/UniqueConstraintError.md"
+      },
+      {
+        "text": "ValidationError",
+        "link": "/api/classes/ValidationError.md"
+      }
+    ]
+  },
+  {
+    "text": "Type Aliases",
+    "collapsed": false,
+    "items": [
+      {
+        "text": "BulkWriteResult",
+        "link": "/api/type-aliases/BulkWriteResult.md"
+      },
+      {
+        "text": "Collection",
+        "link": "/api/type-aliases/Collection.md"
+      },
+      {
+        "text": "CollectionBuilder",
+        "link": "/api/type-aliases/CollectionBuilder.md"
+      },
+      {
+        "text": "CompoundIndex",
+        "link": "/api/type-aliases/CompoundIndex.md"
+      },
+      {
+        "text": "DatabaseOptions",
+        "link": "/api/type-aliases/DatabaseOptions.md"
+      },
+      {
+        "text": "DeleteResult",
+        "link": "/api/type-aliases/DeleteResult.md"
+      },
+      {
+        "text": "Document",
+        "link": "/api/type-aliases/Document.md"
+      },
+      {
+        "text": "DocumentInput",
+        "link": "/api/type-aliases/DocumentInput.md"
+      },
+      {
+        "text": "DocumentPath",
+        "link": "/api/type-aliases/DocumentPath.md"
+      },
+      {
+        "text": "DocumentUpdate",
+        "link": "/api/type-aliases/DocumentUpdate.md"
+      },
+      {
+        "text": "FieldOperator",
+        "link": "/api/type-aliases/FieldOperator.md"
+      },
+      {
+        "text": "InsertManyResult",
+        "link": "/api/type-aliases/InsertManyResult.md"
+      },
+      {
+        "text": "InsertOneResult",
+        "link": "/api/type-aliases/InsertOneResult.md"
+      },
+      {
+        "text": "JsonPath",
+        "link": "/api/type-aliases/JsonPath.md"
+      },
+      {
+        "text": "LogicalOperator",
+        "link": "/api/type-aliases/LogicalOperator.md"
+      },
+      {
+        "text": "PathValue",
+        "link": "/api/type-aliases/PathValue.md"
+      },
+      {
+        "text": "ProjectionSpec",
+        "link": "/api/type-aliases/ProjectionSpec.md"
+      },
+      {
+        "text": "QueryFilter",
+        "link": "/api/type-aliases/QueryFilter.md"
+      },
+      {
+        "text": "QueryOptions",
+        "link": "/api/type-aliases/QueryOptions.md"
+      },
+      {
+        "text": "SchemaBuilder",
+        "link": "/api/type-aliases/SchemaBuilder.md"
+      },
+      {
+        "text": "SchemaDefinition",
+        "link": "/api/type-aliases/SchemaDefinition.md"
+      },
+      {
+        "text": "SchemaField",
+        "link": "/api/type-aliases/SchemaField.md"
+      },
+      {
+        "text": "SortSpec",
+        "link": "/api/type-aliases/SortSpec.md"
+      },
+      {
+        "text": "SQLiteType",
+        "link": "/api/type-aliases/SQLiteType.md"
+      },
+      {
+        "text": "StrataDB",
+        "link": "/api/type-aliases/StrataDB.md"
+      },
+      {
+        "text": "TimestampConfig",
+        "link": "/api/type-aliases/TimestampConfig.md"
+      },
+      {
+        "text": "Transaction",
+        "link": "/api/type-aliases/Transaction.md"
+      },
+      {
+        "text": "TypeScriptToSQLite",
+        "link": "/api/type-aliases/TypeScriptToSQLite.md"
+      },
+      {
+        "text": "UpdateResult",
+        "link": "/api/type-aliases/UpdateResult.md"
+      }
+    ]
+  },
+  {
+    "text": "Functions",
+    "collapsed": false,
+    "items": [
+      {
+        "text": "createSchema",
+        "link": "/api/functions/createSchema.md"
+      }
+    ]
+  }
+]

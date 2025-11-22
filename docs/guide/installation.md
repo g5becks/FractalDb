@@ -1,0 +1,59 @@
+# Installation
+
+## Requirements
+
+::: danger Bun Required
+StrataDB **only works with Bun**. It uses `bun:sqlite` which is not available in Node.js or Deno.
+:::
+
+- [Bun](https://bun.sh) v1.0 or later
+
+## Install StrataDB
+
+```bash
+bun add stratadb
+```
+
+## Optional: Validation Libraries
+
+StrataDB works with any Standard Schema compatible validation library:
+
+```bash
+# Choose one (or none)
+bun add zod        # Most popular
+bun add arktype    # Best TypeScript integration
+bun add valibot    # Lightweight alternative
+```
+
+See [Validation](/guide/validation) for usage examples.
+
+## TypeScript Configuration
+
+StrataDB is written in TypeScript and includes type definitions. For best results, enable strict mode in your `tsconfig.json`:
+
+```json
+{
+  "compilerOptions": {
+    "strict": true,
+    "moduleResolution": "bundler",
+    "target": "ESNext",
+    "module": "ESNext"
+  }
+}
+```
+
+## Verify Installation
+
+```typescript
+import { StrataDBClass } from 'stratadb'
+
+const db = new StrataDBClass({ database: ':memory:' })
+console.log('StrataDB is working!')
+db.close()
+```
+
+Run with:
+
+```bash
+bun run your-file.ts
+```

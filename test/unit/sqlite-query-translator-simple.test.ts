@@ -10,6 +10,8 @@ import { SQLiteQueryTranslator } from "../../src/sqlite-query-translator"
 const ADMIN_REGEX_CI = /^admin/i
 const ADMIN_REGEX_LOWER_CI = /admin/i
 const PREMIUM_REGEX_CI = /^premium/i
+const SQL_LINE_REGEX = /^SQL:/
+const PARAMS_LINE_REGEX = /^Parameters:/
 
 // ============================================================================
 // TEST SCHEMAS AND TYPES
@@ -546,5 +548,81 @@ describe("SQLiteQueryTranslator - Parameter Validation", () => {
     expect(() => userTranslator.translate({ age: 42 })).not.toThrow()
     expect(() => userTranslator.translate({ active: true })).not.toThrow()
     expect(() => userTranslator.translate({ status: null })).not.toThrow()
+  })
+})
+
+// ============================================================================
+// TOSTRING() INTROSPECTION TESTS
+// ============================================================================
+
+describe("SQLiteQueryTranslator - toString() Query Introspection", () => {
+  /**
+   * Tests verify that QueryTranslatorResult includes toString() for debugging
+   * and issue reporting.
+   */
+
+  it("should provide toString() for simple equality query", () => {
+    const filter: QueryFilter<User> = { name: "Alice" }
+    const result = userTranslator.translate(filter)
+
+    const str = result.toString()
+    expect(str).toContain("SQL:")
+    expect(str).toContain("_name = ?")
+    expect(str).toContain("Parameters:")
+    expect(str).toContain('"Alice"')
+  })
+
+  it("should provide toString() for complex query with multiple params", () => {
+    const filter: QueryFilter<User> = {
+      age: { $gte: 18, $lt: 65 },
+    }
+    const result = userTranslator.translate(filter)
+
+    const str = result.toString()
+    expect(str).toContain("SQL:")
+    expect(str).toContain("_age >= ?")
+    expect(str).toContain("_age < ?")
+    expect(str).toContain("Parameters:")
+    expect(str).toContain("18")
+    expect(str).toContain("65")
+  })
+
+  it("should provide toString() for empty filter", () => {
+    const filter: QueryFilter<User> = {}
+    const result = userTranslator.translate(filter)
+
+    const str = result.toString()
+    expect(str).toContain("SQL: 1=1")
+    expect(str).toContain("Parameters: []")
+  })
+
+  it("should provide toString() for translateOptions", () => {
+    const options: QueryOptions<User> = {
+      sort: { age: -1 },
+      limit: 10,
+      skip: 20,
+    }
+    const result = userTranslator.translateOptions(options)
+
+    const str = result.toString()
+    expect(str).toContain("SQL:")
+    expect(str).toContain("ORDER BY _age DESC")
+    expect(str).toContain("LIMIT ?")
+    expect(str).toContain("OFFSET ?")
+    expect(str).toContain("Parameters:")
+    expect(str).toContain("10")
+    expect(str).toContain("20")
+  })
+
+  it("should format toString() output for debugging", () => {
+    const filter: QueryFilter<User> = { name: "Bob", age: { $gt: 21 } }
+    const result = userTranslator.translate(filter)
+
+    const str = result.toString()
+    // Should have two lines: SQL and Parameters
+    const lines = str.split("\n")
+    expect(lines).toHaveLength(2)
+    expect(lines[0]).toMatch(SQL_LINE_REGEX)
+    expect(lines[1]).toMatch(PARAMS_LINE_REGEX)
   })
 })

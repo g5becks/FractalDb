@@ -27,17 +27,27 @@ export type SQLiteBindValue = SQLQueryBindings
  * - Allows database to cache query plans for better performance
  * - Ensures proper escaping and type handling by the database driver
  *
+ * **Debugging with toString():**
+ * The result includes a `toString()` method for easy debugging and introspection.
+ * This is useful for troubleshooting queries and reporting issues.
+ *
  * @example
  * ```typescript
  * // Example translation result
  * const result: QueryTranslatorResult = {
  *   sql: "age > ? AND status = ?",
- *   params: [18, 'active']
+ *   params: [18, 'active'],
+ *   toString: () => "..."
  * };
  *
  * // Used with database query
  * const query = `SELECT * FROM users WHERE ${result.sql}`;
  * const users = db.prepare(query).all(...result.params);
+ *
+ * // Debug output
+ * console.log(result.toString());
+ * // SQL: age > ? AND status = ?
+ * // Parameters: [18, "active"]
  * ```
  */
 export type QueryTranslatorResult = {
@@ -46,6 +56,52 @@ export type QueryTranslatorResult = {
 
   /** Array of parameter values to bind to the SQL placeholders */
   readonly params: SQLiteBindValue[]
+
+  /**
+   * Returns a formatted string representation of the query for debugging.
+   *
+   * @remarks
+   * Useful for logging, troubleshooting, and GitHub issue reports.
+   * Shows both the SQL and the parameter values.
+   *
+   * @example
+   * ```typescript
+   * const result = translator.translate({ age: { $gte: 21 } });
+   * console.log(result.toString());
+   * // SQL: jsonb_extract(body, '$.age') >= ?
+   * // Parameters: [21]
+   * ```
+   */
+  toString(): string
+}
+
+/**
+ * Creates a QueryTranslatorResult with toString() for debugging.
+ *
+ * @param sql - The SQL string with placeholders
+ * @param params - The parameter values to bind
+ * @returns QueryTranslatorResult with toString() method
+ *
+ * @example
+ * ```typescript
+ * const result = createQueryResult("age > ?", [18]);
+ * console.log(result.toString());
+ * // SQL: age > ?
+ * // Parameters: [18]
+ * ```
+ */
+export function createQueryResult(
+  sql: string,
+  params: SQLiteBindValue[]
+): QueryTranslatorResult {
+  return {
+    sql,
+    params,
+    toString(): string {
+      const paramStr = JSON.stringify(params)
+      return `SQL: ${sql}\nParameters: ${paramStr}`
+    },
+  }
 }
 
 /**

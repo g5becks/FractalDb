@@ -58,8 +58,8 @@ export type {
 // biome-ignore lint/performance/noBarrelFile: library entry point requires re-exports
 export {
   ConnectionError,
-  DocDBError,
   QueryError,
+  StrataDBError,
   TransactionError,
   UniqueConstraintError,
   ValidationError,

@@ -28,7 +28,7 @@ import type { StandardSchemaV1 } from "./standard-schema.js"
  * - ArkType v2.0+
  * - And any other library implementing Standard Schema v1
  *
- * @throws {TypeError} If the schema validator returns a Promise (async validation not supported)
+ * @throws {ValidationError} If the schema validator returns a Promise (async validation not supported) or if validation fails
  *
  * @example
  * ```typescript
@@ -108,8 +108,11 @@ export function wrapStandardSchema<T>(
 
     // StrataDB only supports synchronous validation
     if (result instanceof Promise) {
-      throw new TypeError(
-        "Async validation is not supported. Standard Schema validators must return synchronous results."
+      throw new ValidationError(
+        "Async validation is not supported: Standard Schema validators must return synchronous results. " +
+          "StrataDB requires immediate validation responses for performance and consistency.",
+        undefined,
+        doc
       )
     }
 

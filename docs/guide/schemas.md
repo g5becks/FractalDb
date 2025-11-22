@@ -1,0 +1,129 @@
+# Schemas
+
+Schemas define your document structure, indexes, and validation rules.
+
+## Creating a Schema
+
+Use `createSchema<T>()` for a fluent builder API:
+
+```typescript
+import { createSchema, type Document } from 'stratadb'
+
+type User = Document<{
+  name: string
+  email: string
+  age: number
+}>
+
+const userSchema = createSchema<User>()
+  .field('name', { type: 'TEXT', indexed: true })
+  .field('email', { type: 'TEXT', indexed: true, unique: true })
+  .field('age', { type: 'INTEGER', indexed: true })
+  .build()
+```
+
+## Field Options
+
+```typescript
+.field('fieldName', {
+  type: 'TEXT',        // SQLite type (required)
+  indexed: true,       // Create index for fast queries
+  unique: true,        // Enforce uniqueness
+  nullable: false,     // Disallow null values
+  default: 'value',    // Default value on insert
+  path: '$.nested.field'  // JSON path for nested fields
+})
+```
+
+### SQLite Types
+
+| Type | TypeScript | Description |
+|------|------------|-------------|
+| `TEXT` | `string` | Text strings |
+| `INTEGER` | `number` | Integers |
+| `REAL` | `number` | Floating point |
+| `BLOB` | `Uint8Array` | Binary data |
+| `BOOLEAN` | `boolean` | Stored as INTEGER (0/1) |
+| `NUMERIC` | `number` | Numeric affinity |
+
+## Indexes
+
+Indexed fields are extracted into **generated columns** for fast B-tree lookups:
+
+```typescript
+// Indexed field - uses generated column, O(log n) queries
+.field('email', { type: 'TEXT', indexed: true })
+
+// Non-indexed field - uses jsonb_extract, O(n) queries
+.field('bio', { type: 'TEXT' })
+```
+
+### Compound Indexes
+
+For queries on multiple fields:
+
+```typescript
+const schema = createSchema<User>()
+  .field('age', { type: 'INTEGER', indexed: true })
+  .field('status', { type: 'TEXT', indexed: true })
+  .compoundIndex('age_status', ['age', 'status'])
+  .build()
+
+// This query uses the compound index efficiently:
+await users.find({ age: { $gte: 18 }, status: 'active' })
+```
+
+### Unique Constraints
+
+```typescript
+// Single field unique
+.field('email', { type: 'TEXT', indexed: true, unique: true })
+
+// Compound unique (e.g., one email per tenant)
+.compoundIndex('email_tenant', ['email', 'tenantId'], { unique: true })
+```
+
+## Timestamps
+
+Enable automatic timestamp management:
+
+```typescript
+const schema = createSchema<User>()
+  .field('name', { type: 'TEXT' })
+  .timestamps(true)  // Enable createdAt/updatedAt
+  .build()
+```
+
+## Validation
+
+Add runtime validation using Zod, ArkType, or custom functions:
+
+```typescript
+import { z } from 'zod'
+
+const UserValidator = z.object({
+  name: z.string().min(1),
+  email: z.string().email(),
+  age: z.number().int().min(0),
+})
+
+const schema = createSchema<User>()
+  .field('name', { type: 'TEXT' })
+  .field('email', { type: 'TEXT', unique: true })
+  .field('age', { type: 'INTEGER' })
+  .validate((doc): doc is User => UserValidator.safeParse(doc).success)
+  .build()
+```
+
+See [Validation](/guide/validation) for more examples.
+
+## Inline Schema Definition
+
+You can also define schemas inline when creating collections:
+
+```typescript
+const users = db.collection<User>('users')
+  .field('name', { type: 'TEXT', indexed: true })
+  .field('email', { type: 'TEXT', indexed: true, unique: true })
+  .build()
+```

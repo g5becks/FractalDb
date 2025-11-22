@@ -66,6 +66,27 @@ export type CollectionBuilder<T extends Document> = {
   validate(validator: (doc: unknown) => doc is T): CollectionBuilder<T>
 
   /**
+   * Enable or disable query caching for this collection.
+   *
+   * @param enabled - Whether to enable query caching
+   * @returns The builder for method chaining
+   *
+   * @remarks
+   * Query caching stores SQL templates for repeated queries, improving performance
+   * at the cost of memory usage (up to 500 cached query templates).
+   *
+   * @example
+   * ```typescript
+   * // Enable caching for this collection
+   * const users = db.collection<User>('users')
+   *   .field('name', { type: 'TEXT', indexed: true })
+   *   .cache(true)
+   *   .build();
+   * ```
+   */
+  cache(enabled: boolean): CollectionBuilder<T>
+
+  /**
    * Build and return the collection with the defined schema.
    *
    * @returns The collection instance ready for operations
@@ -88,15 +109,18 @@ export class CollectionBuilderImpl<T extends Document>
   // biome-ignore lint/correctness/noUnusedPrivateClassMembers: used in timestamps() and build()
   private enableTimestamps = false
   private validatorFn: ((doc: unknown) => doc is T) | undefined
+  private enableCacheOption: boolean
 
   constructor(
     db: SQLiteDatabase,
     collectionName: string,
-    idGenerator: () => string
+    idGenerator: () => string,
+    defaultEnableCache: boolean
   ) {
     this.db = db
     this.collectionName = collectionName
     this.idGenerator = idGenerator
+    this.enableCacheOption = defaultEnableCache
   }
 
   field<K extends keyof T>(
@@ -160,6 +184,11 @@ export class CollectionBuilderImpl<T extends Document>
     return this
   }
 
+  cache(enabled: boolean): CollectionBuilder<T> {
+    this.enableCacheOption = enabled
+    return this
+  }
+
   build(): Collection<T> {
     const schema = {
       fields: this.fieldDefs,
@@ -180,7 +209,8 @@ export class CollectionBuilderImpl<T extends Document>
       this.db,
       this.collectionName,
       schema,
-      this.idGenerator
+      this.idGenerator,
+      this.enableCacheOption
     )
   }
 }
