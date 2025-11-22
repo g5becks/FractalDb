@@ -35,6 +35,7 @@
     "typescript": "^5.9.3",
     "ultracite": "6.3.4",
     "valibot": "^1.1.0",
+    "vitepress": "^2.0.0-alpha.15",
     "zod": "^4.1.12"
   },
   "tsd": {
@@ -58,6 +59,9 @@
     "bench": "bun run bench/query-translation.bench.ts",
     "bench:crud": "bun run bench/crud-operations.bench.ts",
     "bench:batch": "bun run bench/batch-throughput.bench.ts",
-    "bench:all": "bun run bench && bun run bench:crud && bun run bench:batch"
+    "bench:all": "bun run bench && bun run bench:crud && bun run bench:batch",
+    "docs:dev": "vitepress dev docs",
+    "docs:build": "vitepress build docs",
+    "docs:preview": "vitepress preview docs"
   }
 }

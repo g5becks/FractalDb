@@ -56,7 +56,7 @@ export default defineConfig({
     },
 
     socialLinks: [
-      { icon: "github", link: "https://github.com/takinprofit/stratadb" },
+      { icon: "github", link: "https://github.com/g5becks/StrataDB" },
     ],
 
     footer: {
