@@ -1,5 +1,7 @@
 # Getting Started
 
+StrataDB is an embedded database - it runs inside your application with no separate server process. Your data lives in a single `.db` file.
+
 ## Prerequisites
 
 StrataDB requires [Bun](https://bun.sh). Install it with:

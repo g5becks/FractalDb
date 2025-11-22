@@ -3,8 +3,8 @@ layout: home
 
 hero:
   name: StrataDB
-  text: Type-safe Document Database
-  tagline: MongoDB-like API with full TypeScript type safety, powered by bun:sqlite
+  text: Embedded Document Database
+  tagline: Type-safe, in-process document database for Bun. No server required.
   actions:
     - theme: brand
       text: Get Started
@@ -14,12 +14,12 @@ hero:
       link: /api/
 
 features:
+  - title: Truly Embedded
+    details: Runs in-process with your app. No database server to install, no network latency, no configuration.
   - title: Type-Safe Queries
-    details: Full TypeScript inference for queries, filters, and results. Catch errors at compile time, not runtime.
-  - title: Bun Native
-    details: Built on bun:sqlite with JSONB storage and generated columns. Requires Bun runtime.
+    details: Full TypeScript inference for queries, filters, and results. Catch errors at compile time.
   - title: MongoDB-like API
-    details: Familiar API with find, insertOne, updateMany, and more. Easy migration from MongoDB.
-  - title: Minimal Dependencies
-    details: Lightweight with only essential dependencies. Optimized for Bun's performance.
+    details: Familiar API with find, insertOne, updateMany. If you know MongoDB, you know StrataDB.
+  - title: Single File Storage
+    details: Your entire database is one portable .db file. Easy to backup, deploy, and version control.
 ---

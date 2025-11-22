@@ -1,17 +1,26 @@
 # What is StrataDB?
 
-StrataDB is a **type-safe document database** built exclusively for the [Bun](https://bun.sh) runtime. It provides a MongoDB-like API with full TypeScript type safety, powered by `bun:sqlite`.
+StrataDB is a **type-safe embedded document database** for the [Bun](https://bun.sh) runtime. It runs in-process with your application - no separate database server required.
 
 ::: warning Bun Only
 StrataDB requires the Bun runtime. It will **not work** with Node.js or Deno as it depends on `bun:sqlite`.
 :::
+
+## Why Embedded?
+
+Unlike MongoDB or PostgreSQL, StrataDB runs **inside your application process**:
+
+- **Zero setup** - No database server to install, configure, or manage
+- **Zero latency** - Direct memory access, no network round-trips
+- **Single file** - Your entire database is one portable `.db` file
+- **Serverless ready** - Perfect for edge functions, CLI tools, Electron apps
 
 ## Why StrataDB?
 
 - **Type Safety First**: Every query, filter, and result is fully typed. Catch errors at compile time.
 - **Familiar API**: If you know MongoDB, you know StrataDB. Same methods, better types.
 - **SQLite Reliability**: Battle-tested SQLite storage with JSONB for flexible documents.
-- **Bun Performance**: Native `bun:sqlite` bindings for maximum speed.
+- **Portable**: Single file database - easy to backup, deploy, and version control.
 
 ## How It Works
 

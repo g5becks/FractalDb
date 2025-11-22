@@ -1,7 +1,7 @@
 {
   "name": "stratadb",
   "version": "0.1.0",
-  "description": "Type-safe document database built on SQLite with MongoDB-like queries",
+  "description": "Type-safe embedded document database for Bun with MongoDB-like queries",
   "type": "module",
   "main": "./dist/index.js",
   "module": "./dist/index.js",

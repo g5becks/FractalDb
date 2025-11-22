@@ -1,14 +1,23 @@
 # StrataDB
 
-Type-safe document database built on SQLite with MongoDB-like queries. Powered by Bun.
+A type-safe **embedded document database** for Bun. No separate server process, no network overhead - just import and use.
+
+## Why Embedded?
+
+Unlike MongoDB or other client-server databases, StrataDB runs **in-process** with your application:
+
+- **Zero setup** - No database server to install or manage
+- **Zero latency** - Direct memory access, no network round-trips
+- **Single file** - Your entire database is one portable `.db` file
+- **Serverless ready** - Perfect for edge functions, CLI tools, and desktop apps
 
 ## Features
 
-- **Full Type Safety** - Compile-time validation of queries, schemas, and SQLite types
+- **Embedded SQLite** - Runs in-process via `bun:sqlite`, no external dependencies
+- **Full Type Safety** - Compile-time validation of queries, schemas, and results
 - **MongoDB-like API** - Familiar operators: `$eq`, `$gt`, `$in`, `$and`, `$or`, etc.
-- **High Performance** - JSONB storage with generated columns for indexed fields
-- **Flexible Validation** - Use any Standard Schema validator (Zod, ArkType, Valibot)
-- **Minimal Dependencies** - Only `@standard-schema/spec` and `fast-safe-stringify`
+- **JSONB Storage** - Flexible documents with indexed generated columns
+- **Portable** - Single file database, easy to backup and deploy
 
 ## Installation
 
