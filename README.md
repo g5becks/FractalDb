@@ -78,13 +78,13 @@ db.collection<User>('users')
 
 ## Documentation
 
-See the [documentation](https://g5becks.github.io/stratadb/) for complete guides:
+See the [documentation](https://g5becks.github.io/StrataDB/) for complete guides:
 
-- [Getting Started](https://g5becks.github.io/stratadb/guide/getting-started)
-- [Collections](https://g5becks.github.io/stratadb/guide/collections)
-- [Queries](https://g5becks.github.io/stratadb/guide/queries)
-- [Schemas](https://g5becks.github.io/stratadb/guide/schemas)
-- [Transactions](https://g5becks.github.io/stratadb/guide/transactions)
+- [Getting Started](https://g5becks.github.io/StrataDB/guide/getting-started)
+- [Collections](https://g5becks.github.io/StrataDB/guide/collections)
+- [Queries](https://g5becks.github.io/StrataDB/guide/queries)
+- [Schemas](https://g5becks.github.io/StrataDB/guide/schemas)
+- [Transactions](https://g5becks.github.io/StrataDB/guide/transactions)
 
 ## Development
 
