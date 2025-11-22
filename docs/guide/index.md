@@ -22,7 +22,7 @@ StrataDB stores documents as JSONB in SQLite while creating **generated columns*
 - Type-safe filters (TypeScript knows your schema)
 
 ```typescript
-import { StrataDBClass, createSchema, type Document } from 'stratadb'
+import { Strata, createSchema, type Document } from 'stratadb'
 
 // Define your document type
 type User = Document<{
@@ -39,7 +39,7 @@ const userSchema = createSchema<User>()
   .build()
 
 // Open database and create collection
-const db = new StrataDBClass({ database: 'app.db' })
+const db = new Strata({ database: 'app.db' })
 const users = db.collection('users', userSchema)
 
 // Type-safe operations

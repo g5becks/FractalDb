@@ -11,7 +11,7 @@ with generated columns for indexed fields.
 ## Example
 
 ```typescript
-import { StrataDBClass, createSchema, type Document } from 'stratadb';
+import { Strata, createSchema, type Document } from 'stratadb';
 
 type User = Document<{
   name: string;
@@ -25,7 +25,7 @@ const userSchema = createSchema<User>()
   .field('age', { type: 'INTEGER', indexed: true })
   .build();
 
-const db = new StrataDBClass({ database: 'app.db' });
+const db = new Strata({ database: 'app.db' });
 const users = db.collection('users', userSchema);
 
 await users.insertOne({ name: 'Alice', email: 'alice@example.com', age: 30 });
@@ -35,18 +35,20 @@ const adults = await users.find({ age: { $gte: 18 } });
 ## Classes
 
 - [ConnectionError](classes/ConnectionError.md)
-- [DocDBError](classes/DocDBError.md)
 - [QueryError](classes/QueryError.md)
-- [StrataDBClass](classes/StrataDBClass.md)
+- [Strata](classes/Strata.md)
+- [StrataDBError](classes/StrataDBError.md)
 - [TransactionError](classes/TransactionError.md)
 - [UniqueConstraintError](classes/UniqueConstraintError.md)
 - [ValidationError](classes/ValidationError.md)
 
 ## Type Aliases
 
+- [ArrayOperator](type-aliases/ArrayOperator.md)
 - [BulkWriteResult](type-aliases/BulkWriteResult.md)
 - [Collection](type-aliases/Collection.md)
 - [CollectionBuilder](type-aliases/CollectionBuilder.md)
+- [ComparisonOperator](type-aliases/ComparisonOperator.md)
 - [CompoundIndex](type-aliases/CompoundIndex.md)
 - [DatabaseOptions](type-aliases/DatabaseOptions.md)
 - [DeleteResult](type-aliases/DeleteResult.md)
@@ -54,11 +56,16 @@ const adults = await users.find({ age: { $gte: 18 } });
 - [DocumentInput](type-aliases/DocumentInput.md)
 - [DocumentPath](type-aliases/DocumentPath.md)
 - [DocumentUpdate](type-aliases/DocumentUpdate.md)
+- [EqualityOperators](type-aliases/EqualityOperators.md)
+- [ExistenceOperator](type-aliases/ExistenceOperator.md)
 - [FieldOperator](type-aliases/FieldOperator.md)
+- [IdGenerator](type-aliases/IdGenerator.md)
 - [InsertManyResult](type-aliases/InsertManyResult.md)
 - [InsertOneResult](type-aliases/InsertOneResult.md)
 - [JsonPath](type-aliases/JsonPath.md)
 - [LogicalOperator](type-aliases/LogicalOperator.md)
+- [MembershipOperators](type-aliases/MembershipOperators.md)
+- [OrderingOperators](type-aliases/OrderingOperators.md)
 - [PathValue](type-aliases/PathValue.md)
 - [ProjectionSpec](type-aliases/ProjectionSpec.md)
 - [QueryFilter](type-aliases/QueryFilter.md)
@@ -69,6 +76,7 @@ const adults = await users.find({ age: { $gte: 18 } });
 - [SortSpec](type-aliases/SortSpec.md)
 - [SQLiteType](type-aliases/SQLiteType.md)
 - [StrataDB](type-aliases/StrataDB.md)
+- [StringOperator](type-aliases/StringOperator.md)
 - [TimestampConfig](type-aliases/TimestampConfig.md)
 - [Transaction](type-aliases/Transaction.md)
 - [TypeScriptToSQLite](type-aliases/TypeScriptToSQLite.md)
@@ -77,3 +85,10 @@ const adults = await users.find({ age: { $gte: 18 } });
 ## Functions
 
 - [createSchema](functions/createSchema.md)
+- [dateToTimestamp](functions/dateToTimestamp.md)
+- [generateId](functions/generateId.md)
+- [isTimestampInRange](functions/isTimestampInRange.md)
+- [isValidTimestamp](functions/isValidTimestamp.md)
+- [nowTimestamp](functions/nowTimestamp.md)
+- [timestampDiff](functions/timestampDiff.md)
+- [timestampToDate](functions/timestampToDate.md)

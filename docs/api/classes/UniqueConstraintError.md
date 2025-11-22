@@ -2,7 +2,7 @@
 
 # Class: UniqueConstraintError
 
-Defined in: [src/errors.ts:360](https://github.com/g5becks/StrataDB/blob/89bee4bbe54bb52f1f1308d5950da4d385abbe16/src/errors.ts#L360)
+Defined in: [src/errors.ts:360](https://github.com/g5becks/StrataDB/blob/7791c9d2c0eca8b064c87359859d54870cd83af8/src/errors.ts#L360)
 
 Error thrown when unique constraint is violated.
 
@@ -25,7 +25,7 @@ try {
 
 ## Extends
 
-- [`DocDBError`](DocDBError.md)
+- [`StrataDBError`](StrataDBError.md)
 
 ## Constructors
 
@@ -39,7 +39,7 @@ new UniqueConstraintError(
    sqliteCode?): UniqueConstraintError;
 ```
 
-Defined in: [src/errors.ts:373](https://github.com/g5becks/StrataDB/blob/89bee4bbe54bb52f1f1308d5950da4d385abbe16/src/errors.ts#L373)
+Defined in: [src/errors.ts:373](https://github.com/g5becks/StrataDB/blob/7791c9d2c0eca8b064c87359859d54870cd83af8/src/errors.ts#L373)
 
 #### Parameters
 
@@ -65,7 +65,7 @@ Defined in: [src/errors.ts:373](https://github.com/g5becks/StrataDB/blob/89bee4b
 
 #### Overrides
 
-[`DocDBError`](DocDBError.md).[`constructor`](DocDBError.md#constructor)
+[`StrataDBError`](StrataDBError.md).[`constructor`](StrataDBError.md#constructor)
 
 ## Properties
 
@@ -75,13 +75,13 @@ Defined in: [src/errors.ts:373](https://github.com/g5becks/StrataDB/blob/89bee4b
 readonly category: "database";
 ```
 
-Defined in: [src/errors.ts:361](https://github.com/g5becks/StrataDB/blob/89bee4bbe54bb52f1f1308d5950da4d385abbe16/src/errors.ts#L361)
+Defined in: [src/errors.ts:361](https://github.com/g5becks/StrataDB/blob/7791c9d2c0eca8b064c87359859d54870cd83af8/src/errors.ts#L361)
 
 Error category for grouping related error types
 
 #### Overrides
 
-[`DocDBError`](DocDBError.md).[`category`](DocDBError.md#category)
+[`StrataDBError`](StrataDBError.md).[`category`](StrataDBError.md#category)
 
 ***
 
@@ -97,7 +97,7 @@ The cause of the error.
 
 #### Inherited from
 
-[`DocDBError`](DocDBError.md).[`cause`](DocDBError.md#cause)
+[`StrataDBError`](StrataDBError.md).[`cause`](StrataDBError.md#cause)
 
 ***
 
@@ -107,13 +107,13 @@ The cause of the error.
 readonly code: "UNIQUE_CONSTRAINT_ERROR" = "UNIQUE_CONSTRAINT_ERROR";
 ```
 
-Defined in: [src/errors.ts:362](https://github.com/g5becks/StrataDB/blob/89bee4bbe54bb52f1f1308d5950da4d385abbe16/src/errors.ts#L362)
+Defined in: [src/errors.ts:362](https://github.com/g5becks/StrataDB/blob/7791c9d2c0eca8b064c87359859d54870cd83af8/src/errors.ts#L362)
 
 Unique error code for programmatic identification
 
 #### Overrides
 
-[`DocDBError`](DocDBError.md).[`code`](DocDBError.md#code)
+[`StrataDBError`](StrataDBError.md).[`code`](StrataDBError.md#code)
 
 ***
 
@@ -123,7 +123,7 @@ Unique error code for programmatic identification
 readonly optional field: string;
 ```
 
-Defined in: [src/errors.ts:368](https://github.com/g5becks/StrataDB/blob/89bee4bbe54bb52f1f1308d5950da4d385abbe16/src/errors.ts#L368)
+Defined in: [src/errors.ts:368](https://github.com/g5becks/StrataDB/blob/7791c9d2c0eca8b064c87359859d54870cd83af8/src/errors.ts#L368)
 
 The field with unique constraint violation
 
@@ -139,7 +139,7 @@ Defined in: node\_modules/typescript/lib/lib.es5.d.ts:1077
 
 #### Inherited from
 
-[`DocDBError`](DocDBError.md).[`message`](DocDBError.md#message)
+[`StrataDBError`](StrataDBError.md).[`message`](StrataDBError.md#message)
 
 ***
 
@@ -153,7 +153,7 @@ Defined in: node\_modules/typescript/lib/lib.es5.d.ts:1076
 
 #### Inherited from
 
-[`DocDBError`](DocDBError.md).[`name`](DocDBError.md#name)
+[`StrataDBError`](StrataDBError.md).[`name`](StrataDBError.md#name)
 
 ***
 
@@ -163,7 +163,7 @@ Defined in: node\_modules/typescript/lib/lib.es5.d.ts:1076
 readonly optional sqliteCode: number;
 ```
 
-Defined in: [src/errors.ts:365](https://github.com/g5becks/StrataDB/blob/89bee4bbe54bb52f1f1308d5950da4d385abbe16/src/errors.ts#L365)
+Defined in: [src/errors.ts:365](https://github.com/g5becks/StrataDB/blob/7791c9d2c0eca8b064c87359859d54870cd83af8/src/errors.ts#L365)
 
 SQLite error code (if available)
 
@@ -179,7 +179,7 @@ Defined in: node\_modules/typescript/lib/lib.es5.d.ts:1078
 
 #### Inherited from
 
-[`DocDBError`](DocDBError.md).[`stack`](DocDBError.md#stack)
+[`StrataDBError`](StrataDBError.md).[`stack`](StrataDBError.md#stack)
 
 ***
 
@@ -189,7 +189,7 @@ Defined in: node\_modules/typescript/lib/lib.es5.d.ts:1078
 readonly optional value: unknown;
 ```
 
-Defined in: [src/errors.ts:371](https://github.com/g5becks/StrataDB/blob/89bee4bbe54bb52f1f1308d5950da4d385abbe16/src/errors.ts#L371)
+Defined in: [src/errors.ts:371](https://github.com/g5becks/StrataDB/blob/7791c9d2c0eca8b064c87359859d54870cd83af8/src/errors.ts#L371)
 
 The value that violated the unique constraint
 
@@ -215,7 +215,7 @@ not capture any frames.
 
 #### Inherited from
 
-[`DocDBError`](DocDBError.md).[`stackTraceLimit`](DocDBError.md#stacktracelimit)
+[`StrataDBError`](StrataDBError.md).[`stackTraceLimit`](StrataDBError.md#stacktracelimit)
 
 ## Methods
 
@@ -289,7 +289,7 @@ a();
 
 ##### Inherited from
 
-[`DocDBError`](DocDBError.md).[`captureStackTrace`](DocDBError.md#capturestacktrace)
+[`StrataDBError`](StrataDBError.md).[`captureStackTrace`](StrataDBError.md#capturestacktrace)
 
 #### Call Signature
 
@@ -317,7 +317,7 @@ Create .stack property on a target object
 
 ##### Inherited from
 
-[`DocDBError`](DocDBError.md).[`captureStackTrace`](DocDBError.md#capturestacktrace)
+[`StrataDBError`](StrataDBError.md).[`captureStackTrace`](StrataDBError.md#capturestacktrace)
 
 ***
 
@@ -345,7 +345,7 @@ Indicates whether the argument provided is a built-in Error instance or not.
 
 ##### Inherited from
 
-[`DocDBError`](DocDBError.md).[`isError`](DocDBError.md#iserror)
+[`StrataDBError`](StrataDBError.md).[`isError`](StrataDBError.md#iserror)
 
 #### Call Signature
 
@@ -373,7 +373,7 @@ True if the value is an instance of Error, false otherwise
 
 ##### Inherited from
 
-[`DocDBError`](DocDBError.md).[`isError`](DocDBError.md#iserror)
+[`StrataDBError`](StrataDBError.md).[`isError`](StrataDBError.md#iserror)
 
 ***
 
@@ -405,4 +405,4 @@ https://v8.dev/docs/stack-trace-api#customizing-stack-traces
 
 #### Inherited from
 
-[`DocDBError`](DocDBError.md).[`prepareStackTrace`](DocDBError.md#preparestacktrace)
+[`StrataDBError`](StrataDBError.md).[`prepareStackTrace`](StrataDBError.md#preparestacktrace)

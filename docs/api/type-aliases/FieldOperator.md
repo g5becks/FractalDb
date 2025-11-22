@@ -6,7 +6,7 @@
 type FieldOperator<T> = T extends string ? ComparisonOperator<T> & StringOperator & ExistenceOperator : T extends readonly unknown[] ? ComparisonOperator<T> & ArrayOperator<T> & ExistenceOperator : ComparisonOperator<T> & ExistenceOperator;
 ```
 
-Defined in: [src/query-types.ts:292](https://github.com/g5becks/StrataDB/blob/89bee4bbe54bb52f1f1308d5950da4d385abbe16/src/query-types.ts#L292)
+Defined in: [src/query-types.ts:295](https://github.com/g5becks/StrataDB/blob/7791c9d2c0eca8b064c87359859d54870cd83af8/src/query-types.ts#L295)
 
 Combined field operators for any field type.
 

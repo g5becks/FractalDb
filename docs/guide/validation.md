@@ -12,7 +12,7 @@ bun add zod
 
 ```typescript
 import { z } from 'zod'
-import { createSchema, StrataDBClass, type Document } from 'stratadb'
+import { createSchema, Strata, type Document } from 'stratadb'
 
 // Define Zod schema
 const UserSchema = z.object({
@@ -38,7 +38,7 @@ const userSchema = createSchema<User>()
   })
   .build()
 
-const db = new StrataDBClass({ database: ':memory:' })
+const db = new Strata({ database: ':memory:' })
 const users = db.collection('users', userSchema)
 
 // Valid document - succeeds
@@ -69,7 +69,7 @@ bun add arktype
 
 ```typescript
 import { type } from 'arktype'
-import { createSchema, StrataDBClass, type Document } from 'stratadb'
+import { createSchema, Strata, type Document } from 'stratadb'
 
 // Define ArkType schema
 const userType = type({
@@ -95,7 +95,7 @@ const userSchema = createSchema<User>()
   })
   .build()
 
-const db = new StrataDBClass({ database: ':memory:' })
+const db = new Strata({ database: ':memory:' })
 const users = db.collection('users', userSchema)
 
 // Insert with validation
@@ -117,7 +117,7 @@ bun add valibot
 
 ```typescript
 import * as v from 'valibot'
-import { createSchema, StrataDBClass, type Document } from 'stratadb'
+import { createSchema, Strata, type Document } from 'stratadb'
 
 // Define Valibot schema
 const UserSchema = v.object({

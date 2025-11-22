@@ -11,7 +11,7 @@ bun add stratadb
 ## Basic Setup
 
 ```typescript
-import { StrataDBClass, createSchema, type Document } from 'stratadb'
+import { Strata, createSchema, type Document } from 'stratadb'
 
 // Define document type
 type User = Document<{
@@ -31,7 +31,7 @@ const userSchema = createSchema<User>()
   .build()
 
 // Initialize database
-const db = new StrataDBClass({ 
+const db = new Strata({ 
   database: ':memory:'  // or 'path/to/file.db'
 })
 
@@ -301,7 +301,7 @@ try {
 
 ```typescript
 // Enable for entire database
-const db = new StrataDBClass({
+const db = new Strata({
   database: 'app.db',
   enableCache: true  // Cache for all collections
 })

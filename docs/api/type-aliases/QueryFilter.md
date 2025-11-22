@@ -9,7 +9,7 @@ type QueryFilter<T> = Simplify<
 | { [P in DocumentPath<T> as P extends string ? P : never]?: P extends string ? PathValue<T, P> | FieldOperator<PathValue<T, P>> : never }>;
 ```
 
-Defined in: [src/query-types.ts:488](https://github.com/g5becks/StrataDB/blob/89bee4bbe54bb52f1f1308d5950da4d385abbe16/src/query-types.ts#L488)
+Defined in: [src/query-types.ts:491](https://github.com/g5becks/StrataDB/blob/7791c9d2c0eca8b064c87359859d54870cd83af8/src/query-types.ts#L491)
 
 Complete query filter combining field filters and logical operators.
 
@@ -59,7 +59,7 @@ const simpleQuery: QueryFilter<User> = {
 // ✅ Field operators
 const operatorQuery: QueryFilter<User> = {
   age: { $gt: 18, $lte: 65 },
-  email: { $like: '%@example.com$' }
+  email: { $endsWith: '@example.com' }
 };
 
 // ✅ Nested path queries (dot notation)
@@ -102,7 +102,7 @@ const complexQuery: QueryFilter<User> = {
     },
     {
       $not: {
-        email: { $like: '%@spam.com$' }
+        email: { $endsWith: '@spam.com' }
       }
     },
     {
@@ -119,7 +119,7 @@ const arrayQuery: QueryFilter<User> = {
   tags: {
     $elemMatch: {
       // This recursively uses QueryFilter for array elements
-      $regex: /^premium/i
+      $startsWith: 'premium'
     }
   }
 };

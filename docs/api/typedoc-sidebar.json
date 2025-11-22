@@ -8,16 +8,16 @@
         "link": "/api/classes/ConnectionError.md"
       },
       {
-        "text": "DocDBError",
-        "link": "/api/classes/DocDBError.md"
-      },
-      {
         "text": "QueryError",
         "link": "/api/classes/QueryError.md"
       },
       {
-        "text": "StrataDBClass",
-        "link": "/api/classes/StrataDBClass.md"
+        "text": "Strata",
+        "link": "/api/classes/Strata.md"
+      },
+      {
+        "text": "StrataDBError",
+        "link": "/api/classes/StrataDBError.md"
       },
       {
         "text": "TransactionError",
@@ -38,6 +38,10 @@
     "collapsed": false,
     "items": [
       {
+        "text": "ArrayOperator",
+        "link": "/api/type-aliases/ArrayOperator.md"
+      },
+      {
         "text": "BulkWriteResult",
         "link": "/api/type-aliases/BulkWriteResult.md"
       },
@@ -48,6 +52,10 @@
       {
         "text": "CollectionBuilder",
         "link": "/api/type-aliases/CollectionBuilder.md"
+      },
+      {
+        "text": "ComparisonOperator",
+        "link": "/api/type-aliases/ComparisonOperator.md"
       },
       {
         "text": "CompoundIndex",
@@ -78,8 +86,20 @@
         "link": "/api/type-aliases/DocumentUpdate.md"
       },
       {
+        "text": "EqualityOperators",
+        "link": "/api/type-aliases/EqualityOperators.md"
+      },
+      {
+        "text": "ExistenceOperator",
+        "link": "/api/type-aliases/ExistenceOperator.md"
+      },
+      {
         "text": "FieldOperator",
         "link": "/api/type-aliases/FieldOperator.md"
+      },
+      {
+        "text": "IdGenerator",
+        "link": "/api/type-aliases/IdGenerator.md"
       },
       {
         "text": "InsertManyResult",
@@ -96,6 +116,14 @@
       {
         "text": "LogicalOperator",
         "link": "/api/type-aliases/LogicalOperator.md"
+      },
+      {
+        "text": "MembershipOperators",
+        "link": "/api/type-aliases/MembershipOperators.md"
+      },
+      {
+        "text": "OrderingOperators",
+        "link": "/api/type-aliases/OrderingOperators.md"
       },
       {
         "text": "PathValue",
@@ -138,6 +166,10 @@
         "link": "/api/type-aliases/StrataDB.md"
       },
       {
+        "text": "StringOperator",
+        "link": "/api/type-aliases/StringOperator.md"
+      },
+      {
         "text": "TimestampConfig",
         "link": "/api/type-aliases/TimestampConfig.md"
       },
@@ -162,6 +194,34 @@
       {
         "text": "createSchema",
         "link": "/api/functions/createSchema.md"
+      },
+      {
+        "text": "dateToTimestamp",
+        "link": "/api/functions/dateToTimestamp.md"
+      },
+      {
+        "text": "generateId",
+        "link": "/api/functions/generateId.md"
+      },
+      {
+        "text": "isTimestampInRange",
+        "link": "/api/functions/isTimestampInRange.md"
+      },
+      {
+        "text": "isValidTimestamp",
+        "link": "/api/functions/isValidTimestamp.md"
+      },
+      {
+        "text": "nowTimestamp",
+        "link": "/api/functions/nowTimestamp.md"
+      },
+      {
+        "text": "timestampDiff",
+        "link": "/api/functions/timestampDiff.md"
+      },
+      {
+        "text": "timestampToDate",
+        "link": "/api/functions/timestampToDate.md"
       }
     ]
   }

@@ -10,7 +10,7 @@
  *
  * @example
  * ```typescript
- * import { StrataDBClass, createSchema, type Document } from 'stratadb';
+ * import { Strata, createSchema, type Document } from 'stratadb';
  *
  * type User = Document<{
  *   name: string;
@@ -24,7 +24,7 @@
  *   .field('age', { type: 'INTEGER', indexed: true })
  *   .build();
  *
- * const db = new StrataDBClass({ database: 'app.db' });
+ * const db = new Strata({ database: 'app.db' });
  * const users = db.collection('users', userSchema);
  *
  * await users.insertOne({ name: 'Alice', email: 'alice@example.com', age: 30 });
@@ -98,7 +98,7 @@ export type {
   TypeScriptToSQLite,
 } from "./schema-types.js"
 // Main database class
-export { StrataDBClass } from "./stratadb.js"
+export { Strata } from "./stratadb.js"
 // Timestamp utilities
 export {
   dateToTimestamp,

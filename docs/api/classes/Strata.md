@@ -1,8 +1,8 @@
-[stratadb](../index.md) / StrataDBClass
+[stratadb](../index.md) / Strata
 
-# Class: StrataDBClass
+# Class: Strata
 
-Defined in: src/stratadb.ts:51
+Defined in: [src/stratadb.ts:53](https://github.com/g5becks/StrataDB/blob/7791c9d2c0eca8b064c87359859d54870cd83af8/src/stratadb.ts#L53)
 
 Main StrataDB database class.
 
@@ -21,13 +21,13 @@ It manages collections, transactions, and database lifecycle.
 
 ```typescript
 // Create database with path
-const db = new StrataDBClass({ database: 'myapp.db' });
+const db = new Strata({ database: 'myapp.db' });
 
 // Create in-memory database
-const memDb = new StrataDBClass({ database: ':memory:' });
+const memDb = new Strata({ database: ':memory:' });
 
 // With custom options
-const customDb = new StrataDBClass({
+const customDb = new Strata({
   database: 'app.db',
   idGenerator: () => `custom-${Date.now()}`,
   onClose: () => console.log('Database closed'),
@@ -35,7 +35,7 @@ const customDb = new StrataDBClass({
 });
 
 // Using with automatic cleanup
-using db = new StrataDBClass({ database: ':memory:' });
+using db = new Strata({ database: ':memory:' });
 const users = db.collection('users', userSchema);
 // Database automatically closes when scope exits
 ```
@@ -49,10 +49,10 @@ const users = db.collection('users', userSchema);
 ### Constructor
 
 ```ts
-new StrataDBClass(options): StrataDBClass;
+new Strata(options): Strata;
 ```
 
-Defined in: src/stratadb.ts:64
+Defined in: [src/stratadb.ts:66](https://github.com/g5becks/StrataDB/blob/7791c9d2c0eca8b064c87359859d54870cd83af8/src/stratadb.ts#L66)
 
 Creates a new StrataDB instance.
 
@@ -66,7 +66,7 @@ Database configuration options
 
 #### Returns
 
-`StrataDBClass`
+`Strata`
 
 ## Properties
 
@@ -76,7 +76,7 @@ Database configuration options
 readonly sqliteDb: Database;
 ```
 
-Defined in: src/stratadb.ts:52
+Defined in: [src/stratadb.ts:54](https://github.com/g5becks/StrataDB/blob/7791c9d2c0eca8b064c87359859d54870cd83af8/src/stratadb.ts#L54)
 
 Direct access to the underlying SQLite database.
 Use for advanced operations not covered by StrataDB API.
@@ -95,7 +95,7 @@ StrataDBInterface.sqliteDb
 dispose: void;
 ```
 
-Defined in: src/stratadb.ts:213
+Defined in: [src/stratadb.ts:206](https://github.com/g5becks/StrataDB/blob/7791c9d2c0eca8b064c87359859d54870cd83af8/src/stratadb.ts#L206)
 
 Disposes the database (closes connection).
 
@@ -117,7 +117,7 @@ StrataDBInterface.[dispose]
 close(): void;
 ```
 
-Defined in: src/stratadb.ts:201
+Defined in: [src/stratadb.ts:198](https://github.com/g5becks/StrataDB/blob/7791c9d2c0eca8b064c87359859d54870cd83af8/src/stratadb.ts#L198)
 
 Closes the database connection.
 
@@ -140,10 +140,13 @@ Implementation of overloaded collection method.
 #### Call Signature
 
 ```ts
-collection<T>(name, schema): Collection<T>;
+collection<T>(
+   name, 
+   schema, 
+options?): Collection<T>;
 ```
 
-Defined in: src/stratadb.ts:93
+Defined in: [src/stratadb.ts:91](https://github.com/g5becks/StrataDB/blob/7791c9d2c0eca8b064c87359859d54870cd83af8/src/stratadb.ts#L91)
 
 Gets or creates a collection with a pre-built schema.
 
@@ -163,6 +166,10 @@ Gets or creates a collection with a pre-built schema.
 
 [`SchemaDefinition`](../type-aliases/SchemaDefinition.md)\<`T`\>
 
+###### options?
+
+`CollectionOptions`
+
 ##### Returns
 
 [`Collection`](../type-aliases/Collection.md)\<`T`\>
@@ -179,7 +186,7 @@ StrataDBInterface.collection
 collection<T>(name): CollectionBuilder<T>;
 ```
 
-Defined in: src/stratadb.ts:101
+Defined in: [src/stratadb.ts:100](https://github.com/g5becks/StrataDB/blob/7791c9d2c0eca8b064c87359859d54870cd83af8/src/stratadb.ts#L100)
 
 Creates a collection builder for fluent schema definition.
 
@@ -213,7 +220,7 @@ StrataDBInterface.collection
 execute<R>(fn): Promise<R>;
 ```
 
-Defined in: src/stratadb.ts:186
+Defined in: [src/stratadb.ts:183](https://github.com/g5becks/StrataDB/blob/7791c9d2c0eca8b064c87359859d54870cd83af8/src/stratadb.ts#L183)
 
 Executes a function within a transaction.
 
@@ -251,7 +258,7 @@ StrataDBInterface.execute
 generateId(): string;
 ```
 
-Defined in: src/stratadb.ts:86
+Defined in: [src/stratadb.ts:84](https://github.com/g5becks/StrataDB/blob/7791c9d2c0eca8b064c87359859d54870cd83af8/src/stratadb.ts#L84)
 
 Generates a new unique ID using the configured ID generator.
 
@@ -275,7 +282,7 @@ StrataDBInterface.generateId
 transaction(): Transaction;
 ```
 
-Defined in: src/stratadb.ts:138
+Defined in: [src/stratadb.ts:145](https://github.com/g5becks/StrataDB/blob/7791c9d2c0eca8b064c87359859d54870cd83af8/src/stratadb.ts#L145)
 
 Creates a new transaction.
 

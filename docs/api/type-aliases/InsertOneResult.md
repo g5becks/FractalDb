@@ -3,16 +3,12 @@
 # Type Alias: InsertOneResult\<T\>
 
 ```ts
-type InsertOneResult<T> = object;
+type InsertOneResult<T> = T;
 ```
 
-Defined in: [src/collection-types.ts:14](https://github.com/g5becks/StrataDB/blob/89bee4bbe54bb52f1f1308d5950da4d385abbe16/src/collection-types.ts#L14)
+Defined in: [src/collection-types.ts:22](https://github.com/g5becks/StrataDB/blob/7791c9d2c0eca8b064c87359859d54870cd83af8/src/collection-types.ts#L22)
 
 Result of inserting a single document into a collection.
-
-## Remarks
-
-Contains the inserted document with its generated ID and metadata.
 
 ## Type Parameters
 
@@ -22,26 +18,15 @@ Contains the inserted document with its generated ID and metadata.
 
 The document type
 
-## Properties
+## Remarks
 
-### acknowledged
+Represents the inserted document with its generated ID.
+Since SQLite is ACID and local, if this function returns without throwing,
+the operation succeeded - no acknowledgment flag needed.
 
-```ts
-readonly acknowledged: true;
+## Example
+
+```typescript
+const result = await users.insertOne({ name: 'Alice', email: 'alice@example.com' });
+console.log(result._id); // Auto-generated UUID
 ```
-
-Defined in: [src/collection-types.ts:19](https://github.com/g5becks/StrataDB/blob/89bee4bbe54bb52f1f1308d5950da4d385abbe16/src/collection-types.ts#L19)
-
-Whether the insert operation succeeded
-
-***
-
-### document
-
-```ts
-readonly document: T;
-```
-
-Defined in: [src/collection-types.ts:16](https://github.com/g5becks/StrataDB/blob/89bee4bbe54bb52f1f1308d5950da4d385abbe16/src/collection-types.ts#L16)
-
-The inserted document with its generated ID

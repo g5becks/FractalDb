@@ -6,7 +6,7 @@
 type StrataDB = object;
 ```
 
-Defined in: src/database-types.ts:128
+Defined in: [src/database-types.ts:210](https://github.com/g5becks/StrataDB/blob/7791c9d2c0eca8b064c87359859d54870cd83af8/src/database-types.ts#L210)
 
 Main StrataDB interface for database operations.
 
@@ -42,7 +42,7 @@ db.close();
 readonly sqliteDb: SQLiteDatabase;
 ```
 
-Defined in: src/database-types.ts:133
+Defined in: [src/database-types.ts:215](https://github.com/g5becks/StrataDB/blob/7791c9d2c0eca8b064c87359859d54870cd83af8/src/database-types.ts#L215)
 
 Direct access to the underlying SQLite database.
 Use for advanced operations not covered by StrataDB API.
@@ -55,7 +55,7 @@ Use for advanced operations not covered by StrataDB API.
 dispose: void;
 ```
 
-Defined in: src/database-types.ts:218
+Defined in: [src/database-types.ts:306](https://github.com/g5becks/StrataDB/blob/7791c9d2c0eca8b064c87359859d54870cd83af8/src/database-types.ts#L306)
 
 Disposes the database (closes connection).
 Enables `using db = new StrataDB(...)` syntax.
@@ -72,7 +72,7 @@ Enables `using db = new StrataDB(...)` syntax.
 close(): void;
 ```
 
-Defined in: src/database-types.ts:212
+Defined in: [src/database-types.ts:300](https://github.com/g5becks/StrataDB/blob/7791c9d2c0eca8b064c87359859d54870cd83af8/src/database-types.ts#L300)
 
 Closes the database connection.
 
@@ -87,10 +87,13 @@ Closes the database connection.
 #### Call Signature
 
 ```ts
-collection<T>(name, schema): Collection<T>;
+collection<T>(
+   name, 
+   schema, 
+options?): Collection<T>;
 ```
 
-Defined in: src/database-types.ts:154
+Defined in: [src/database-types.ts:241](https://github.com/g5becks/StrataDB/blob/7791c9d2c0eca8b064c87359859d54870cd83af8/src/database-types.ts#L241)
 
 Gets or creates a collection with a pre-built schema.
 
@@ -114,6 +117,12 @@ Collection name (table name in SQLite)
 
 Schema definition for type safety and validation
 
+###### options?
+
+`CollectionOptions`
+
+Optional collection-specific configuration
+
 ##### Returns
 
 [`Collection`](Collection.md)\<`T`\>
@@ -123,7 +132,11 @@ Collection instance for the specified type
 ##### Example
 
 ```typescript
+// Default cache behavior (inherits from database)
 const users = db.collection('users', userSchema);
+
+// Override cache setting for this collection
+const logs = db.collection('logs', logSchema, { enableCache: false });
 ```
 
 #### Call Signature
@@ -132,7 +145,7 @@ const users = db.collection('users', userSchema);
 collection<T>(name): CollectionBuilder<T>;
 ```
 
-Defined in: src/database-types.ts:173
+Defined in: [src/database-types.ts:261](https://github.com/g5becks/StrataDB/blob/7791c9d2c0eca8b064c87359859d54870cd83af8/src/database-types.ts#L261)
 
 Creates a collection builder for fluent schema definition.
 
@@ -173,7 +186,7 @@ const users = db.collection<User>('users')
 execute<R>(fn): Promise<R>;
 ```
 
-Defined in: src/database-types.ts:207
+Defined in: [src/database-types.ts:295](https://github.com/g5becks/StrataDB/blob/7791c9d2c0eca8b064c87359859d54870cd83af8/src/database-types.ts#L295)
 
 Executes a function within a transaction.
 
@@ -219,7 +232,7 @@ await db.execute(async (tx) => {
 generateId(): string;
 ```
 
-Defined in: src/database-types.ts:140
+Defined in: [src/database-types.ts:222](https://github.com/g5becks/StrataDB/blob/7791c9d2c0eca8b064c87359859d54870cd83af8/src/database-types.ts#L222)
 
 Generates a new unique ID using the configured ID generator.
 
@@ -237,7 +250,7 @@ A new unique identifier string
 transaction(): Transaction;
 ```
 
-Defined in: src/database-types.ts:187
+Defined in: [src/database-types.ts:275](https://github.com/g5becks/StrataDB/blob/7791c9d2c0eca8b064c87359859d54870cd83af8/src/database-types.ts#L275)
 
 Creates a new transaction for atomic operations.
 

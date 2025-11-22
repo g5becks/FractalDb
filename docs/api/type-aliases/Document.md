@@ -6,16 +6,16 @@
 type Document<T> = object & ReadonlyDeep<T>;
 ```
 
-Defined in: [src/core-types.ts:60](https://github.com/g5becks/StrataDB/blob/89bee4bbe54bb52f1f1308d5950da4d385abbe16/src/core-types.ts#L60)
+Defined in: [src/core-types.ts:60](https://github.com/g5becks/StrataDB/blob/7791c9d2c0eca8b064c87359859d54870cd83af8/src/core-types.ts#L60)
 
 Document type with immutable ID.
 
 ## Type Declaration
 
-### id
+### \_id
 
 ```ts
-readonly id: string;
+readonly _id: string;
 ```
 
 Unique identifier for the document (immutable)

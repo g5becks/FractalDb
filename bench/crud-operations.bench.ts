@@ -12,7 +12,7 @@
 import { bench, group, run } from "mitata"
 import type { Document } from "../src/core-types.js"
 import { createSchema } from "../src/schema-builder.js"
-import { StrataDBClass } from "../src/stratadb.js"
+import { Strata } from "../src/stratadb.js"
 
 // Test document type
 type User = Document<{
@@ -47,7 +47,7 @@ const userSchema = createSchema<User>()
 
 // Create fresh database for each benchmark group
 function createTestDb() {
-  return new StrataDBClass({ database: ":memory:" })
+  return new Strata({ database: ":memory:" })
 }
 
 // Sample user data generator
@@ -67,10 +67,7 @@ function generateUser(): Omit<User, "_id"> {
 }
 
 // Seed database with test data
-async function seedDatabase(
-  db: StrataDBClass,
-  count: number
-): Promise<string[]> {
+async function seedDatabase(db: Strata, count: number): Promise<string[]> {
   const users = db.collection("users", userSchema)
   const ids: string[] = []
   for (let i = 0; i < count; i += 1) {

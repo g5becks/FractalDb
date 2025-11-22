@@ -6,7 +6,7 @@
 type SchemaDefinition<T> = object;
 ```
 
-Defined in: [src/schema-types.ts:281](https://github.com/g5becks/StrataDB/blob/89bee4bbe54bb52f1f1308d5950da4d385abbe16/src/schema-types.ts#L281)
+Defined in: [src/schema-types.ts:281](https://github.com/g5becks/StrataDB/blob/7791c9d2c0eca8b064c87359859d54870cd83af8/src/schema-types.ts#L281)
 
 Complete schema definition for a document collection.
 
@@ -87,7 +87,7 @@ The document type this schema defines
 readonly optional compoundIndexes: readonly CompoundIndex<T>[];
 ```
 
-Defined in: [src/schema-types.ts:286](https://github.com/g5becks/StrataDB/blob/89bee4bbe54bb52f1f1308d5950da4d385abbe16/src/schema-types.ts#L286)
+Defined in: [src/schema-types.ts:286](https://github.com/g5becks/StrataDB/blob/7791c9d2c0eca8b064c87359859d54870cd83af8/src/schema-types.ts#L286)
 
 Array of compound index definitions for multi-field queries
 
@@ -99,7 +99,7 @@ Array of compound index definitions for multi-field queries
 readonly fields: readonly SchemaField<T, keyof T>[];
 ```
 
-Defined in: [src/schema-types.ts:283](https://github.com/g5becks/StrataDB/blob/89bee4bbe54bb52f1f1308d5950da4d385abbe16/src/schema-types.ts#L283)
+Defined in: [src/schema-types.ts:283](https://github.com/g5becks/StrataDB/blob/7791c9d2c0eca8b064c87359859d54870cd83af8/src/schema-types.ts#L283)
 
 Array of field definitions for indexing and constraints
 
@@ -111,7 +111,7 @@ Array of field definitions for indexing and constraints
 readonly optional timestamps: TimestampConfig;
 ```
 
-Defined in: [src/schema-types.ts:289](https://github.com/g5becks/StrataDB/blob/89bee4bbe54bb52f1f1308d5950da4d385abbe16/src/schema-types.ts#L289)
+Defined in: [src/schema-types.ts:289](https://github.com/g5becks/StrataDB/blob/7791c9d2c0eca8b064c87359859d54870cd83af8/src/schema-types.ts#L289)
 
 Configuration for automatic timestamp management
 
@@ -123,7 +123,7 @@ Configuration for automatic timestamp management
 readonly optional validate: (doc) => doc is T;
 ```
 
-Defined in: [src/schema-types.ts:292](https://github.com/g5becks/StrataDB/blob/89bee4bbe54bb52f1f1308d5950da4d385abbe16/src/schema-types.ts#L292)
+Defined in: [src/schema-types.ts:292](https://github.com/g5becks/StrataDB/blob/7791c9d2c0eca8b064c87359859d54870cd83af8/src/schema-types.ts#L292)
 
 Optional validation function using Standard Schema type predicate signature
 

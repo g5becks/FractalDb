@@ -1,7 +1,7 @@
 import { describe, expect, it } from "bun:test"
 import type { Document } from "../../src/core-types.js"
 import { createSchema } from "../../src/schema-builder.js"
-import { StrataDBClass } from "../../src/stratadb.js"
+import { Strata } from "../../src/stratadb.js"
 
 describe("Symbol.dispose Resource Cleanup Tests", () => {
   // Test type
@@ -17,10 +17,10 @@ describe("Symbol.dispose Resource Cleanup Tests", () => {
 
   describe("Database Symbol.dispose", () => {
     it("should close connection when disposed", async () => {
-      let dbInstance: StrataDBClass | null = null
+      let dbInstance: Strata | null = null
 
       {
-        using db = new StrataDBClass({ database: ":memory:" })
+        using db = new Strata({ database: ":memory:" })
         dbInstance = db
 
         // Database should be usable within scope
@@ -46,7 +46,7 @@ describe("Symbol.dispose Resource Cleanup Tests", () => {
       let onCloseCalled = false
 
       {
-        using db = new StrataDBClass({
+        using db = new Strata({
           database: ":memory:",
           onClose: () => {
             onCloseCalled = true
@@ -65,7 +65,7 @@ describe("Symbol.dispose Resource Cleanup Tests", () => {
       let onCloseCalled = false
 
       try {
-        using db = new StrataDBClass({
+        using db = new Strata({
           database: ":memory:",
           onClose: () => {
             onCloseCalled = true
@@ -91,7 +91,7 @@ describe("Symbol.dispose Resource Cleanup Tests", () => {
       let closeCount = 0
 
       {
-        using db = new StrataDBClass({
+        using db = new Strata({
           database: ":memory:",
           onClose: () => {
             closeCount += 1
@@ -115,21 +115,21 @@ describe("Symbol.dispose Resource Cleanup Tests", () => {
       const disposalOrder: string[] = []
 
       {
-        using db1 = new StrataDBClass({
+        using db1 = new Strata({
           database: ":memory:",
           onClose: () => {
             disposalOrder.push("db1")
           },
         })
 
-        using db2 = new StrataDBClass({
+        using db2 = new Strata({
           database: ":memory:",
           onClose: () => {
             disposalOrder.push("db2")
           },
         })
 
-        using db3 = new StrataDBClass({
+        using db3 = new Strata({
           database: ":memory:",
           onClose: () => {
             disposalOrder.push("db3")
@@ -149,7 +149,7 @@ describe("Symbol.dispose Resource Cleanup Tests", () => {
 
   describe("Transaction Symbol.dispose", () => {
     it("should rollback uncommitted transaction when disposed", async () => {
-      using db = new StrataDBClass({ database: ":memory:" })
+      using db = new Strata({ database: ":memory:" })
       const users = db.collection("users", userSchema)
 
       // Insert initial data
@@ -180,7 +180,7 @@ describe("Symbol.dispose Resource Cleanup Tests", () => {
     })
 
     it("should commit transaction if explicitly committed before disposal", async () => {
-      using db = new StrataDBClass({ database: ":memory:" })
+      using db = new Strata({ database: ":memory:" })
       const users = db.collection("users", userSchema)
 
       {
@@ -206,7 +206,7 @@ describe("Symbol.dispose Resource Cleanup Tests", () => {
     })
 
     it("should rollback when callback throws error", async () => {
-      using db = new StrataDBClass({ database: ":memory:" })
+      using db = new Strata({ database: ":memory:" })
       const users = db.collection("users", userSchema)
 
       // Insert initial data
@@ -240,7 +240,7 @@ describe("Symbol.dispose Resource Cleanup Tests", () => {
     })
 
     it("should document rollback behavior with manual rollback and dispose", async () => {
-      using db = new StrataDBClass({ database: ":memory:" })
+      using db = new Strata({ database: ":memory:" })
       const users = db.collection("users", userSchema)
 
       {
@@ -264,7 +264,7 @@ describe("Symbol.dispose Resource Cleanup Tests", () => {
     })
 
     it("should handle nested using statements correctly", async () => {
-      using db = new StrataDBClass({ database: ":memory:" })
+      using db = new Strata({ database: ":memory:" })
       const users = db.collection("users", userSchema)
 
       {
@@ -301,7 +301,7 @@ describe("Symbol.dispose Resource Cleanup Tests", () => {
     it("should cleanup sequential transactions correctly", async () => {
       const disposalOrder: string[] = []
 
-      using db = new StrataDBClass({
+      using db = new Strata({
         database: ":memory:",
         onClose: () => {
           disposalOrder.push("db")
@@ -338,7 +338,7 @@ describe("Symbol.dispose Resource Cleanup Tests", () => {
 
   describe("execute() helper with automatic transaction management", () => {
     it("should commit transaction when execute callback succeeds", async () => {
-      using db = new StrataDBClass({ database: ":memory:" })
+      using db = new Strata({ database: ":memory:" })
       const users = db.collection("users", userSchema)
 
       const result = await db.execute(async (tx) => {
@@ -358,7 +358,7 @@ describe("Symbol.dispose Resource Cleanup Tests", () => {
     })
 
     it("should rollback transaction when execute callback throws", async () => {
-      using db = new StrataDBClass({ database: ":memory:" })
+      using db = new Strata({ database: ":memory:" })
       const users = db.collection("users", userSchema)
 
       // Insert initial data

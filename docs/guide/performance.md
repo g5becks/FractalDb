@@ -40,7 +40,7 @@ Cache is **disabled by default**. You can enable it at the database or collectio
 Enable caching for all collections:
 
 ```typescript
-const db = new StrataDBClass({
+const db = new Strata({
   database: 'app.db',
   enableCache: true  // Enable for all collections
 })
@@ -56,7 +56,7 @@ Enable caching for specific collections:
 
 ```typescript
 // Database default: disabled
-const db = new StrataDBClass({ database: 'app.db' })
+const db = new Strata({ database: 'app.db' })
 
 // Enable cache for high-traffic collection
 const users = db.collection('users', userSchema, { enableCache: true })
@@ -250,7 +250,7 @@ Create your own benchmarks using [mitata](https://github.com/evanwashere/mitata)
 
 ```typescript
 import { bench, group, run } from 'mitata'
-import { StrataDBClass, createSchema, type Document } from 'stratadb'
+import { Strata, createSchema, type Document } from 'stratadb'
 
 type User = Document<{ name: string; email: string }>
 
@@ -259,7 +259,7 @@ const schema = createSchema<User>()
   .field('email', { type: 'TEXT', indexed: true, unique: true })
   .build()
 
-const db = new StrataDBClass({ database: ':memory:' })
+const db = new Strata({ database: ':memory:' })
 const users = db.collection('users', schema)
 
 // Populate test data

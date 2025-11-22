@@ -116,7 +116,7 @@ A: Enable query caching when you have repetitive query patterns:
 
 ```typescript
 // Enable caching for frequently repeated queries
-const db = new StrataDBClass({ 
+const db = new Strata({ 
   database: 'app.db',
   enableCache: true  // Caching enabled globally
 })

@@ -6,27 +6,24 @@
 type DeleteResult = object;
 ```
 
-Defined in: [src/collection-types.ts:64](https://github.com/g5becks/StrataDB/blob/89bee4bbe54bb52f1f1308d5950da4d385abbe16/src/collection-types.ts#L64)
+Defined in: [src/collection-types.ts:91](https://github.com/g5becks/StrataDB/blob/7791c9d2c0eca8b064c87359859d54870cd83af8/src/collection-types.ts#L91)
 
 Result of a delete operation.
 
 ## Remarks
 
 Provides the count of documents deleted by the operation.
+Since SQLite is ACID and local, if this function returns without throwing,
+the operation succeeded.
 
-## Properties
+## Example
 
-### acknowledged
-
-```ts
-readonly acknowledged: true;
+```typescript
+const result = await users.deleteMany({ status: 'inactive' });
+console.log(`Deleted ${result.deletedCount} users`);
 ```
 
-Defined in: [src/collection-types.ts:69](https://github.com/g5becks/StrataDB/blob/89bee4bbe54bb52f1f1308d5950da4d385abbe16/src/collection-types.ts#L69)
-
-Whether the delete operation succeeded
-
-***
+## Properties
 
 ### deletedCount
 
@@ -34,6 +31,6 @@ Whether the delete operation succeeded
 readonly deletedCount: number;
 ```
 
-Defined in: [src/collection-types.ts:66](https://github.com/g5becks/StrataDB/blob/89bee4bbe54bb52f1f1308d5950da4d385abbe16/src/collection-types.ts#L66)
+Defined in: [src/collection-types.ts:93](https://github.com/g5becks/StrataDB/blob/7791c9d2c0eca8b064c87359859d54870cd83af8/src/collection-types.ts#L93)
 
 Number of documents deleted

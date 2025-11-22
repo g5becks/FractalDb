@@ -14,14 +14,14 @@ import { z } from "zod"
 import type { Document } from "../../src/core-types.js"
 import { ValidationError } from "../../src/errors.js"
 import { createSchema } from "../../src/schema-builder.js"
-import { StrataDBClass } from "../../src/stratadb.js"
+import { Strata } from "../../src/stratadb.js"
 import { wrapStandardSchema } from "../../src/validator.js"
 
 describe("Standard Schema Validator Integration Tests", () => {
-  let db: StrataDBClass
+  let db: Strata
 
   beforeEach(() => {
-    db = new StrataDBClass({ database: ":memory:" })
+    db = new Strata({ database: ":memory:" })
   })
 
   afterEach(() => {

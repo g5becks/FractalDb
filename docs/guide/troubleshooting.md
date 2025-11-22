@@ -29,7 +29,7 @@ bun run your-script.ts
 
 ```typescript
 // ✅ Correct import
-import { StrataDBClass, createSchema } from 'stratadb'
+import { Strata, createSchema } from 'stratadb'
 import type { Document } from 'stratadb'
 ```
 
@@ -48,14 +48,14 @@ chmod 755 ./data
 
 2. Use absolute paths if relative paths fail:
 ```typescript
-const db = new StrataDBClass({ 
+const db = new Strata({ 
   database: '/absolute/path/to/your/app.db' 
 })
 ```
 
 3. For temporary databases, use `:memory:`:
 ```typescript
-const db = new StrataDBClass({ database: ':memory:' })
+const db = new Strata({ database: ':memory:' })
 ```
 
 ### Database Locked Errors
@@ -163,7 +163,7 @@ const userSchema = createSchema<User>()
 2. **Use query caching** for repeated patterns:
 ```typescript
 // Enable caching for frequently repeated queries
-const db = new StrataDBClass({ 
+const db = new Strata({ 
   database: 'app.db', 
   enableCache: true 
 })
@@ -195,7 +195,7 @@ await users.find({ status: { $in: ['active', 'pending', 'trial'] } })
 const oneOffQueries = db.collection('temp', schema, { enableCache: false })
 
 // Or limit the cache size by disabling global cache and enabling only where needed
-const db = new StrataDBClass({ 
+const db = new Strata({ 
   database: 'app.db',
   enableCache: false  // Disable globally
 })
@@ -364,11 +364,11 @@ If experiencing memory issues:
 1. **Close databases properly**:
 ```typescript
 // Use Symbol.dispose for automatic cleanup
-using db = new StrataDBClass({ database: 'app.db' })
+using db = new Strata({ database: 'app.db' })
 // db.close() called automatically when scope exits
 
 // Or manually close
-const db = new StrataDBClass({ database: 'app.db' })
+const db = new Strata({ database: 'app.db' })
 // ... use db ...
 db.close()
 ```
@@ -399,12 +399,12 @@ function processUser(userId: string) {
 import { describe, test, expect, beforeEach, afterEach } from 'bun:test'
 
 describe('User Service', () => {
-  let db: StrataDBClass
+  let db: Strata
   let users: Collection<User>
 
   beforeEach(() => {
     // Use in-memory database for tests
-    db = new StrataDBClass({ database: ':memory:' })
+    db = new Strata({ database: ':memory:' })
     users = db.collection('users', userSchema)
   })
 
@@ -432,7 +432,7 @@ For debugging, consider creating a minimal example that reproduces your issue:
 
 ```typescript
 // Example of a minimal reproduction
-import { StrataDBClass, createSchema, type Document } from 'stratadb'
+import { Strata, createSchema, type Document } from 'stratadb'
 
 type TestDoc = Document<{ name: string }>
 
@@ -440,7 +440,7 @@ const schema = createSchema<TestDoc>()
   .field('name', { type: 'TEXT', indexed: true })
   .build()
 
-const db = new StrataDBClass({ database: ':memory:' })
+const db = new Strata({ database: ':memory:' })
 const collection = db.collection('test', schema)
 
 try {

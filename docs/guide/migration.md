@@ -10,7 +10,7 @@ If you're currently using MongoDB, StrataDB provides a familiar API with additio
 
 | MongoDB | StrataDB | Notes |
 |---------|----------|-------|
-| `MongoClient` | `StrataDBClass` | Main database class |
+| `MongoClient` | `Strata` | Main database class |
 | `collection.insertOne()` | `collection.insertOne()` | Same API |
 | `collection.find()` | `collection.find()` | Same API with type safety |
 | Schema validation | Schema definitions with types | Compile-time validation |
@@ -67,9 +67,9 @@ const db = client.db('myapp')
 const users = db.collection('users')
 
 // ✅ StrataDB approach
-import { StrataDBClass } from 'stratadb'
+import { Strata } from 'stratadb'
 
-const db = new StrataDBClass({ database: 'myapp.db' })
+const db = new Strata({ database: 'myapp.db' })
 const users = db.collection('users', userSchema)
 ```
 
@@ -352,7 +352,7 @@ Unlike MongoDB which runs as a separate service, StrataDB uses files:
 
 ```typescript
 // For production deployment
-const db = new StrataDBClass({
+const db = new Strata({
   database: process.env.NODE_ENV === 'production' 
     ? '/var/lib/myapp/database.db'  // Production path
     : './dev.db'                   // Development path

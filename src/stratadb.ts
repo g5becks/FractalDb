@@ -31,13 +31,13 @@ import { SQLiteCollection } from "./sqlite-collection.js"
  * @example
  * ```typescript
  * // Create database with path
- * const db = new StrataDBClass({ database: 'myapp.db' });
+ * const db = new Strata({ database: 'myapp.db' });
  *
  * // Create in-memory database
- * const memDb = new StrataDBClass({ database: ':memory:' });
+ * const memDb = new Strata({ database: ':memory:' });
  *
  * // With custom options
- * const customDb = new StrataDBClass({
+ * const customDb = new Strata({
  *   database: 'app.db',
  *   idGenerator: () => `custom-${Date.now()}`,
  *   onClose: () => console.log('Database closed'),
@@ -45,12 +45,12 @@ import { SQLiteCollection } from "./sqlite-collection.js"
  * });
  *
  * // Using with automatic cleanup
- * using db = new StrataDBClass({ database: ':memory:' });
+ * using db = new Strata({ database: ':memory:' });
  * const users = db.collection('users', userSchema);
  * // Database automatically closes when scope exits
  * ```
  */
-export class StrataDBClass implements StrataDBInterface {
+export class Strata implements StrataDBInterface {
   readonly sqliteDb: SQLiteDatabase
 
   private readonly idGeneratorFn: () => string

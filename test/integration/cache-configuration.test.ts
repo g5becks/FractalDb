@@ -1,7 +1,7 @@
 import { describe, expect, it } from "bun:test"
 import type { Document } from "../../src/core-types.ts"
 import { createSchema } from "../../src/schema-builder.ts"
-import { StrataDBClass } from "../../src/stratadb.ts"
+import { Strata } from "../../src/stratadb.ts"
 
 interface TestDoc extends Document {
   name: string
@@ -11,7 +11,7 @@ interface TestDoc extends Document {
 describe("Cache Configuration", () => {
   describe("Database-level cache configuration", () => {
     it("should disable cache for all collections by default", () => {
-      const db = new StrataDBClass({ database: ":memory:" })
+      const db = new Strata({ database: ":memory:" })
 
       const schema = createSchema<TestDoc>()
         .field("name", { type: "TEXT", indexed: true })
@@ -34,7 +34,7 @@ describe("Cache Configuration", () => {
     })
 
     it("should enable cache for all collections when configured", () => {
-      const db = new StrataDBClass({
+      const db = new Strata({
         database: ":memory:",
         enableCache: true,
       })
@@ -56,7 +56,7 @@ describe("Cache Configuration", () => {
     })
 
     it("should apply cache setting to multiple collections", () => {
-      const db = new StrataDBClass({
+      const db = new Strata({
         database: ":memory:",
         enableCache: true,
       })
@@ -85,7 +85,7 @@ describe("Cache Configuration", () => {
 
   describe("Collection-level cache override", () => {
     it("should allow collection to override database default (enable when db disabled)", () => {
-      const db = new StrataDBClass({
+      const db = new Strata({
         database: ":memory:",
         enableCache: false, // Database default: disabled
       })
@@ -107,7 +107,7 @@ describe("Cache Configuration", () => {
     })
 
     it("should allow collection to override database default (disable when db enabled)", () => {
-      const db = new StrataDBClass({
+      const db = new Strata({
         database: ":memory:",
         enableCache: true, // Database default: enabled
       })
@@ -129,7 +129,7 @@ describe("Cache Configuration", () => {
     })
 
     it("should allow mixed cache settings across collections", () => {
-      const db = new StrataDBClass({
+      const db = new Strata({
         database: ":memory:",
         enableCache: false, // Database default: disabled
       })
@@ -166,7 +166,7 @@ describe("Cache Configuration", () => {
 
   describe("CollectionBuilder cache configuration", () => {
     it("should allow cache configuration via builder", () => {
-      const db = new StrataDBClass({ database: ":memory:" })
+      const db = new Strata({ database: ":memory:" })
 
       const collection = db
         .collection<TestDoc>("test")
@@ -184,7 +184,7 @@ describe("Cache Configuration", () => {
     })
 
     it("should inherit database default when not specified in builder", () => {
-      const db = new StrataDBClass({
+      const db = new Strata({
         database: ":memory:",
         enableCache: true,
       })
@@ -205,7 +205,7 @@ describe("Cache Configuration", () => {
     })
 
     it("should allow builder to override database default", () => {
-      const db = new StrataDBClass({
+      const db = new Strata({
         database: ":memory:",
         enableCache: true, // Database default: enabled
       })
@@ -226,7 +226,7 @@ describe("Cache Configuration", () => {
     })
 
     it("should support fluent method chaining with cache()", () => {
-      const db = new StrataDBClass({ database: ":memory:" })
+      const db = new Strata({ database: ":memory:" })
 
       const collection = db
         .collection<TestDoc>("test")
@@ -248,7 +248,7 @@ describe("Cache Configuration", () => {
 
   describe("Cache behavior verification", () => {
     it("should actually cache repeated queries with same structure", async () => {
-      const db = new StrataDBClass({
+      const db = new Strata({
         database: ":memory:",
         enableCache: true,
       })
@@ -285,7 +285,7 @@ describe("Cache Configuration", () => {
     })
 
     it("should not cache when disabled", async () => {
-      const db = new StrataDBClass({
+      const db = new Strata({
         database: ":memory:",
         enableCache: false,
       })

@@ -10,7 +10,7 @@
 import { bench, group, run } from "mitata"
 import type { Document } from "../src/core-types.js"
 import { createSchema } from "../src/schema-builder.js"
-import { StrataDBClass } from "../src/stratadb.js"
+import { Strata } from "../src/stratadb.js"
 
 // Test document type
 type User = Document<{
@@ -44,7 +44,7 @@ const userSchema = createSchema<User>()
   .build()
 
 function createTestDb() {
-  return new StrataDBClass({ database: ":memory:" })
+  return new Strata({ database: ":memory:" })
 }
 
 let emailCounter = 0

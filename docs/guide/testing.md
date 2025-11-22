@@ -10,7 +10,7 @@ The most important practice for testing is using in-memory databases to ensure t
 
 ```typescript
 import { describe, test, expect, beforeEach, afterEach } from 'bun:test'
-import { StrataDBClass, createSchema, type Document, type Collection } from 'stratadb'
+import { Strata, createSchema, type Document, type Collection } from 'stratadb'
 
 // Define your document type for testing
 type TestUser = Document<{
@@ -28,12 +28,12 @@ const userSchema = createSchema<TestUser>()
   .build()
 
 describe('User Service', () => {
-  let db: StrataDBClass
+  let db: Strata
   let users: Collection<TestUser>
 
   beforeEach(() => {
     // Create fresh in-memory database for each test
-    db = new StrataDBClass({ database: ':memory:' })
+    db = new Strata({ database: ':memory:' })
     users = db.collection('users', userSchema)
   })
 
@@ -64,12 +64,12 @@ Create reusable test utilities to reduce boilerplate in your test files:
 
 ```typescript
 // test-utils.ts
-import { StrataDBClass } from 'stratadb'
+import { Strata } from 'stratadb'
 import type { Collection } from 'stratadb'
 import type { Document } from 'stratadb'
 
 export interface TestDatabase {
-  db: StrataDBClass
+  db: Strata
   cleanup: () => void
 }
 
@@ -77,7 +77,7 @@ export interface TestDatabase {
  * Creates a fresh in-memory database for testing
  */
 export const createTestDatabase = (): TestDatabase => {
-  const db = new StrataDBClass({ database: ':memory:' })
+  const db = new Strata({ database: ':memory:' })
   
   return {
     db,
@@ -89,7 +89,7 @@ export const createTestDatabase = (): TestDatabase => {
  * Creates a test collection with proper cleanup
  */
 export const createTestCollection = <T extends Document<unknown>>(
-  db: StrataDBClass,
+  db: Strata,
   collectionName: string,
   schema: any // Your schema object
 ): Collection<T> => {
@@ -122,7 +122,7 @@ Test each database operation separately:
 
 ```typescript
 import { describe, test, expect, beforeEach, afterEach } from 'bun:test'
-import { StrataDBClass, createSchema } from 'stratadb'
+import { Strata, createSchema } from 'stratadb'
 
 describe('User Collection Operations', () => {
   type User = Document<{ name: string; email: string }>
@@ -132,11 +132,11 @@ describe('User Collection Operations', () => {
     .field('email', { type: 'TEXT', indexed: true, unique: true })
     .build()
 
-  let db: StrataDBClass
+  let db: Strata
   let users: Collection<User>
 
   beforeEach(() => {
-    db = new StrataDBClass({ database: ':memory:' })
+    db = new Strata({ database: ':memory:' })
     users = db.collection('users', userSchema)
   })
 
@@ -262,7 +262,7 @@ export class UserService {
 // user-service.test.ts
 import { describe, test, expect, beforeEach, afterEach } from 'bun:test'
 import { UserService } from './user-service'
-import { StrataDBClass, createSchema } from 'stratadb'
+import { Strata, createSchema } from 'stratadb'
 
 describe('UserService', () => {
   type User = Document<{ name: string; email: string; active: boolean }>
@@ -272,12 +272,12 @@ describe('UserService', () => {
     .field('active', { type: 'INTEGER', indexed: true }) // INTEGER for boolean in SQLite
     .build()
 
-  let db: StrataDBClass
+  let db: Strata
   let users: Collection<User>
   let userService: UserService
 
   beforeEach(() => {
-    db = new StrataDBClass({ database: ':memory:' })
+    db = new Strata({ database: ':memory:' })
     users = db.collection('users', userSchema)
     userService = new UserService(users)
   })
@@ -364,7 +364,7 @@ Test how your validation logic works:
 
 ```typescript
 import { describe, test, expect, beforeEach, afterEach } from 'bun:test'
-import { StrataDBClass, createSchema, wrapStandardSchema } from 'stratadb'
+import { Strata, createSchema, wrapStandardSchema } from 'stratadb'
 import { z } from 'zod'
 
 describe('Validation Testing', () => {
@@ -386,11 +386,11 @@ describe('Validation Testing', () => {
     .validate(wrapStandardSchema<User>(ZodUser))
     .build()
 
-  let db: StrataDBClass
+  let db: Strata
   let users: Collection<User>
 
   beforeEach(() => {
-    db = new StrataDBClass({ database: ':memory:' })
+    db = new Strata({ database: ':memory:' })
     users = db.collection('users', userSchema)
   })
 
@@ -617,17 +617,17 @@ describe('Performance Testing', () => {
 
 ```typescript
 // ❌ Don't use shared databases between tests
-let sharedDb: StrataDBClass
+let sharedDb: Strata
 let sharedUsers: Collection<User>
 
 beforeAll(() => {
-  sharedDb = new StrataDBClass({ database: './shared-test.db' }) // Shared state
+  sharedDb = new Strata({ database: './shared-test.db' }) // Shared state
   sharedUsers = sharedDb.collection('users', userSchema)
 })
 
 // ❌ Don't forget to close databases
 test('some test', async () => {
-  const db = new StrataDBClass({ database: ':memory:' })
+  const db = new Strata({ database: ':memory:' })
   const users = db.collection('users', userSchema)
   // Using db and users but never closing
   // This can cause resource leaks

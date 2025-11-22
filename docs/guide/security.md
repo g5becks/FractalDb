@@ -21,12 +21,12 @@ chmod 600 myapp.db
 
 ```typescript
 // ✅ Good: Store database in protected directory
-const db = new StrataDBClass({
+const db = new Strata({
   database: '/var/lib/myapp/data.db'  // Protected system directory
 })
 
 // ❌ Avoid: Database in public or temporary directories
-const db = new StrataDBClass({
+const db = new Strata({
   database: './public/db.db'      // Accessible via web server
   // or
   database: '/tmp/app.db'         // World-readable temporary directory
@@ -376,15 +376,15 @@ Secure database configuration:
 
 ```typescript
 // ✅ Load sensitive config from environment variables
-const db = new StrataDBClass({
+const db = new Strata({
   database: process.env.DB_PATH || './app.db',
   // For production, use absolute paths that are secured
   onClose: () => console.log('Database closed securely')
 })
 
 // Don't hardcode sensitive paths
-// ❌ const db = new StrataDBClass({ database: './db.sqlite' }) // Path might be guessable
-// ✅ const db = new StrataDBClass({ database: process.env.DB_PATH }) // Secure
+// ❌ const db = new Strata({ database: './db.sqlite' }) // Path might be guessable
+// ✅ const db = new Strata({ database: process.env.DB_PATH }) // Secure
 ```
 
 ## Audit and Monitoring

@@ -21,7 +21,7 @@ Requires [Bun](https://bun.sh) runtime.
 ## Quick Start
 
 ```typescript
-import { StrataDBClass, createSchema, type Document } from 'stratadb'
+import { Strata, createSchema, type Document } from 'stratadb'
 
 type User = Document<{
   name: string
@@ -36,7 +36,7 @@ const schema = createSchema<User>()
   .timestamps(true)
   .build()
 
-using db = new StrataDBClass({ database: 'app.db' })
+using db = new Strata({ database: 'app.db' })
 const users = db.collection('users', schema)
 
 // Insert

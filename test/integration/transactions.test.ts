@@ -9,7 +9,7 @@
  */
 
 import { afterEach, beforeEach, describe, expect, it } from "bun:test"
-import { createSchema, type Document, StrataDBClass } from "../../src/index.js"
+import { createSchema, type Document, Strata } from "../../src/index.js"
 
 // ============================================================================
 // Test Document Types
@@ -26,10 +26,10 @@ type Account = Document<{
 // ============================================================================
 
 describe("Transactions", () => {
-  let db: StrataDBClass
+  let db: Strata
 
   beforeEach(() => {
-    db = new StrataDBClass({ database: ":memory:" })
+    db = new Strata({ database: ":memory:" })
   })
 
   afterEach(() => {

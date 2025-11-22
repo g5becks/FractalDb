@@ -6,7 +6,7 @@
 type LogicalOperator<T> = object;
 ```
 
-Defined in: [src/query-types.ts:364](https://github.com/g5becks/StrataDB/blob/89bee4bbe54bb52f1f1308d5950da4d385abbe16/src/query-types.ts#L364)
+Defined in: [src/query-types.ts:367](https://github.com/g5becks/StrataDB/blob/7791c9d2c0eca8b064c87359859d54870cd83af8/src/query-types.ts#L367)
 
 Logical operators for complex query composition.
 
@@ -67,7 +67,7 @@ const complexQuery: LogicalOperator<User> = {
       ]
     },
     {
-      $not: { email: { $like: '%@spam.com$' } }
+      $not: { email: { $endsWith: '@spam.com' } }
     }
   ]
 };
@@ -89,7 +89,7 @@ The document type being queried
 readonly optional $and: readonly QueryFilter<T>[];
 ```
 
-Defined in: [src/query-types.ts:366](https://github.com/g5becks/StrataDB/blob/89bee4bbe54bb52f1f1308d5950da4d385abbe16/src/query-types.ts#L366)
+Defined in: [src/query-types.ts:369](https://github.com/g5becks/StrataDB/blob/7791c9d2c0eca8b064c87359859d54870cd83af8/src/query-types.ts#L369)
 
 All conditions in the array must match (logical AND)
 
@@ -101,7 +101,7 @@ All conditions in the array must match (logical AND)
 readonly optional $nor: readonly QueryFilter<T>[];
 ```
 
-Defined in: [src/query-types.ts:372](https://github.com/g5becks/StrataDB/blob/89bee4bbe54bb52f1f1308d5950da4d385abbe16/src/query-types.ts#L372)
+Defined in: [src/query-types.ts:375](https://github.com/g5becks/StrataDB/blob/7791c9d2c0eca8b064c87359859d54870cd83af8/src/query-types.ts#L375)
 
 None of the conditions in the array must match (logical NOR)
 
@@ -113,7 +113,7 @@ None of the conditions in the array must match (logical NOR)
 readonly optional $not: QueryFilter<T>;
 ```
 
-Defined in: [src/query-types.ts:375](https://github.com/g5becks/StrataDB/blob/89bee4bbe54bb52f1f1308d5950da4d385abbe16/src/query-types.ts#L375)
+Defined in: [src/query-types.ts:378](https://github.com/g5becks/StrataDB/blob/7791c9d2c0eca8b064c87359859d54870cd83af8/src/query-types.ts#L378)
 
 Negates the given condition (logical NOT)
 
@@ -125,6 +125,6 @@ Negates the given condition (logical NOT)
 readonly optional $or: readonly QueryFilter<T>[];
 ```
 
-Defined in: [src/query-types.ts:369](https://github.com/g5becks/StrataDB/blob/89bee4bbe54bb52f1f1308d5950da4d385abbe16/src/query-types.ts#L369)
+Defined in: [src/query-types.ts:372](https://github.com/g5becks/StrataDB/blob/7791c9d2c0eca8b064c87359859d54870cd83af8/src/query-types.ts#L372)
 
 At least one condition in the array must match (logical OR)

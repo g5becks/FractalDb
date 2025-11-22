@@ -1,8 +1,8 @@
-[stratadb](../index.md) / DocDBError
+[stratadb](../index.md) / StrataDBError
 
-# Abstract Class: DocDBError
+# Abstract Class: StrataDBError
 
-Defined in: [src/errors.ts:35](https://github.com/g5becks/StrataDB/blob/89bee4bbe54bb52f1f1308d5950da4d385abbe16/src/errors.ts#L35)
+Defined in: [src/errors.ts:35](https://github.com/g5becks/StrataDB/blob/7791c9d2c0eca8b064c87359859d54870cd83af8/src/errors.ts#L35)
 
 Abstract base class for all StrataDB errors.
 
@@ -18,7 +18,7 @@ for programmatic error handling and response.
 try {
   await users.insertOne(invalidUser);
 } catch (error) {
-  if (error instanceof DocDBError) {
+  if (error instanceof StrataDBError) {
     console.log(`Error: ${error.code} in category: ${error.category}`);
 
     switch (error.category) {
@@ -56,10 +56,10 @@ try {
 ### Constructor
 
 ```ts
-new DocDBError(message): DocDBError;
+new StrataDBError(message): StrataDBError;
 ```
 
-Defined in: [src/errors.ts:46](https://github.com/g5becks/StrataDB/blob/89bee4bbe54bb52f1f1308d5950da4d385abbe16/src/errors.ts#L46)
+Defined in: [src/errors.ts:46](https://github.com/g5becks/StrataDB/blob/7791c9d2c0eca8b064c87359859d54870cd83af8/src/errors.ts#L46)
 
 #### Parameters
 
@@ -69,7 +69,7 @@ Defined in: [src/errors.ts:46](https://github.com/g5becks/StrataDB/blob/89bee4bb
 
 #### Returns
 
-`DocDBError`
+`StrataDBError`
 
 #### Overrides
 
@@ -85,7 +85,7 @@ Error.constructor
 abstract readonly category: "validation" | "query" | "database" | "transaction";
 ```
 
-Defined in: [src/errors.ts:40](https://github.com/g5becks/StrataDB/blob/89bee4bbe54bb52f1f1308d5950da4d385abbe16/src/errors.ts#L40)
+Defined in: [src/errors.ts:40](https://github.com/g5becks/StrataDB/blob/7791c9d2c0eca8b064c87359859d54870cd83af8/src/errors.ts#L40)
 
 Error category for grouping related error types
 
@@ -115,7 +115,7 @@ Error.cause
 abstract readonly code: string;
 ```
 
-Defined in: [src/errors.ts:37](https://github.com/g5becks/StrataDB/blob/89bee4bbe54bb52f1f1308d5950da4d385abbe16/src/errors.ts#L37)
+Defined in: [src/errors.ts:37](https://github.com/g5becks/StrataDB/blob/7791c9d2c0eca8b064c87359859d54870cd83af8/src/errors.ts#L37)
 
 Unique error code for programmatic identification
 

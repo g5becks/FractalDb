@@ -20,9 +20,9 @@
  *
  * @example
  * ```typescript
- * import { StrataDBClass, nowTimestamp, timestampToDate } from 'stratadb';
+ * import { Strata, nowTimestamp, timestampToDate } from 'stratadb';
  *
- * const db = new StrataDBClass({ database: ':memory:' });
+ * const db = new Strata({ database: ':memory:' });
  * const users = db.collection('users', schema);
  *
  * // Insert - automatically adds timestamps

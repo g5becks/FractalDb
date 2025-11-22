@@ -9,7 +9,7 @@ import { afterEach, beforeEach, describe, expect, it } from "bun:test"
 import {
   createSchema,
   type Document,
-  StrataDBClass,
+  Strata,
   UniqueConstraintError,
 } from "../../src/index.js"
 
@@ -46,11 +46,11 @@ type Product = Document<{
 // ============================================================================
 
 describe("Collection CRUD Operations", () => {
-  let db: StrataDBClass
+  let db: Strata
 
   // Create fresh in-memory database before each test
   beforeEach(() => {
-    db = new StrataDBClass({ database: ":memory:" })
+    db = new Strata({ database: ":memory:" })
   })
 
   // Close database after each test

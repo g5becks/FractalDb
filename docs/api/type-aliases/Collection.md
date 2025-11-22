@@ -6,7 +6,7 @@
 type Collection<T> = object;
 ```
 
-Defined in: [src/collection-types.ts:157](https://github.com/g5becks/StrataDB/blob/89bee4bbe54bb52f1f1308d5950da4d385abbe16/src/collection-types.ts#L157)
+Defined in: [src/collection-types.ts:181](https://github.com/g5becks/StrataDB/blob/7791c9d2c0eca8b064c87359859d54870cd83af8/src/collection-types.ts#L181)
 
 MongoDB-like collection interface for type-safe document operations.
 
@@ -26,7 +26,7 @@ table and provides MongoDB-like methods for querying and manipulating documents.
 **Document Storage:**
 - All documents stored in a single `data` JSONB column
 - Indexed fields have generated columns with underscore prefix (e.g., `_age`)
-- Auto-generated `id` and `createdAt` fields
+- Auto-generated `_id` and `createdAt` fields
 - Optional `updatedAt` tracking
 
 **Comparison to MongoDB:**
@@ -75,7 +75,7 @@ const result = await users.insertOne({
   age: 30,
   role: 'admin'
 });
-console.log(result.document.id); // Auto-generated UUID
+console.log(result._id); // Auto-generated UUID
 
 // Query documents
 const admins = await users.find({ role: 'admin' });
@@ -108,7 +108,7 @@ The document type, must extend Document
 readonly name: string;
 ```
 
-Defined in: [src/collection-types.ts:161](https://github.com/g5becks/StrataDB/blob/89bee4bbe54bb52f1f1308d5950da4d385abbe16/src/collection-types.ts#L161)
+Defined in: [src/collection-types.ts:185](https://github.com/g5becks/StrataDB/blob/7791c9d2c0eca8b064c87359859d54870cd83af8/src/collection-types.ts#L185)
 
 Collection name (table name in SQLite).
 
@@ -120,7 +120,7 @@ Collection name (table name in SQLite).
 readonly schema: SchemaDefinition<T>;
 ```
 
-Defined in: [src/collection-types.ts:166](https://github.com/g5becks/StrataDB/blob/89bee4bbe54bb52f1f1308d5950da4d385abbe16/src/collection-types.ts#L166)
+Defined in: [src/collection-types.ts:190](https://github.com/g5becks/StrataDB/blob/7791c9d2c0eca8b064c87359859d54870cd83af8/src/collection-types.ts#L190)
 
 Schema definition for this collection.
 
@@ -132,7 +132,7 @@ Schema definition for this collection.
 count(filter): Promise<number>;
 ```
 
-Defined in: [src/collection-types.ts:295](https://github.com/g5becks/StrataDB/blob/89bee4bbe54bb52f1f1308d5950da4d385abbe16/src/collection-types.ts#L295)
+Defined in: [src/collection-types.ts:329](https://github.com/g5becks/StrataDB/blob/7791c9d2c0eca8b064c87359859d54870cd83af8/src/collection-types.ts#L329)
 
 Count documents matching the query filter.
 
@@ -179,7 +179,7 @@ const adultCount = await users.count({ age: { $gte: 18 } });
 deleteMany(filter): Promise<DeleteResult>;
 ```
 
-Defined in: [src/collection-types.ts:527](https://github.com/g5becks/StrataDB/blob/89bee4bbe54bb52f1f1308d5950da4d385abbe16/src/collection-types.ts#L527)
+Defined in: [src/collection-types.ts:752](https://github.com/g5becks/StrataDB/blob/7791c9d2c0eca8b064c87359859d54870cd83af8/src/collection-types.ts#L752)
 
 Delete multiple documents matching the query filter.
 
@@ -222,41 +222,188 @@ await users.deleteMany({});
 ### deleteOne()
 
 ```ts
-deleteOne(id): Promise<boolean>;
+deleteOne(filter): Promise<boolean>;
 ```
 
-Defined in: [src/collection-types.ts:435](https://github.com/g5becks/StrataDB/blob/89bee4bbe54bb52f1f1308d5950da4d385abbe16/src/collection-types.ts#L435)
+Defined in: [src/collection-types.ts:501](https://github.com/g5becks/StrataDB/blob/7791c9d2c0eca8b064c87359859d54870cd83af8/src/collection-types.ts#L501)
 
-Delete a single document matching the query filter.
+Delete a single document by ID or filter.
 
 #### Parameters
 
-##### id
+##### filter
 
-`string`
+Document ID (string) or query filter
 
-The document ID to delete
+`string` | [`QueryFilter`](QueryFilter.md)\<`T`\>
 
 #### Returns
 
 `Promise`\<`boolean`\>
 
-Promise resolving to delete result with statistics
+Promise resolving to `true` if document was deleted, `false` if not found
 
 #### Remarks
 
+This method accepts either a string ID or a query filter for maximum flexibility.
+When you have the document ID, pass it directly as a string for convenience.
+When you need to delete by other fields, pass a filter object.
+
 Deletes the first document that matches the filter.
-If no document matches, returns `{ deletedCount: 0 }`.
+If no document matches, returns `false`.
 
 #### Example
 
 ```typescript
-const result = await users.deleteOne({ id: userId });
-if (result.deletedCount > 0) {
-  console.log('User deleted successfully');
-} else {
-  console.log('User not found');
+// Delete by ID (string)
+const deleted = await users.deleteOne('user-123')
+if (deleted) {
+  console.log('User deleted successfully')
 }
+
+// Delete by filter
+const deleted = await users.deleteOne({ email: 'inactive@example.com' })
+
+// Delete with complex filter
+const deleted = await users.deleteOne({
+  status: 'inactive',
+  lastLogin: { $lt: Date.now() - 90 * 24 * 60 * 60 * 1000 } // 90 days
+})
+```
+
+***
+
+### distinct()
+
+```ts
+distinct<K>(field, filter?): Promise<T[K][]>;
+```
+
+Defined in: [src/collection-types.ts:783](https://github.com/g5becks/StrataDB/blob/7791c9d2c0eca8b064c87359859d54870cd83af8/src/collection-types.ts#L783)
+
+Find distinct values for a specified field across the collection.
+
+#### Type Parameters
+
+##### K
+
+`K` *extends* `string` \| `number` \| `symbol`
+
+#### Parameters
+
+##### field
+
+`K`
+
+The field name to get distinct values for
+
+##### filter?
+
+[`QueryFilter`](QueryFilter.md)\<`T`\>
+
+Optional query filter to narrow results
+
+#### Returns
+
+`Promise`\<`T`\[`K`\][]\>
+
+Promise resolving to array of unique values for the field
+
+#### Remarks
+
+Returns an array of unique values for the specified field.
+If a filter is provided, only documents matching the filter are considered.
+
+The method uses SQLite's DISTINCT clause for efficient querying.
+For indexed fields, uses the generated column; for non-indexed fields, uses JSON extraction.
+
+#### Example
+
+```typescript
+// Get all unique ages
+const ages = await users.distinct('age');
+console.log(ages); // [25, 30, 35, 40]
+
+// Get unique roles for active users
+const activeRoles = await users.distinct('role', { active: true });
+
+// Get unique tags (array field)
+const tags = await users.distinct('tags');
+```
+
+***
+
+### drop()
+
+```ts
+drop(): Promise<void>;
+```
+
+Defined in: [src/collection-types.ts:835](https://github.com/g5becks/StrataDB/blob/7791c9d2c0eca8b064c87359859d54870cd83af8/src/collection-types.ts#L835)
+
+Drop the collection (delete the table).
+
+#### Returns
+
+`Promise`\<`void`\>
+
+Promise resolving when the collection is dropped
+
+#### Remarks
+
+Permanently deletes the collection and all its documents.
+This operation cannot be undone.
+
+The table and all associated indexes are removed from the database.
+Use with caution in production environments.
+
+#### Example
+
+```typescript
+// Drop a temporary collection
+await tempCollection.drop();
+
+// Drop with confirmation
+if (confirm('Really delete all users?')) {
+  await users.drop();
+}
+```
+
+***
+
+### estimatedDocumentCount()
+
+```ts
+estimatedDocumentCount(): Promise<number>;
+```
+
+Defined in: [src/collection-types.ts:810](https://github.com/g5becks/StrataDB/blob/7791c9d2c0eca8b064c87359859d54870cd83af8/src/collection-types.ts#L810)
+
+Get an estimated count of documents in the collection.
+
+#### Returns
+
+`Promise`\<`number`\>
+
+Promise resolving to the estimated document count
+
+#### Remarks
+
+Returns a fast estimate of the document count using SQLite table statistics.
+This is much faster than count() for large collections but may not be exact.
+
+Uses SQLite's internal statistics which are updated periodically.
+For exact counts, use the count() method instead.
+
+#### Example
+
+```typescript
+const estimate = await users.estimatedDocumentCount();
+console.log(`Approximately ${estimate} users`);
+
+// Compare with exact count
+const exact = await users.count({});
+console.log(`Exact: ${exact}, Estimated: ${estimate}`);
 ```
 
 ***
@@ -267,7 +414,7 @@ if (result.deletedCount > 0) {
 find(filter, options?): Promise<readonly T[]>;
 ```
 
-Defined in: [src/collection-types.ts:234](https://github.com/g5becks/StrataDB/blob/89bee4bbe54bb52f1f1308d5950da4d385abbe16/src/collection-types.ts#L234)
+Defined in: [src/collection-types.ts:258](https://github.com/g5becks/StrataDB/blob/7791c9d2c0eca8b064c87359859d54870cd83af8/src/collection-types.ts#L258)
 
 Find all documents matching the query filter.
 
@@ -338,7 +485,7 @@ const results = await users.find({
 findById(id): Promise<T | null>;
 ```
 
-Defined in: [src/collection-types.ts:188](https://github.com/g5becks/StrataDB/blob/89bee4bbe54bb52f1f1308d5950da4d385abbe16/src/collection-types.ts#L188)
+Defined in: [src/collection-types.ts:212](https://github.com/g5becks/StrataDB/blob/7791c9d2c0eca8b064c87359859d54870cd83af8/src/collection-types.ts#L212)
 
 Find a single document by its ID.
 
@@ -378,17 +525,17 @@ if (user) {
 findOne(filter, options?): Promise<T | null>;
 ```
 
-Defined in: [src/collection-types.ts:265](https://github.com/g5becks/StrataDB/blob/89bee4bbe54bb52f1f1308d5950da4d385abbe16/src/collection-types.ts#L265)
+Defined in: [src/collection-types.ts:299](https://github.com/g5becks/StrataDB/blob/7791c9d2c0eca8b064c87359859d54870cd83af8/src/collection-types.ts#L299)
 
-Find the first document matching the query filter.
+Find the first document matching the query filter or ID.
 
 #### Parameters
 
 ##### filter
 
-[`QueryFilter`](QueryFilter.md)\<`T`\>
+Document ID or query filter to match documents
 
-Query filter to match documents
+`string` | [`QueryFilter`](QueryFilter.md)\<`T`\>
 
 ##### options?
 
@@ -407,13 +554,23 @@ Promise resolving to the first matching document, or null if none found
 Equivalent to `find(filter, { ...options, limit: 1 })[0]` but more efficient
 since it stops after finding the first match.
 
+Accepts either a string ID or a full QueryFilter object for flexible querying:
+- String ID: `{ _id: string }` filter is applied automatically
+- QueryFilter: Full MongoDB-style query filtering
+
 #### Example
 
 ```typescript
-// Find any admin user
+// Find by document ID
+const user = await users.findOne('123e4567-e89b-12d3-a456-426614174000');
+if (user) {
+  console.log(user.name);
+}
+
+// Find by query filter
 const admin = await users.findOne({ role: 'admin' });
 
-// Find most recent user
+// Find with options
 const latest = await users.findOne(
   {},
   { sort: { createdAt: -1 } }
@@ -428,13 +585,264 @@ if (exists) {
 
 ***
 
+### findOneAndDelete()
+
+```ts
+findOneAndDelete(filter, options?): Promise<T | null>;
+```
+
+Defined in: [src/collection-types.ts:541](https://github.com/g5becks/StrataDB/blob/7791c9d2c0eca8b064c87359859d54870cd83af8/src/collection-types.ts#L541)
+
+Find and delete a single document atomically.
+
+#### Parameters
+
+##### filter
+
+Document ID (string) or query filter
+
+`string` | [`QueryFilter`](QueryFilter.md)\<`T`\>
+
+##### options?
+
+Query options (sort)
+
+###### sort?
+
+[`SortSpec`](SortSpec.md)\<`T`\>
+
+#### Returns
+
+`Promise`\<`T` \| `null`\>
+
+Promise resolving to the deleted document, or null if not found
+
+#### Remarks
+
+This method accepts either a string ID or a query filter for maximum flexibility.
+When you have the document ID, pass it directly as a string for convenience.
+When you need to delete by other fields, pass a filter object.
+
+This operation is atomic - it finds and deletes in a single operation.
+Useful when you need the deleted document's data (e.g., for logging, undo operations).
+
+When multiple documents match the filter, the sort option determines which one is deleted.
+
+#### Example
+
+```typescript
+// Delete by ID
+const deleted = await users.findOneAndDelete('user-123');
+if (deleted) {
+  console.log(`Deleted user: ${deleted.name}`);
+  await logDeletion(deleted);
+}
+
+// Delete by filter
+const deleted = await users.findOneAndDelete({ email: 'old@example.com' });
+
+// Delete with sort (delete oldest inactive user)
+const deleted = await users.findOneAndDelete(
+  { status: 'inactive' },
+  { sort: { createdAt: 1 } }
+);
+```
+
+***
+
+### findOneAndReplace()
+
+```ts
+findOneAndReplace(
+   filter, 
+   replacement, 
+options?): Promise<T | null>;
+```
+
+Defined in: [src/collection-types.ts:652](https://github.com/g5becks/StrataDB/blob/7791c9d2c0eca8b064c87359859d54870cd83af8/src/collection-types.ts#L652)
+
+Find and replace a single document atomically.
+
+#### Parameters
+
+##### filter
+
+Document ID (string) or query filter
+
+`string` | [`QueryFilter`](QueryFilter.md)\<`T`\>
+
+##### replacement
+
+`Omit`\<`T`, `"_id"` \| `"createdAt"` \| `"updatedAt"`\>
+
+Complete replacement document (without _id, createdAt, updatedAt)
+
+##### options?
+
+Replace options (sort, returnDocument, upsert)
+
+###### returnDocument?
+
+`"before"` \| `"after"`
+
+###### sort?
+
+[`SortSpec`](SortSpec.md)\<`T`\>
+
+###### upsert?
+
+`boolean`
+
+#### Returns
+
+`Promise`\<`T` \| `null`\>
+
+Promise resolving to the document before or after replacement, or null if not found
+
+#### Remarks
+
+This method accepts either a string ID or a query filter for maximum flexibility.
+When you have the document ID, pass it directly as a string for convenience.
+When you need to replace by other fields, pass a filter object.
+
+This operation replaces the ENTIRE document (except _id, createdAt).
+Unlike `findOneAndUpdate` which merges fields, this replaces everything.
+The replacement document is validated against the schema.
+Default returnDocument is 'after'.
+
+#### Example
+
+```typescript
+// Replace by ID
+const replaced = await users.findOneAndReplace(
+  'user-123',
+  {
+    name: 'New Name',
+    email: 'new@example.com',
+    age: 30,
+    active: true,
+    tags: []
+  },
+  { returnDocument: 'after' }
+);
+
+// Replace by filter
+const replaced = await users.findOneAndReplace(
+  { email: 'old@example.com' },
+  {
+    name: 'New Name',
+    email: 'new@example.com',
+    age: 30,
+    active: true,
+    tags: []
+  }
+);
+```
+
+***
+
+### findOneAndUpdate()
+
+```ts
+findOneAndUpdate(
+   filter, 
+   update, 
+options?): Promise<T | null>;
+```
+
+Defined in: [src/collection-types.ts:596](https://github.com/g5becks/StrataDB/blob/7791c9d2c0eca8b064c87359859d54870cd83af8/src/collection-types.ts#L596)
+
+Find and update a single document atomically.
+
+#### Parameters
+
+##### filter
+
+Document ID (string) or query filter
+
+`string` | [`QueryFilter`](QueryFilter.md)\<`T`\>
+
+##### update
+
+`Omit`\<`Partial`\<`T`\>, `"_id"` \| `"createdAt"` \| `"updatedAt"`\>
+
+Partial document with fields to update
+
+##### options?
+
+Update options (sort, returnDocument, upsert)
+
+###### returnDocument?
+
+`"before"` \| `"after"`
+
+###### sort?
+
+[`SortSpec`](SortSpec.md)\<`T`\>
+
+###### upsert?
+
+`boolean`
+
+#### Returns
+
+`Promise`\<`T` \| `null`\>
+
+Promise resolving to the document before or after update, or null if not found
+
+#### Remarks
+
+This method accepts either a string ID or a query filter for maximum flexibility.
+When you have the document ID, pass it directly as a string for convenience.
+When you need to update by other fields, pass a filter object.
+
+This operation is atomic - it finds and updates in a single logical operation.
+Use `returnDocument` to control whether you get the document state before or after the update.
+Default is 'after'.
+
+#### Example
+
+```typescript
+// Update by ID
+const updated = await users.findOneAndUpdate(
+  'user-123',
+  { loginCount: 5 },
+  { returnDocument: 'after' }
+);
+
+// Update by filter
+const updated = await users.findOneAndUpdate(
+  { email: 'alice@example.com' },
+  { loginCount: 5 },
+  { returnDocument: 'after' }
+);
+console.log(`New login count: ${updated?.loginCount}`);
+
+// Get previous state before update
+const before = await users.findOneAndUpdate(
+  { _id: userId },
+  { status: 'archived' },
+  { returnDocument: 'before' }
+);
+await logStatusChange(before, 'archived');
+
+// Upsert with returnDocument
+const result = await users.findOneAndUpdate(
+  { email: 'new@example.com' },
+  { name: 'New User', age: 25 },
+  { upsert: true, returnDocument: 'after' }
+);
+```
+
+***
+
 ### insertMany()
 
 ```ts
 insertMany(docs): Promise<InsertManyResult<T>>;
 ```
 
-Defined in: [src/collection-types.ts:466](https://github.com/g5becks/StrataDB/blob/89bee4bbe54bb52f1f1308d5950da4d385abbe16/src/collection-types.ts#L466)
+Defined in: [src/collection-types.ts:691](https://github.com/g5becks/StrataDB/blob/7791c9d2c0eca8b064c87359859d54870cd83af8/src/collection-types.ts#L691)
 
 Insert multiple documents into the collection.
 
@@ -442,7 +850,7 @@ Insert multiple documents into the collection.
 
 ##### docs
 
-readonly `Omit`\<`T`, `"id"` \| `"createdAt"` \| `"updatedAt"`\>[]
+readonly `Omit`\<`T`, `"_id"` \| `"createdAt"` \| `"updatedAt"`\>[]
 
 Array of documents to insert
 
@@ -485,10 +893,10 @@ console.log(`Inserted ${result.insertedCount} users`);
 ### insertOne()
 
 ```ts
-insertOne(doc): Promise<InsertOneResult<T>>;
+insertOne(doc): Promise<T>;
 ```
 
-Defined in: [src/collection-types.ts:335](https://github.com/g5becks/StrataDB/blob/89bee4bbe54bb52f1f1308d5950da4d385abbe16/src/collection-types.ts#L335)
+Defined in: [src/collection-types.ts:370](https://github.com/g5becks/StrataDB/blob/7791c9d2c0eca8b064c87359859d54870cd83af8/src/collection-types.ts#L370)
 
 Insert a single document into the collection.
 
@@ -496,21 +904,21 @@ Insert a single document into the collection.
 
 ##### doc
 
-`Omit`\<`T`, `"id"` \| `"createdAt"` \| `"updatedAt"`\>
+`Omit`\<`T`, `"_id"` \| `"createdAt"` \| `"updatedAt"`\>
 
-Document to insert (without id, createdAt, updatedAt)
+Document to insert (without _id, createdAt, updatedAt)
 
 #### Returns
 
-`Promise`\<[`InsertOneResult`](InsertOneResult.md)\<`T`\>\>
+`Promise`\<`T`\>
 
-Promise resolving to insert result with the new document
+Promise resolving to the inserted document with generated _id
 
 #### Remarks
 
 Validates the document against the schema before inserting.
 Automatically generates:
-- `id`: UUID v4
+- `_id`: UUID v4
 - `createdAt`: Current timestamp
 - `updatedAt`: Current timestamp (if schema has this field)
 
@@ -529,13 +937,14 @@ If unique constraint is violated
 
 ```typescript
 try {
-  const result = await users.insertOne({
+  const user = await users.insertOne({
     name: 'Bob',
     email: 'bob@example.com',
     age: 25,
     role: 'user'
   });
-  console.log(`Inserted user with ID: ${result.document.id}`);
+  console.log(`Inserted user with ID: ${user._id}`);
+  console.log(`User name: ${user.name}`);
 } catch (err) {
   if (err instanceof ValidationError) {
     console.error('Invalid user:', err.message);
@@ -548,42 +957,46 @@ try {
 ### replaceOne()
 
 ```ts
-replaceOne(id, doc): Promise<T | null>;
+replaceOne(filter, doc): Promise<T | null>;
 ```
 
-Defined in: [src/collection-types.ts:410](https://github.com/g5becks/StrataDB/blob/89bee4bbe54bb52f1f1308d5950da4d385abbe16/src/collection-types.ts#L410)
+Defined in: [src/collection-types.ts:464](https://github.com/g5becks/StrataDB/blob/7791c9d2c0eca8b064c87359859d54870cd83af8/src/collection-types.ts#L464)
 
-Replace a single document matching the query filter.
+Replace a single document by ID or filter.
 
 #### Parameters
 
-##### id
+##### filter
 
-`string`
+Document ID (string) or query filter
 
-The document ID to replace
+`string` | [`QueryFilter`](QueryFilter.md)\<`T`\>
 
 ##### doc
 
-`Omit`\<`T`, `"id"` \| `"createdAt"` \| `"updatedAt"`\>
+`Omit`\<`T`, `"_id"` \| `"createdAt"` \| `"updatedAt"`\>
 
-New document to replace with (without id, createdAt)
+New document to replace with (without _id, createdAt, updatedAt)
 
 #### Returns
 
 `Promise`\<`T` \| `null`\>
 
-Promise resolving to update result with statistics
+Promise resolving to the replaced document, or null if not found
 
 #### Remarks
 
+This method accepts either a string ID or a query filter for maximum flexibility.
+When you have the document ID, pass it directly as a string for convenience.
+When you need to replace by other fields, pass a filter object.
+
 Completely replaces the matched document with the new document.
-Preserves `id` and `createdAt`, updates `updatedAt`.
+Preserves `_id` and `createdAt`, updates `updatedAt`.
 Validates the new document against the schema.
 
 **Difference from updateOne:**
-- `updateOne`: Modifies specific fields
-- `replaceOne`: Replaces entire document
+- `updateOne`: Merges specific fields into existing document
+- `replaceOne`: Replaces entire document (except _id, createdAt)
 
 #### Throws
 
@@ -592,11 +1005,23 @@ If new document fails schema validation
 #### Example
 
 ```typescript
-await users.replaceOne(
-  { id: userId },
+// Replace by ID (string)
+const replaced = await users.replaceOne(
+  'user-123',
   {
     name: 'Alice Smith',
     email: 'alice.smith@example.com',
+    age: 31,
+    role: 'admin'
+  }
+);
+
+// Replace by filter
+const replaced = await users.replaceOne(
+  { email: 'old@example.com' },
+  {
+    name: 'Alice Smith',
+    email: 'new@example.com',
     age: 31,
     role: 'admin'
   }
@@ -611,7 +1036,7 @@ await users.replaceOne(
 updateMany(filter, update): Promise<UpdateResult>;
 ```
 
-Defined in: [src/collection-types.ts:498](https://github.com/g5becks/StrataDB/blob/89bee4bbe54bb52f1f1308d5950da4d385abbe16/src/collection-types.ts#L498)
+Defined in: [src/collection-types.ts:723](https://github.com/g5becks/StrataDB/blob/7791c9d2c0eca8b064c87359859d54870cd83af8/src/collection-types.ts#L723)
 
 Update multiple documents matching the query filter.
 
@@ -625,7 +1050,7 @@ Query filter to find documents to update
 
 ##### update
 
-`Omit`\<`Partial`\<`T`\>, `"id"` \| `"createdAt"` \| `"updatedAt"`\>
+`Omit`\<`Partial`\<`T`\>, `"_id"` \| `"createdAt"` \| `"updatedAt"`\>
 
 Update operations to apply
 
@@ -664,30 +1089,32 @@ await users.updateMany(
 
 ```ts
 updateOne(
-   id, 
+   filter, 
    update, 
 options?): Promise<T | null>;
 ```
 
-Defined in: [src/collection-types.ts:373](https://github.com/g5becks/StrataDB/blob/89bee4bbe54bb52f1f1308d5950da4d385abbe16/src/collection-types.ts#L373)
+Defined in: [src/collection-types.ts:411](https://github.com/g5becks/StrataDB/blob/7791c9d2c0eca8b064c87359859d54870cd83af8/src/collection-types.ts#L411)
 
-Update a single document matching the query filter.
+Update a single document matching the query filter or ID.
 
 #### Parameters
 
-##### id
+##### filter
 
-`string`
+Document ID or query filter to find the document to update
 
-The document ID to update
+`string` | [`QueryFilter`](QueryFilter.md)\<`T`\>
 
 ##### update
 
-`Omit`\<`Partial`\<`T`\>, `"id"` \| `"createdAt"` \| `"updatedAt"`\>
+`Omit`\<`Partial`\<`T`\>, `"_id"` \| `"createdAt"` \| `"updatedAt"`\>
 
-Update operations to apply
+Partial document with fields to update
 
 ##### options?
+
+Optional upsert configuration
 
 ###### upsert?
 
@@ -697,34 +1124,38 @@ Update operations to apply
 
 `Promise`\<`T` \| `null`\>
 
-Promise resolving to update result with statistics
+Promise resolving to the updated document, or null if not found
 
 #### Remarks
 
 Updates the first document that matches the filter.
-Uses MongoDB-style update operators like `$set`, `$inc`, etc.
+Merges the provided partial document with the existing document.
 Automatically updates `updatedAt` if present in schema.
 
-**Update Operators:**
-- `$set`: Set field values
-- `$inc`: Increment numeric fields
-- `$unset`: Remove fields
-- `$push`: Add to arrays
-- `$pull`: Remove from arrays
+Accepts either a string ID or a full QueryFilter object for flexible targeting:
+- String ID: `{ _id: string }` filter is applied automatically
+- QueryFilter: Full MongoDB-style query filtering
 
 #### Example
 
 ```typescript
-// Set field values
-await users.updateOne(
-  { email: 'alice@example.com' },
-  { $set: { role: 'admin', verified: true } }
+// Update by document ID
+const updated = await users.updateOne(
+  '123e4567-e89b-12d3-a456-426614174000',
+  { role: 'admin', verified: true }
 );
 
-// Increment counter
+// Update by query filter
 await users.updateOne(
-  { id: userId },
-  { $inc: { loginCount: 1 } }
+  { email: 'alice@example.com' },
+  { role: 'admin', verified: true }
+);
+
+// Update with upsert
+await users.updateOne(
+  { email: 'new@example.com' },
+  { role: 'user' },
+  { upsert: true }
 );
 ```
 
@@ -736,7 +1167,7 @@ await users.updateOne(
 validate(doc): Promise<T>;
 ```
 
-Defined in: [src/collection-types.ts:561](https://github.com/g5becks/StrataDB/blob/89bee4bbe54bb52f1f1308d5950da4d385abbe16/src/collection-types.ts#L561)
+Defined in: [src/collection-types.ts:869](https://github.com/g5becks/StrataDB/blob/7791c9d2c0eca8b064c87359859d54870cd83af8/src/collection-types.ts#L869)
 
 Validate a document against the schema (async).
 
@@ -790,7 +1221,7 @@ try {
 validateSync(doc): T;
 ```
 
-Defined in: [src/collection-types.ts:586](https://github.com/g5becks/StrataDB/blob/89bee4bbe54bb52f1f1308d5950da4d385abbe16/src/collection-types.ts#L586)
+Defined in: [src/collection-types.ts:894](https://github.com/g5becks/StrataDB/blob/7791c9d2c0eca8b064c87359859d54870cd83af8/src/collection-types.ts#L894)
 
 Validate a document against the schema (sync).
 
@@ -806,7 +1237,7 @@ Document to validate
 
 `T`
 
-The validated document typed as T
+True if valid
 
 #### Remarks
 
@@ -825,8 +1256,8 @@ If schema uses async validators
 
 ```typescript
 try {
-  const user = users.validateSync({ name: 'Alice', email: 'alice@example.com', age: 30, role: 'admin' });
-  console.log('Document is valid:', user.name);
+  users.validateSync({ name: 'Alice', email: 'alice@example.com', age: 30, role: 'admin' });
+  console.log('Document is valid');
 } catch (err) {
   console.error('Validation failed:', err.message);
 }

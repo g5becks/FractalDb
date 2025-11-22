@@ -6,7 +6,7 @@
 type CollectionBuilder<T> = object;
 ```
 
-Defined in: src/collection-builder.ts:33
+Defined in: [src/collection-builder.ts:33](https://github.com/g5becks/StrataDB/blob/7791c9d2c0eca8b064c87359859d54870cd83af8/src/collection-builder.ts#L33)
 
 Fluent builder for creating collections with inline schema definition.
 
@@ -43,7 +43,7 @@ The document type extending Document
 build(): Collection<T>;
 ```
 
-Defined in: src/collection-builder.ts:73
+Defined in: [src/collection-builder.ts:94](https://github.com/g5becks/StrataDB/blob/7791c9d2c0eca8b064c87359859d54870cd83af8/src/collection-builder.ts#L94)
 
 Build and return the collection with the defined schema.
 
@@ -52,6 +52,47 @@ Build and return the collection with the defined schema.
 [`Collection`](Collection.md)\<`T`\>
 
 The collection instance ready for operations
+
+***
+
+### cache()
+
+```ts
+cache(enabled): CollectionBuilder<T>;
+```
+
+Defined in: [src/collection-builder.ts:87](https://github.com/g5becks/StrataDB/blob/7791c9d2c0eca8b064c87359859d54870cd83af8/src/collection-builder.ts#L87)
+
+Enable or disable query caching for this collection.
+
+#### Parameters
+
+##### enabled
+
+`boolean`
+
+Whether to enable query caching
+
+#### Returns
+
+`CollectionBuilder`\<`T`\>
+
+The builder for method chaining
+
+#### Remarks
+
+Query caching stores SQL templates for repeated queries, improving performance
+at the cost of memory usage (up to 500 cached query templates).
+
+#### Example
+
+```typescript
+// Enable caching for this collection
+const users = db.collection<User>('users')
+  .field('name', { type: 'TEXT', indexed: true })
+  .cache(true)
+  .build();
+```
 
 ***
 
@@ -64,7 +105,7 @@ compoundIndex(
 options?): CollectionBuilder<T>;
 ```
 
-Defined in: src/collection-builder.ts:52
+Defined in: [src/collection-builder.ts:52](https://github.com/g5becks/StrataDB/blob/7791c9d2c0eca8b064c87359859d54870cd83af8/src/collection-builder.ts#L52)
 
 Define a compound index spanning multiple fields.
 
@@ -96,7 +137,7 @@ readonly keyof `T`[]
 field<K>(name, options): CollectionBuilder<T>;
 ```
 
-Defined in: src/collection-builder.ts:37
+Defined in: [src/collection-builder.ts:37](https://github.com/g5becks/StrataDB/blob/7791c9d2c0eca8b064c87359859d54870cd83af8/src/collection-builder.ts#L37)
 
 Define an indexed field with type checking.
 
@@ -150,7 +191,7 @@ Define an indexed field with type checking.
 timestamps(enabled?): CollectionBuilder<T>;
 ```
 
-Defined in: src/collection-builder.ts:61
+Defined in: [src/collection-builder.ts:61](https://github.com/g5becks/StrataDB/blob/7791c9d2c0eca8b064c87359859d54870cd83af8/src/collection-builder.ts#L61)
 
 Enable automatic timestamp management.
 
@@ -172,7 +213,7 @@ Enable automatic timestamp management.
 validate(validator): CollectionBuilder<T>;
 ```
 
-Defined in: src/collection-builder.ts:66
+Defined in: [src/collection-builder.ts:66](https://github.com/g5becks/StrataDB/blob/7791c9d2c0eca8b064c87359859d54870cd83af8/src/collection-builder.ts#L66)
 
 Add validation function using a type predicate.
 

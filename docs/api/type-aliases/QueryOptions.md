@@ -6,7 +6,7 @@
 type QueryOptions<T> = object;
 ```
 
-Defined in: [src/query-options-types.ts:214](https://github.com/g5becks/StrataDB/blob/89bee4bbe54bb52f1f1308d5950da4d385abbe16/src/query-options-types.ts#L214)
+Defined in: [src/query-options-types.ts:214](https://github.com/g5becks/StrataDB/blob/7791c9d2c0eca8b064c87359859d54870cd83af8/src/query-options-types.ts#L214)
 
 Complete query options for controlling result set behavior.
 
@@ -117,7 +117,7 @@ The document type being queried
 readonly optional limit: number;
 ```
 
-Defined in: [src/query-options-types.ts:219](https://github.com/g5becks/StrataDB/blob/89bee4bbe54bb52f1f1308d5950da4d385abbe16/src/query-options-types.ts#L219)
+Defined in: [src/query-options-types.ts:219](https://github.com/g5becks/StrataDB/blob/7791c9d2c0eca8b064c87359859d54870cd83af8/src/query-options-types.ts#L219)
 
 Maximum number of documents to return
 
@@ -129,7 +129,7 @@ Maximum number of documents to return
 readonly optional projection: ProjectionSpec<T>;
 ```
 
-Defined in: [src/query-options-types.ts:225](https://github.com/g5becks/StrataDB/blob/89bee4bbe54bb52f1f1308d5950da4d385abbe16/src/query-options-types.ts#L225)
+Defined in: [src/query-options-types.ts:225](https://github.com/g5becks/StrataDB/blob/7791c9d2c0eca8b064c87359859d54870cd83af8/src/query-options-types.ts#L225)
 
 Which fields to include (1) or exclude (0) from results
 
@@ -141,7 +141,7 @@ Which fields to include (1) or exclude (0) from results
 readonly optional skip: number;
 ```
 
-Defined in: [src/query-options-types.ts:222](https://github.com/g5becks/StrataDB/blob/89bee4bbe54bb52f1f1308d5950da4d385abbe16/src/query-options-types.ts#L222)
+Defined in: [src/query-options-types.ts:222](https://github.com/g5becks/StrataDB/blob/7791c9d2c0eca8b064c87359859d54870cd83af8/src/query-options-types.ts#L222)
 
 Number of documents to skip (for pagination)
 
@@ -153,6 +153,6 @@ Number of documents to skip (for pagination)
 readonly optional sort: SortSpec<T>;
 ```
 
-Defined in: [src/query-options-types.ts:216](https://github.com/g5becks/StrataDB/blob/89bee4bbe54bb52f1f1308d5950da4d385abbe16/src/query-options-types.ts#L216)
+Defined in: [src/query-options-types.ts:216](https://github.com/g5becks/StrataDB/blob/7791c9d2c0eca8b064c87359859d54870cd83af8/src/query-options-types.ts#L216)
 
 Sort order for results (MongoDB-style: 1 = asc, -1 = desc)

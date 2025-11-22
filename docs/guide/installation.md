@@ -45,9 +45,9 @@ StrataDB is written in TypeScript and includes type definitions. For best result
 ## Verify Installation
 
 ```typescript
-import { StrataDBClass } from 'stratadb'
+import { Strata } from 'stratadb'
 
-const db = new StrataDBClass({ database: ':memory:' })
+const db = new Strata({ database: ':memory:' })
 console.log('StrataDB is working!')
 db.close()
 ```

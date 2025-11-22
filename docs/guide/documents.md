@@ -71,7 +71,7 @@ await users.insertOne({
 Or configure a custom ID generator for the entire database:
 
 ```typescript
-const db = new StrataDBClass({
+const db = new Strata({
   database: 'app.db',
   idGenerator: () => `user_${Date.now()}_${Math.random().toString(36).slice(2)}`
 })
@@ -87,15 +87,15 @@ bun add nanoid
 
 ```typescript
 import { nanoid } from 'nanoid'
-import { StrataDBClass } from 'stratadb'
+import { Strata } from 'stratadb'
 
-const db = new StrataDBClass({
+const db = new Strata({
   database: 'app.db',
   idGenerator: () => nanoid()  // e.g., "V1StGXR8_Z5jdHi6B-myT"
 })
 
 // Or with custom length
-const db = new StrataDBClass({
+const db = new Strata({
   database: 'app.db',
   idGenerator: () => nanoid(10)  // e.g., "IRFa-VaY2b"
 })
@@ -111,9 +111,9 @@ bun add ulid
 
 ```typescript
 import { ulid } from 'ulid'
-import { StrataDBClass } from 'stratadb'
+import { Strata } from 'stratadb'
 
-const db = new StrataDBClass({
+const db = new Strata({
   database: 'app.db',
   idGenerator: () => ulid()  // e.g., "01ARZ3NDEKTSV4RRFFQ69G5FAV"
 })

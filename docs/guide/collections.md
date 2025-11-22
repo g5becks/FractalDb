@@ -5,7 +5,7 @@ Collections store and query documents. Each collection maps to a SQLite table.
 ## Creating Collections
 
 ```typescript
-import { StrataDBClass, createSchema, type Document } from 'stratadb'
+import { Strata, createSchema, type Document } from 'stratadb'
 
 type User = Document<{
   name: string
@@ -19,7 +19,7 @@ const userSchema = createSchema<User>()
   .field('age', { type: 'INTEGER', indexed: true })
   .build()
 
-const db = new StrataDBClass({ database: 'app.db' })
+const db = new Strata({ database: 'app.db' })
 const users = db.collection('users', userSchema)
 
 // Option 2: Inline schema

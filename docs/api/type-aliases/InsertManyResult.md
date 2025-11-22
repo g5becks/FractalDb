@@ -6,13 +6,26 @@
 type InsertManyResult<T> = object;
 ```
 
-Defined in: [src/collection-types.ts:30](https://github.com/g5becks/StrataDB/blob/89bee4bbe54bb52f1f1308d5950da4d385abbe16/src/collection-types.ts#L30)
+Defined in: [src/collection-types.ts:44](https://github.com/g5becks/StrataDB/blob/7791c9d2c0eca8b064c87359859d54870cd83af8/src/collection-types.ts#L44)
 
 Result of inserting multiple documents into a collection.
 
 ## Remarks
 
-Contains all successfully inserted documents with their generated IDs.
+Contains all successfully inserted documents with their generated IDs and count.
+Since SQLite is ACID and local, if this function returns without throwing,
+all inserts succeeded.
+
+## Example
+
+```typescript
+const result = await users.insertMany([
+  { name: 'Alice', email: 'alice@example.com' },
+  { name: 'Bob', email: 'bob@example.com' }
+]);
+console.log(`Inserted ${result.insertedCount} users`);
+console.log('User IDs:', result.documents.map(d => d._id));
+```
 
 ## Type Parameters
 
@@ -24,25 +37,13 @@ The document type
 
 ## Properties
 
-### acknowledged
-
-```ts
-readonly acknowledged: true;
-```
-
-Defined in: [src/collection-types.ts:38](https://github.com/g5becks/StrataDB/blob/89bee4bbe54bb52f1f1308d5950da4d385abbe16/src/collection-types.ts#L38)
-
-Whether the insert operation succeeded
-
-***
-
 ### documents
 
 ```ts
 readonly documents: readonly T[];
 ```
 
-Defined in: [src/collection-types.ts:32](https://github.com/g5becks/StrataDB/blob/89bee4bbe54bb52f1f1308d5950da4d385abbe16/src/collection-types.ts#L32)
+Defined in: [src/collection-types.ts:46](https://github.com/g5becks/StrataDB/blob/7791c9d2c0eca8b064c87359859d54870cd83af8/src/collection-types.ts#L46)
 
 Array of inserted documents with their generated IDs
 
@@ -54,6 +55,6 @@ Array of inserted documents with their generated IDs
 readonly insertedCount: number;
 ```
 
-Defined in: [src/collection-types.ts:35](https://github.com/g5becks/StrataDB/blob/89bee4bbe54bb52f1f1308d5950da4d385abbe16/src/collection-types.ts#L35)
+Defined in: [src/collection-types.ts:49](https://github.com/g5becks/StrataDB/blob/7791c9d2c0eca8b064c87359859d54870cd83af8/src/collection-types.ts#L49)
 
 Number of documents successfully inserted

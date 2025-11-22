@@ -17,7 +17,7 @@ bun add stratadb
 ## Basic Usage
 
 ```typescript
-import { StrataDBClass, createSchema, type Document } from 'stratadb'
+import { Strata, createSchema, type Document } from 'stratadb'
 
 // 1. Define your document type
 type User = Document<{
@@ -35,7 +35,7 @@ const userSchema = createSchema<User>()
   .build()
 
 // 3. Open database and create collection
-using db = new StrataDBClass({ database: 'app.db' })
+using db = new Strata({ database: 'app.db' })
 const users = db.collection('users', userSchema)
 
 // 4. Insert
@@ -64,13 +64,13 @@ The `using` keyword automatically closes the database when the scope exits.
 For testing:
 
 ```typescript
-using db = new StrataDBClass({ database: ':memory:' })
+using db = new Strata({ database: ':memory:' })
 ```
 
 ## Configuration Options
 
 ```typescript
-const db = new StrataDBClass({
+const db = new Strata({
   database: 'app.db',
 
   // Custom ID generator (default: crypto.randomUUID())
