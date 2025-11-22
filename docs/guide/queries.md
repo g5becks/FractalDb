@@ -2,86 +2,71 @@
 
 StrataDB provides type-safe MongoDB-style query operators.
 
-## Basic Queries
-
-### Find by ID
-
-```typescript
-const user = await users.findById('user-123')
-if (user) {
-  console.log(user.name)
-}
-```
-
-### Find One
-
-```typescript
-const admin = await users.findOne({ role: 'admin' })
-```
-
-### Find Many
-
-```typescript
-const activeUsers = await users.find({ status: 'active' })
-```
-
-### Count
-
-```typescript
-const count = await users.count({ role: 'admin' })
-```
-
 ## Comparison Operators
 
 ```typescript
-// Equal (implicit)
-await users.find({ age: 30 })
+// Implicit equality
+await users.find({ status: 'active' })
 
 // Explicit operators
-await users.find({ age: { $eq: 30 } })   // Equal
-await users.find({ age: { $ne: 30 } })   // Not equal
-await users.find({ age: { $gt: 18 } })   // Greater than
-await users.find({ age: { $gte: 18 } })  // Greater than or equal
-await users.find({ age: { $lt: 65 } })   // Less than
-await users.find({ age: { $lte: 65 } })  // Less than or equal
+await users.find({ age: { $eq: 30 } })   // equal
+await users.find({ age: { $ne: 30 } })   // not equal
+await users.find({ age: { $gt: 18 } })   // greater than
+await users.find({ age: { $gte: 18 } })  // greater than or equal
+await users.find({ age: { $lt: 65 } })   // less than
+await users.find({ age: { $lte: 65 } })  // less than or equal
 
-// Range query
+// Range query (combine operators)
 await users.find({ age: { $gte: 18, $lt: 65 } })
-```
 
-## Array Operators
-
-```typescript
-// Value in array
+// Membership
 await users.find({ role: { $in: ['admin', 'moderator'] } })
-
-// Value not in array
 await users.find({ status: { $nin: ['banned', 'deleted'] } })
 ```
 
 ## String Operators
 
 ```typescript
-// Starts with
 await users.find({ name: { $startsWith: 'A' } })
-
-// Ends with
 await users.find({ email: { $endsWith: '@example.com' } })
+await users.find({ name: { $like: 'J%n' } })      // John, Jan, Jason
+await users.find({ bio: { $like: '%engineer%' } })  // contains
+```
 
-// Contains
-await users.find({ bio: { $contains: 'developer' } })
+The `$like` operator uses SQL LIKE syntax: `%` matches any sequence, `_` matches one character.
 
-// LIKE pattern (SQL LIKE syntax)
-await users.find({ name: { $like: 'J%n' } })  // John, Jan, Jason
+## Array Operators
+
+For querying array fields:
+
+```typescript
+type User = Document<{
+  tags: string[]
+  scores: number[]
+}>
+
+// Contains all specified values
+await users.find({ tags: { $all: ['typescript', 'react'] } })
+
+// Exact array length
+await users.find({ tags: { $size: 3 } })
+
+// Element at index matches value
+await users.find({ scores: { $index: 0 } })  // first element
+
+// At least one element matches filter
+await users.find({
+  scores: { $elemMatch: { $gte: 90 } }
+})
 ```
 
 ## Logical Operators
 
 ```typescript
-// AND (implicit - all conditions must match)
+// Implicit AND (all conditions must match)
 await users.find({ role: 'admin', status: 'active' })
 
-// AND (explicit)
+// Explicit AND
 await users.find({
   $and: [
     { age: { $gte: 18 } },
@@ -89,7 +74,7 @@ await users.find({
   ]
 })
 
-// OR
+// OR (at least one must match)
 await users.find({
   $or: [
     { role: 'admin' },
@@ -97,61 +82,86 @@ await users.find({
   ]
 })
 
-// NOT
+// NOR (none must match)
 await users.find({
-  $not: { status: 'banned' }
+  $nor: [
+    { status: 'banned' },
+    { status: 'deleted' }
+  ]
+})
+
+// NOT (negate condition)
+await users.find({
+  $not: { status: 'inactive' }
 })
 ```
 
-## Null Checks
+## Existence Operator
 
 ```typescript
+// Field exists (even if null)
+await users.find({ deletedAt: { $exists: true } })
+
+// Field does not exist
+await users.find({ phone: { $exists: false } })
+
 // Field is null
 await users.find({ deletedAt: null })
 
-// Field exists (is not null)
-await users.find({ deletedAt: { $ne: null } })
+// Field exists and is not null
+await users.find({ email: { $exists: true, $ne: null } })
 ```
 
 ## Query Options
 
-### Sorting
-
 ```typescript
-// Ascending (1) or descending (-1)
-await users.find({}, {
-  sort: { createdAt: -1 }  // Newest first
-})
-
-// Multiple sort fields
-await users.find({}, {
-  sort: { role: 1, name: 1 }  // By role, then by name
-})
+await users.find(
+  { status: 'active' },
+  {
+    sort: { createdAt: -1, name: 1 },  // -1 desc, 1 asc
+    limit: 20,
+    skip: 40  // for pagination
+  }
+)
 ```
 
-### Pagination
+## Nested Fields
+
+Query nested objects using dot notation:
 
 ```typescript
-// Limit results
-await users.find({}, { limit: 10 })
+type User = Document<{
+  profile: {
+    bio: string
+    settings: { theme: string }
+  }
+}>
 
-// Skip results (for pagination)
-await users.find({}, { skip: 20, limit: 10 })  // Page 3
-
-// Paginated query helper
-const page = 3
-const pageSize = 10
-await users.find({}, {
-  skip: (page - 1) * pageSize,
-  limit: pageSize,
-  sort: { createdAt: -1 }
-})
+await users.find({ 'profile.bio': { $like: '%developer%' } })
+await users.find({ 'profile.settings.theme': 'dark' })
 ```
 
-## Complex Queries
+## Type Safety
+
+Queries are fully typed. TypeScript catches invalid field names and type mismatches:
 
 ```typescript
-// Find active adult admins, sorted by name
+// ✅ Valid
+await users.find({ age: { $gte: 18 } })
+
+// ❌ Compile error: 'agee' doesn't exist
+await users.find({ agee: { $gte: 18 } })
+
+// ❌ Compile error: $startsWith only works on strings
+await users.find({ age: { $startsWith: '1' } })
+
+// ❌ Compile error: $gt only works on numbers/dates
+await users.find({ name: { $gt: 'A' } })
+```
+
+## Complex Example
+
+```typescript
 const results = await users.find(
   {
     $and: [
@@ -160,66 +170,14 @@ const results = await users.find(
       {
         $or: [
           { role: 'admin' },
-          { permissions: { $contains: 'manage_users' } }
+          { permissions: { $like: '%manage_users%' } }
         ]
       }
     ]
   },
   {
-    sort: { name: 1 },
+    sort: { createdAt: -1 },
     limit: 50
   }
 )
 ```
-
-## Type Safety
-
-All queries are fully typed. TypeScript will error on invalid field names or types:
-
-```typescript
-// ✅ Valid - 'age' exists and is a number
-await users.find({ age: { $gte: 18 } })
-
-// ❌ Error - 'agee' doesn't exist
-await users.find({ agee: { $gte: 18 } })
-
-// ❌ Error - 'age' is number, not string
-await users.find({ age: { $startsWith: '1' } })
-```
-
-## Query Debugging
-
-Query results include a `toString()` method for inspecting generated SQL and parameters. This is useful for debugging and when reporting issues:
-
-```typescript
-import { SQLiteQueryTranslator } from 'stratadb'
-
-const translator = new SQLiteQueryTranslator(userSchema)
-
-// Translate a query to see the generated SQL
-const result = translator.translate({
-  age: { $gte: 18, $lt: 65 }
-})
-
-console.log(result.toString())
-// Output:
-// SQL: (_age >= ? AND _age < ?)
-// Parameters: [18, 65]
-
-// Also works with query options
-const options = translator.translateOptions({
-  sort: { createdAt: -1 },
-  limit: 10,
-  skip: 20
-})
-
-console.log(options.toString())
-// Output:
-// SQL: ORDER BY _createdAt DESC LIMIT ? OFFSET ?
-// Parameters: [10, 20]
-```
-
-This introspection helps you understand:
-- How your queries are translated to SQL
-- Which fields use indexed columns vs JSON extraction
-- The exact parameter values being bound

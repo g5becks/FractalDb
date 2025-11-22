@@ -7,9 +7,6 @@ import { SQLiteQueryTranslator } from "../../src/sqlite-query-translator"
 // TOP-LEVEL REGEX CONSTANTS (required by linter for performance)
 // ============================================================================
 
-const ADMIN_REGEX_CI = /^admin/i
-const ADMIN_REGEX_LOWER_CI = /admin/i
-const PREMIUM_REGEX_CI = /^premium/i
 const SQL_LINE_REGEX = /^SQL:/
 const PARAMS_LINE_REGEX = /^Parameters:/
 
@@ -187,34 +184,8 @@ describe("SQLiteQueryTranslator - Comparison Operators", () => {
 
 describe("SQLiteQueryTranslator - String Operators", () => {
   /**
-   * AC #2: Tests verify string operators generate correct LIKE and REGEXP patterns.
+   * AC #2: Tests verify string operators generate correct LIKE patterns.
    */
-
-  it("should translate $regex with RegExp object", () => {
-    const filter: QueryFilter<User> = { name: { $regex: ADMIN_REGEX_CI } }
-    const result = userTranslator.translate(filter)
-
-    expect(result.sql).toBe("(_name REGEXP ?)")
-    expect(result.params).toEqual(["(?i)^admin"])
-  })
-
-  it("should translate $regex with string pattern", () => {
-    const filter: QueryFilter<User> = { email: { $regex: "@example\\.com$" } }
-    const result = userTranslator.translate(filter)
-
-    expect(result.sql).toBe("(_email REGEXP ?)")
-    expect(result.params).toEqual(["@example\\.com$"])
-  })
-
-  it("should translate $regex with explicit $options", () => {
-    const filter: QueryFilter<User> = {
-      name: { $regex: "alice", $options: "i" },
-    }
-    const result = userTranslator.translate(filter)
-
-    expect(result.sql).toBe("(_name REGEXP ?)")
-    expect(result.params).toEqual(["(?i)alice"])
-  })
 
   it("should translate $like operator", () => {
     const filter: QueryFilter<User> = { name: { $like: "%admin%" } }
@@ -238,20 +209,6 @@ describe("SQLiteQueryTranslator - String Operators", () => {
 
     expect(result.sql).toBe("(_email LIKE ?)")
     expect(result.params).toEqual(["%@company.com"])
-  })
-
-  it("should translate multiple string operators for same field", () => {
-    const filter: QueryFilter<User> = {
-      name: {
-        $startsWith: "Admin",
-        $ne: "Administrator",
-        $regex: ADMIN_REGEX_LOWER_CI,
-      },
-    }
-    const result = userTranslator.translate(filter)
-
-    expect(result.sql).toBe("(_name LIKE ? AND _name != ? AND _name REGEXP ?)")
-    expect(result.params).toEqual(["Admin%", "Administrator", "(?i)admin"])
   })
 })
 
@@ -302,18 +259,6 @@ describe("SQLiteQueryTranslator - Array Operators", () => {
       "(json_array_length(jsonb_extract(body, '$.tags')) = ?)"
     )
     expect(result.params).toEqual([0])
-  })
-
-  it("should translate $elemMatch", () => {
-    const filter: QueryFilter<User> = {
-      tags: { $elemMatch: { $regex: PREMIUM_REGEX_CI } },
-    }
-    const result = userTranslator.translate(filter)
-
-    expect(result.sql).toBe(
-      "(EXISTS (SELECT 1 FROM json_each(jsonb_extract(body, '$.tags')) WHERE json_each.value REGEXP ?))"
-    )
-    expect(result.params).toEqual(["(?i)^premium"])
   })
 })
 

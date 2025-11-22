@@ -1,16 +1,12 @@
 # Getting Started
 
-This guide will help you set up StrataDB in your Bun project.
-
 ## Prerequisites
 
-::: danger Required: Bun Runtime
-StrataDB **only works with Bun**. Make sure you have [Bun](https://bun.sh) installed:
+StrataDB requires [Bun](https://bun.sh). Install it with:
 
 ```bash
 curl -fsSL https://bun.sh/install | bash
 ```
-:::
 
 ## Installation
 
@@ -18,128 +14,75 @@ curl -fsSL https://bun.sh/install | bash
 bun add stratadb
 ```
 
-## Quick Start
-
-### 1. Define Your Document Type
+## Basic Usage
 
 ```typescript
-import type { Document } from 'stratadb'
+import { StrataDBClass, createSchema, type Document } from 'stratadb'
 
+// 1. Define your document type
 type User = Document<{
   name: string
   email: string
   age: number
-  role: 'admin' | 'user'
 }>
-```
 
-The `Document` type adds `id`, `createdAt`, and `updatedAt` fields automatically.
-
-### 2. Create a Schema
-
-```typescript
-import { createSchema } from 'stratadb'
-
+// 2. Create a schema with indexed fields
 const userSchema = createSchema<User>()
   .field('name', { type: 'TEXT', indexed: true })
   .field('email', { type: 'TEXT', indexed: true, unique: true })
   .field('age', { type: 'INTEGER', indexed: true })
-  .field('role', { type: 'TEXT' })
+  .timestamps(true)  // adds createdAt/updatedAt
   .build()
-```
 
-### 3. Open Database and Create Collection
-
-```typescript
-import { StrataDBClass } from 'stratadb'
-
-const db = new StrataDBClass({ database: 'myapp.db' })
+// 3. Open database and create collection
+using db = new StrataDBClass({ database: 'app.db' })
 const users = db.collection('users', userSchema)
-```
 
-### 4. CRUD Operations
-
-```typescript
-// Insert
-const result = await users.insertOne({
+// 4. Insert
+const user = await users.insertOne({
   name: 'Alice',
   email: 'alice@example.com',
-  age: 30,
-  role: 'admin'
+  age: 30
 })
-console.log(result.document.id) // Auto-generated UUID
+console.log(user._id)  // auto-generated UUID
 
-// Find
-const admins = await users.find({ role: 'admin' })
+// 5. Query
+const adults = await users.find({ age: { $gte: 18 } })
 const alice = await users.findOne({ email: 'alice@example.com' })
 
-// Update
-await users.updateOne(result.document.id, { age: 31 })
+// 6. Update
+await users.updateOne(user._id, { age: 31 })
 
-// Delete
-await users.deleteOne(result.document.id)
+// 7. Delete
+await users.deleteOne(user._id)
 ```
 
-### 5. Close Database
-
-```typescript
-db.close()
-
-// Or use Symbol.dispose for automatic cleanup
-using db = new StrataDBClass({ database: 'myapp.db' })
-// Database closes automatically when scope exits
-```
+The `using` keyword automatically closes the database when the scope exits.
 
 ## In-Memory Database
 
-For testing or temporary data, use an in-memory database:
+For testing:
 
 ```typescript
-const db = new StrataDBClass({ database: ':memory:' })
+using db = new StrataDBClass({ database: ':memory:' })
 ```
 
-## Database Configuration
-
-The database constructor accepts several configuration options:
+## Configuration Options
 
 ```typescript
 const db = new StrataDBClass({
-  // Database path or ':memory:'
-  database: 'myapp.db',
+  database: 'app.db',
 
   // Custom ID generator (default: crypto.randomUUID())
-  idGenerator: () => `custom-${Date.now()}`,
+  idGenerator: () => nanoid(),
 
-  // Cleanup callback when database closes
-  onClose: () => console.log('Database closed'),
-
-  // Enable query caching for performance (default: false)
+  // Query caching for repeated patterns (default: false)
   enableCache: true
 })
 ```
 
-### Query Caching
-
-Query caching improves performance for repeated query patterns:
-
-```typescript
-// Enable caching globally for all collections
-const db = new StrataDBClass({
-  database: 'app.db',
-  enableCache: true  // 23-70% faster for repeated queries
-})
-
-// Or enable per collection
-const users = db.collection('users', userSchema, { enableCache: true })
-```
-
-::: tip Performance
-Caching provides significant performance improvements (23-70% faster) for repeated queries, but uses memory (up to 500 cached templates per collection). See the [Performance Guide](/guide/performance) for details.
-:::
-
 ## Next Steps
 
-- [Documents](/guide/documents) - Understand document structure
-- [Schemas](/guide/schemas) - Advanced schema configuration
-- [Queries](/guide/queries) - Query operators and filters
-- [Performance](/guide/performance) - Optimization and caching
+- [Collections](/guide/collections) - CRUD operations and atomic methods
+- [Queries](/guide/queries) - Query operators and filtering
+- [Schemas](/guide/schemas) - Indexes, validation, and configuration

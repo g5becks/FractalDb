@@ -55,7 +55,7 @@ describe("Standard Schema Validator", () => {
       // Create a mock Standard Schema that will fail validation
       const mockSchema: StandardSchemaV1<unknown, TestUser> = {
         "~standard": {
-          validate: (input: unknown) => ({
+          validate: (_input: unknown) => ({
             issues: [
               {
                 message: "Email format invalid",
@@ -94,7 +94,7 @@ describe("Standard Schema Validator", () => {
     it("should handle validation with no issues", () => {
       const mockSchema: StandardSchemaV1<unknown, TestUser> = {
         "~standard": {
-          validate: (input: unknown) => ({ issues: undefined }),
+          validate: (_input: unknown) => ({ issues: undefined }),
         },
       }
 
@@ -116,7 +116,7 @@ describe("Standard Schema Validator", () => {
       // Create a mock Standard Schema with nested path issue
       const mockSchema: StandardSchemaV1<unknown, TestUser> = {
         "~standard": {
-          validate: (input: unknown) => ({
+          validate: (_input: unknown) => ({
             issues: [
               {
                 message: "Invalid theme",
@@ -154,7 +154,7 @@ describe("Standard Schema Validator", () => {
     it("should extract value at path from validation issues", () => {
       const mockSchema: StandardSchemaV1<unknown, TestUser> = {
         "~standard": {
-          validate: (input: unknown) => ({
+          validate: (_input: unknown) => ({
             issues: [
               {
                 message: "Invalid age",
@@ -189,7 +189,7 @@ describe("Standard Schema Validator", () => {
     it("should handle nested path value extraction", () => {
       const mockSchema: StandardSchemaV1<unknown, TestUser> = {
         "~standard": {
-          validate: (input: unknown) => ({
+          validate: (_input: unknown) => ({
             issues: [
               {
                 message: "Invalid nested value",
@@ -222,11 +222,11 @@ describe("Standard Schema Validator", () => {
       }
     })
 
-    it("should throw ValidationError if schema returns Promise", async () => {
+    it("should throw ValidationError if schema returns Promise", () => {
       // Create a mock Standard Schema that returns a Promise (async validation)
       const mockSchema: StandardSchemaV1<unknown, TestUser> = {
         "~standard": {
-          validate: (input: unknown) =>
+          validate: (_input: unknown) =>
             Promise.resolve({
               issues: [
                 {
@@ -264,7 +264,7 @@ describe("Standard Schema Validator", () => {
     it("should handle validation with empty issues array as valid", () => {
       const mockSchema: StandardSchemaV1<unknown, TestUser> = {
         "~standard": {
-          validate: (input: unknown) => {
+          validate: (_input: unknown) => {
             return {
               issues: [], // Empty array means valid in Standard Schema
             }
@@ -287,11 +287,11 @@ describe("Standard Schema Validator", () => {
       // This follows Standard Schema specification
       const result = mockSchema["~standard"].validate(doc)
       expect(Array.isArray(result.issues)).toBe(true)
-      expect(result.issues!.length).toBe(0)
+      expect(result.issues?.length).toBe(0)
 
       // According to Standard Schema spec, empty issues array means valid
       // So our wrapper should return true for valid docs
-      const isValid = (() => {
+      const _isValid = (() => {
         try {
           return validator(doc)
         } catch {
@@ -307,7 +307,7 @@ describe("Standard Schema Validator", () => {
     it("should handle validation failure with no specific issues", () => {
       const mockSchema: StandardSchemaV1<unknown, TestUser> = {
         "~standard": {
-          validate: (input: unknown) => ({
+          validate: (_input: unknown) => ({
             issues: [
               {
                 message: "Validation failed with no specific issues",
@@ -343,7 +343,7 @@ describe("Standard Schema Validator", () => {
       // Test with numeric path segments (as might be used for array validation)
       const mockSchema: StandardSchemaV1<unknown, any> = {
         "~standard": {
-          validate: (input: unknown) => {
+          validate: (_input: unknown) => {
             return {
               issues: [
                 {

@@ -39,7 +39,7 @@ const activeAdults: LogicalOperator<User> = {
 // ✅ OR - At least one condition must match
 const adminOrModerator: LogicalOperator<User> = {
   $or: [
-    { name: { $regex: /^admin/i } },
+    { name: { $startsWith: 'admin' } },
     { status: 'active' }
   ]
 };
@@ -67,7 +67,7 @@ const complexQuery: LogicalOperator<User> = {
       ]
     },
     {
-      $not: { email: { $regex: /@spam\.com$/ } }
+      $not: { email: { $like: '%@spam.com$' } }
     }
   ]
 };

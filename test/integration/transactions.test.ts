@@ -63,7 +63,7 @@ describe("Transactions", () => {
       const tx = db.transaction()
       const txAccounts = tx.collection("accounts", schema)
 
-      await txAccounts.updateOne(initial.document.id, { balance: 800 })
+      await txAccounts.updateOne(initial._id, { balance: 800 })
       await txAccounts.insertOne({
         name: "Bob",
         balance: 200,
@@ -73,7 +73,7 @@ describe("Transactions", () => {
       tx.commit()
 
       // Verify changes persisted
-      const alice = await accounts.findById(initial.document.id)
+      const alice = await accounts.findById(initial._id)
       expect(alice?.balance).toBe(800)
 
       const all = await accounts.find({})
@@ -155,7 +155,7 @@ describe("Transactions", () => {
       const tx = db.transaction()
       const txAccounts = tx.collection("accounts", schema)
 
-      await txAccounts.updateOne(initial.document.id, { balance: 500 })
+      await txAccounts.updateOne(initial._id, { balance: 500 })
       await txAccounts.insertOne({
         name: "Bob",
         balance: 500,
@@ -166,7 +166,7 @@ describe("Transactions", () => {
       tx.rollback()
 
       // Verify changes were discarded
-      const alice = await accounts.findById(initial.document.id)
+      const alice = await accounts.findById(initial._id)
       expect(alice?.balance).toBe(1000) // Original balance
 
       const count = await accounts.count({})
@@ -339,12 +339,11 @@ describe("Transactions", () => {
 
       const result = await db.execute(async (tx) => {
         const txAccounts = tx.collection("accounts", schema)
-        const inserted = await txAccounts.insertOne({
+        return await txAccounts.insertOne({
           name: "Alice",
           balance: 1000,
           status: "active",
         })
-        return inserted.document
       })
 
       expect(result.name).toBe("Alice")
@@ -453,17 +452,17 @@ describe("Transactions", () => {
         })
 
         // Read
-        const found = await txAccounts.findById(created.document.id)
+        const found = await txAccounts.findById(created._id)
         expect(found?.name).toBe("Alice")
 
         // Update
-        await txAccounts.updateOne(created.document.id, { balance: 1500 })
-        const updated = await txAccounts.findById(created.document.id)
+        await txAccounts.updateOne(created._id, { balance: 1500 })
+        const updated = await txAccounts.findById(created._id)
         expect(updated?.balance).toBe(1500)
 
         // Delete
-        await txAccounts.deleteOne(created.document.id)
-        const deleted = await txAccounts.findById(created.document.id)
+        await txAccounts.deleteOne(created._id)
+        const deleted = await txAccounts.findById(created._id)
         expect(deleted).toBeNull()
       })
     })

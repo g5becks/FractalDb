@@ -59,7 +59,7 @@ import type {
  */
 export type Document<T = Record<string, unknown>> = {
   /** Unique identifier for the document (immutable) */
-  readonly id: string
+  readonly _id: string
 } & ReadonlyDeep<T>
 
 /**
@@ -91,7 +91,7 @@ export type Document<T = Record<string, unknown>> = {
  * ```
  */
 export type DocumentInput<T extends Document> = Simplify<
-  SetOptional<Except<T, "id">, never> & { id?: string }
+  SetOptional<Except<T, "_id">, never> & { _id?: string }
 >
 
 /**
@@ -125,7 +125,7 @@ export type DocumentInput<T extends Document> = Simplify<
  * ```
  */
 export type DocumentUpdate<T extends Document> = Simplify<
-  PartialDeep<Except<T, "id">>
+  PartialDeep<Except<T, "_id">>
 >
 
 /**

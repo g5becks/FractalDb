@@ -171,7 +171,7 @@ export function buildUniqueConstraintMessage(
  * buildTypeMismatchMessage('name', 'string', 'number', '$gt')
  * // "Type mismatch for field 'name': expected string, got number.
  * //  The operator '$gt' is not valid for string fields.
- * //  For string fields, use operators like $eq, $in, $regex."
+ * //  For string fields, use operators like $eq, $in, $like, $startsWith, $endsWith."
  * ```
  *
  * @internal
@@ -207,7 +207,7 @@ export function buildTypeMismatchMessage(
  */
 function getOperatorSuggestions(type: string): string | null {
   const suggestions: Record<string, string> = {
-    string: "$eq, $in, $regex, $ne",
+    string: "$eq, $in, $like, $startsWith, $endsWith, $ne",
     number: "$eq, $gt, $gte, $lt, $lte, $in, $ne",
     integer: "$eq, $gt, $gte, $lt, $lte, $in, $ne",
     boolean: "$eq, $ne",

@@ -1,6 +1,10 @@
 import { describe, expect, it } from "bun:test"
 import { generateId } from "../../src/id-generator.js"
 
+// UUID v7 format regex: 8-4-4-4-12 hex characters with version '7' in the right place
+const UUID_V7_REGEX =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
+
 describe("ID Generator", () => {
   describe("generateId", () => {
     it("should return a string", () => {
@@ -10,10 +14,7 @@ describe("ID Generator", () => {
 
     it("should generate UUID v7 format", () => {
       const id = generateId()
-      // UUID v7 format: 8-4-4-4-12 hex characters with version '7' in the right place
-      expect(id).toMatch(
-        /^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
-      )
+      expect(id).toMatch(UUID_V7_REGEX)
     })
 
     it("should generate unique IDs", () => {

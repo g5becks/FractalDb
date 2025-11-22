@@ -39,6 +39,18 @@ export default defineConfig({
             { text: "Indexes", link: "/guide/indexes" },
           ],
         },
+        {
+          text: "Help & Support",
+          items: [
+            { text: "FAQ", link: "/guide/faq" },
+            { text: "Troubleshooting", link: "/guide/troubleshooting" },
+            { text: "Migration", link: "/guide/migration" },
+            { text: "Security", link: "/guide/security" },
+            { text: "Testing", link: "/guide/testing" },
+            { text: "Quick Reference", link: "/guide/quick-reference" },
+            { text: "Performance", link: "/guide/performance" },
+          ],
+        },
       ],
       "/api/": typedocSidebar,
     },

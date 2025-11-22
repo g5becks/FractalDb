@@ -37,7 +37,7 @@ type User = Document<{
 // String field gets string operators
 const nameField: FieldOperator<User['name']> = {
   $eq: 'Alice',
-  $regex: /admin/i,
+  $like: '%admin%',
   $startsWith: 'A'
 };
 

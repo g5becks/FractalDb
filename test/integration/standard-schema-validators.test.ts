@@ -38,7 +38,7 @@ describe("Standard Schema Validator Integration Tests", () => {
   describe("Zod validator integration", () => {
     it("should successfully validate valid documents with Zod", async () => {
       const UserZodSchema = z.object({
-        id: z.string(),
+        _id: z.string(),
         name: z.string().min(1),
         email: z.string().email(),
         age: z.number().int().min(0),
@@ -61,9 +61,9 @@ describe("Standard Schema Validator Integration Tests", () => {
         age: 30,
       })
 
-      expect(result.document.id).toBeDefined()
+      expect(result._id).toBeDefined()
 
-      const found = await users.findById(result.document.id)
+      const found = await users.findById(result._id)
       expect(found).toBeDefined()
       expect(found?.name).toBe("Alice")
       expect(found?.email).toBe("alice@example.com")
@@ -72,7 +72,7 @@ describe("Standard Schema Validator Integration Tests", () => {
 
     it("should prevent invalid documents from being inserted with Zod", async () => {
       const UserZodSchema = z.object({
-        id: z.string(),
+        _id: z.string(),
         name: z.string().min(1),
         email: z.string().email(),
         age: z.number().int().min(0),
@@ -103,7 +103,7 @@ describe("Standard Schema Validator Integration Tests", () => {
 
     it("should provide field-level error details with Zod", async () => {
       const UserZodSchema = z.object({
-        id: z.string(),
+        _id: z.string(),
         name: z.string().min(1),
         email: z.string().email(),
         age: z.number().int().min(18),
@@ -138,7 +138,7 @@ describe("Standard Schema Validator Integration Tests", () => {
 
     it("should handle nested validation errors with Zod", async () => {
       const UserZodSchema = z.object({
-        id: z.string(),
+        _id: z.string(),
         name: z.string().min(1, "Name is required"),
         email: z.string().email("Invalid email format"),
         age: z.number().int().min(0),
@@ -174,7 +174,7 @@ describe("Standard Schema Validator Integration Tests", () => {
   describe("Valibot validator integration", () => {
     it("should successfully validate valid documents with Valibot", async () => {
       const UserValibotSchema = object({
-        id: string(),
+        _id: string(),
         name: pipe(string(), minLength(1)),
         email: pipe(string(), email()),
         age: pipe(number(), integer(), minValue(0)),
@@ -197,9 +197,9 @@ describe("Standard Schema Validator Integration Tests", () => {
         age: 28,
       })
 
-      expect(result.document.id).toBeDefined()
+      expect(result._id).toBeDefined()
 
-      const found = await users.findById(result.document.id)
+      const found = await users.findById(result._id)
       expect(found).toBeDefined()
       expect(found?.name).toBe("Diana")
       expect(found?.email).toBe("diana@example.com")
@@ -208,7 +208,7 @@ describe("Standard Schema Validator Integration Tests", () => {
 
     it("should prevent invalid documents from being inserted with Valibot", async () => {
       const UserValibotSchema = object({
-        id: string(),
+        _id: string(),
         name: pipe(string(), minLength(1)),
         email: pipe(string(), email()),
         age: pipe(number(), integer(), minValue(0)),
@@ -239,7 +239,7 @@ describe("Standard Schema Validator Integration Tests", () => {
 
     it("should provide field-level error details with Valibot", async () => {
       const UserValibotSchema = object({
-        id: string(),
+        _id: string(),
         name: pipe(string(), minLength(1)),
         email: pipe(string(), email()),
         age: pipe(number(), integer(), minValue(21)),
@@ -273,7 +273,7 @@ describe("Standard Schema Validator Integration Tests", () => {
 
     it("should handle validation errors correctly with Valibot", async () => {
       const UserValibotSchema = object({
-        id: string(),
+        _id: string(),
         name: pipe(string(), minLength(1, "Name cannot be empty")),
         email: pipe(string(), email("Invalid email address")),
         age: pipe(number(), integer()),
@@ -309,7 +309,7 @@ describe("Standard Schema Validator Integration Tests", () => {
   describe("ArkType validator integration", () => {
     it("should successfully validate valid documents with ArkType", async () => {
       const UserArkSchema = type({
-        id: "string",
+        _id: "string",
         name: "string>0",
         email: "string.email",
         age: "number%1>=0",
@@ -332,9 +332,9 @@ describe("Standard Schema Validator Integration Tests", () => {
         age: 42,
       })
 
-      expect(result.document.id).toBeDefined()
+      expect(result._id).toBeDefined()
 
-      const found = await users.findById(result.document.id)
+      const found = await users.findById(result._id)
       expect(found).toBeDefined()
       expect(found?.name).toBe("Henry")
       expect(found?.email).toBe("henry@example.com")
@@ -343,7 +343,7 @@ describe("Standard Schema Validator Integration Tests", () => {
 
     it("should prevent invalid documents from being inserted with ArkType", async () => {
       const UserArkSchema = type({
-        id: "string",
+        _id: "string",
         name: "string>0",
         email: "string.email",
         age: "number%1>=0",
@@ -374,7 +374,7 @@ describe("Standard Schema Validator Integration Tests", () => {
 
     it("should provide field-level error details with ArkType", async () => {
       const UserArkSchema = type({
-        id: "string",
+        _id: "string",
         name: "string>0",
         email: "string.email",
         age: "number%1>=18",
@@ -408,7 +408,7 @@ describe("Standard Schema Validator Integration Tests", () => {
 
     it("should handle validation errors correctly with ArkType", async () => {
       const UserArkSchema = type({
-        id: "string",
+        _id: "string",
         name: "string>0",
         email: "string.email",
         age: "number%1>=0",
@@ -450,7 +450,7 @@ describe("Standard Schema Validator Integration Tests", () => {
 
       // Zod schema
       const zodSchema = z.object({
-        id: z.string(),
+        _id: z.string(),
         name: z.string().min(1),
         email: z.string().email(),
         age: z.number().int().min(0),
@@ -467,11 +467,11 @@ describe("Standard Schema Validator Integration Tests", () => {
 
       const zodUsers = db.collection("zod_users", zodDbSchema)
       const zodResult = await zodUsers.insertOne(testData)
-      expect(zodResult.document.id).toBeDefined()
+      expect(zodResult._id).toBeDefined()
 
       // Valibot schema
       const valibotSchema = object({
-        id: string(),
+        _id: string(),
         name: pipe(string(), minLength(1)),
         email: pipe(string(), email()),
         age: pipe(number(), integer(), minValue(0)),
@@ -488,11 +488,11 @@ describe("Standard Schema Validator Integration Tests", () => {
 
       const valibotUsers = db.collection("valibot_users", valibotDbSchema)
       const valibotResult = await valibotUsers.insertOne(testData)
-      expect(valibotResult.document.id).toBeDefined()
+      expect(valibotResult._id).toBeDefined()
 
       // ArkType schema
       const arkSchema = type({
-        id: "string",
+        _id: "string",
         name: "string>0",
         email: "string.email",
         age: "number%1>=0",
@@ -509,14 +509,12 @@ describe("Standard Schema Validator Integration Tests", () => {
 
       const arkUsers = db.collection("ark_users", arkDbSchema)
       const arkResult = await arkUsers.insertOne(testData)
-      expect(arkResult.document.id).toBeDefined()
+      expect(arkResult._id).toBeDefined()
 
       // All should have successfully inserted the same data
-      const zodFound = await zodUsers.findById(zodResult.document.id)
-      const valibotFound = await valibotUsers.findById(
-        valibotResult.document.id
-      )
-      const arkFound = await arkUsers.findById(arkResult.document.id)
+      const zodFound = await zodUsers.findById(zodResult._id)
+      const valibotFound = await valibotUsers.findById(valibotResult._id)
+      const arkFound = await arkUsers.findById(arkResult._id)
 
       expect(zodFound?.name).toBe(testData.name)
       expect(valibotFound?.name).toBe(testData.name)
@@ -532,7 +530,7 @@ describe("Standard Schema Validator Integration Tests", () => {
 
       // Zod
       const zodSchema = z.object({
-        id: z.string(),
+        _id: z.string(),
         name: z.string().min(1),
         email: z.string().email(),
         age: z.number().int().min(0),
@@ -556,7 +554,7 @@ describe("Standard Schema Validator Integration Tests", () => {
 
       // Valibot
       const valibotSchema = object({
-        id: string(),
+        _id: string(),
         name: pipe(string(), minLength(1)),
         email: pipe(string(), email()),
         age: pipe(number(), integer(), minValue(0)),
@@ -580,7 +578,7 @@ describe("Standard Schema Validator Integration Tests", () => {
 
       // ArkType
       const arkSchema = type({
-        id: "string",
+        _id: "string",
         name: "string>0",
         email: "string.email",
         age: "number%1>=0",

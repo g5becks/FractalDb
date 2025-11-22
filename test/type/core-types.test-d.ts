@@ -68,13 +68,13 @@ expectType<QueryFilter<Product>>(_productFilter)
 // ============================================================================
 
 /**
- * DocumentInput should make the 'id' field optional while requiring all other fields.
+ * DocumentInput should make the '_id' field optional while requiring all other fields.
  * This tests that input types correctly enforce required fields for insertion.
  */
 
-// ✅ Valid DocumentInput usage - id is optional, all other fields required
+// ✅ Valid DocumentInput usage - _id is optional, all other fields required
 declare const validUserInput: DocumentInput<User>
-expectType<string | undefined>(validUserInput.id)
+expectType<string | undefined>(validUserInput._id)
 expectType<string>(validUserInput.name)
 expectType<string>(validUserInput.email)
 expectType<number>(validUserInput.age)
@@ -90,9 +90,9 @@ expectAssignable<DocumentInput<User>>({
   createdAt: new Date(),
 } as const)
 
-// ✅ Valid DocumentInput usage - id can be explicitly provided
+// ✅ Valid DocumentInput usage - _id can be explicitly provided
 expectAssignable<DocumentInput<User>>({
-  id: "user-123",
+  _id: "user-123",
   name: "Bob",
   email: "bob@example.com",
   age: 25,
@@ -110,7 +110,7 @@ expectAssignable<DocumentInput<User>>({
 
 // ❌ Invalid DocumentInput usage - missing required fields should cause compilation error
 expectError<DocumentInput<User>>({
-  id: "user-123",
+  _id: "user-123",
   // Missing: name, email, age, active, tags, createdAt
 })
 
@@ -119,7 +119,7 @@ expectError<DocumentInput<User>>({
 // ============================================================================
 
 /**
- * DocumentUpdate should make all fields optional (deep partial) and exclude 'id'.
+ * DocumentUpdate should make all fields optional (deep partial) and exclude '_id'.
  * This tests that update types correctly allow partial updates while preventing ID modification.
  */
 
@@ -142,9 +142,9 @@ expectAssignable<DocumentUpdate<User>>({
 
 expectAssignable<DocumentUpdate<User>>({})
 
-// ❌ Invalid DocumentUpdate usage - id field should be excluded from updates
+// ❌ Invalid DocumentUpdate usage - _id field should be excluded from updates
 expectNotAssignable<DocumentUpdate<User>>({
-  id: "new-id",
+  _id: "new-id",
   name: "Alice",
 })
 

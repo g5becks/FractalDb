@@ -158,7 +158,7 @@ describe("Error Message Utilities", () => {
         "$gte"
       )
 
-      expect(message).toContain("$eq, $in, $regex, $ne")
+      expect(message).toContain("$eq, $in, $like, $startsWith, $endsWith, $ne")
     })
 
     it("should provide boolean operator suggestions", () => {

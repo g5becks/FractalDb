@@ -17,7 +17,14 @@ type User = Document<{
   name: string
   email: string
   age: number
-  status: "active" | "inactive" | "pending"
+  status:
+    | "active"
+    | "inactive"
+    | "pending"
+    | "banned"
+    | "deleted"
+    | "suspended"
+    | "review"
   role: string
   tags: string[]
   score: number
@@ -37,9 +44,6 @@ const userSchema = createSchema<User>()
   .build()
 
 const translator = new SQLiteQueryTranslator(userSchema)
-
-// Pre-define regex outside benchmarks (linter requirement)
-const emailDomainRegex = /@example\.com$/
 
 group("Simple Queries", () => {
   bench("direct equality (indexed)", () => {
@@ -96,14 +100,6 @@ group("String Operators", () => {
 
   bench("$like", () => {
     translator.translate({ name: { $like: "%smith%" } })
-  })
-
-  bench("$regex with RegExp", () => {
-    translator.translate({ email: { $regex: emailDomainRegex } })
-  })
-
-  bench("$regex with string", () => {
-    translator.translate({ email: { $regex: "@example\\.com$" } })
   })
 })
 
@@ -336,7 +332,6 @@ group("Hot Path - Repeated Same Structure", () => {
 })
 
 await run({
-  silent: false,
   avg: true,
   json: false,
   colors: true,

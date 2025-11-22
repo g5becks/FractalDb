@@ -1,100 +1,14 @@
 # StrataDB
 
-⚡ Type-safe document database built on SQLite with MongoDB-like queries. Zero runtime overhead, maximum type safety, powered by Bun.
+Type-safe document database built on SQLite with MongoDB-like queries. Powered by Bun.
 
 ## Features
 
-- 🔒 **Full Type Safety** - End-to-end type checking with TypeScript, including SQLite type validation
-- 🚀 **MongoDB-like Queries** - Familiar query syntax with compile-time validation
-- ⚡ **High Performance** - Built on SQLite JSONB with generated columns
-- 🎯 **Minimal Dependencies** - Only `@standard-schema/spec` and `fast-safe-stringify` at runtime
-- 🔧 **Flexible Validation** - Use any Standard Schema validator (Zod, ArkType, Valibot, etc.)
-- 📦 **Clean API** - Both fluent and declarative styles supported with full IntelliSense
-
-## Quick Start
-
-```typescript
-import { StrataDB, type Document } from 'stratadb';
-
-// Define your document type
-type User = Document<{
-  name: string;
-  email: string;
-  age: number;
-}>;
-
-// Create database and collection with fluent API
-using db = new StrataDB({ database: './app.db' });
-
-const users = db.collection<User>('users')
-  .field('name', { type: 'TEXT', indexed: true })
-  .field('email', { type: 'TEXT', indexed: true, unique: true })
-  .field('age', { type: 'INTEGER', indexed: true })
-  .timestamps(true)
-  .build();
-
-// Insert documents
-await users.insertOne({
-  name: 'Alice',
-  email: 'alice@example.com',
-  age: 30
-});
-
-// Query with full type safety
-const results = await users.find({
-  age: { $gte: 18 },
-  email: { $regex: /@example\.com$/ }
-});
-```
-
-## Type Safety
-
-StrataDB ensures compile-time type safety between TypeScript types and SQLite types:
-
-```typescript
-type User = Document<{
-  name: string;
-  age: number;
-  active: boolean;
-}>;
-
-// ✅ Correct - types align
-db.collection<User>('users')
-  .field('name', { type: 'TEXT' })      // string → TEXT ✓
-  .field('age', { type: 'INTEGER' })    // number → INTEGER ✓
-  .field('active', { type: 'BOOLEAN' }) // boolean → BOOLEAN ✓
-  .build();
-
-// ❌ Compiler error - type mismatch
-db.collection<User>('users')
-  .field('name', { type: 'INTEGER' })   // Error: string cannot use INTEGER
-  .field('age', { type: 'TEXT' })       // Error: number cannot use TEXT
-  .build();
-```
-
-## API Styles
-
-StrataDB supports both fluent and declarative API styles:
-
-### Fluent API (Inline)
-```typescript
-const users = db.collection<User>('users')
-  .field('name', { type: 'TEXT', indexed: true })
-  .field('email', { type: 'TEXT', indexed: true, unique: true })
-  .build();
-```
-
-### Declarative API (Separate Schema)
-```typescript
-import { createSchema } from 'stratadb';
-
-const userSchema = createSchema<User>()
-  .field('name', { type: 'TEXT', indexed: true })
-  .field('email', { type: 'TEXT', indexed: true, unique: true })
-  .build();
-
-const users = db.collection<User>('users', userSchema);
-```
+- **Full Type Safety** - Compile-time validation of queries, schemas, and SQLite types
+- **MongoDB-like API** - Familiar operators: `$eq`, `$gt`, `$in`, `$and`, `$or`, etc.
+- **High Performance** - JSONB storage with generated columns for indexed fields
+- **Flexible Validation** - Use any Standard Schema validator (Zod, ArkType, Valibot)
+- **Minimal Dependencies** - Only `@standard-schema/spec` and `fast-safe-stringify`
 
 ## Installation
 
@@ -102,27 +16,83 @@ const users = db.collection<User>('users', userSchema);
 bun add stratadb
 ```
 
+Requires [Bun](https://bun.sh) runtime.
+
+## Quick Start
+
+```typescript
+import { StrataDBClass, createSchema, type Document } from 'stratadb'
+
+type User = Document<{
+  name: string
+  email: string
+  age: number
+}>
+
+const schema = createSchema<User>()
+  .field('name', { type: 'TEXT', indexed: true })
+  .field('email', { type: 'TEXT', indexed: true, unique: true })
+  .field('age', { type: 'INTEGER', indexed: true })
+  .timestamps(true)
+  .build()
+
+using db = new StrataDBClass({ database: 'app.db' })
+const users = db.collection('users', schema)
+
+// Insert
+const user = await users.insertOne({
+  name: 'Alice',
+  email: 'alice@example.com',
+  age: 30
+})
+
+// Query
+const adults = await users.find({
+  age: { $gte: 18 },
+  email: { $endsWith: '@example.com' }
+})
+
+// Update
+await users.updateOne(user._id, { age: 31 })
+
+// Delete
+await users.deleteOne(user._id)
+```
+
+## Type Safety
+
+TypeScript validates schema types against field definitions:
+
+```typescript
+// Correct - types match
+db.collection<User>('users')
+  .field('name', { type: 'TEXT' })      // string -> TEXT
+  .field('age', { type: 'INTEGER' })    // number -> INTEGER
+  .build()
+
+// Compile error - type mismatch
+db.collection<User>('users')
+  .field('name', { type: 'INTEGER' })   // Error: string cannot use INTEGER
+  .build()
+```
+
 ## Documentation
 
-See [DESIGN.md](./DESIGN.md) for comprehensive documentation and API reference.
+See the [documentation site](./docs/guide/getting-started.md) for complete guides:
+
+- [Getting Started](./docs/guide/getting-started.md)
+- [Collections](./docs/guide/collections.md)
+- [Queries](./docs/guide/queries.md)
+- [Schemas](./docs/guide/schemas.md)
+- [Transactions](./docs/guide/transactions.md)
 
 ## Development
 
 ```bash
-# Install dependencies
-bun install
-
-# Run tests
-bun test
-
-# Build
-bun run build
-
-# Type check
-bun run typecheck
-
-# Lint & format
-bun run lint:fix
+bun install      # Install dependencies
+bun test         # Run tests
+bun run build    # Build
+bun run typecheck # Type check
 ```
 
 ## License

@@ -4,7 +4,7 @@
  * @typeParam T - The complete document type including metadata fields
  *
  * @param partial - Partial document data (may or may not include metadata fields)
- * @param metadata - Required metadata fields (id, createdAt, updatedAt)
+ * @param metadata - Required metadata fields (_id, createdAt, updatedAt)
  * @returns Complete document of type T
  *
  * @remarks
@@ -27,26 +27,26 @@
  *   email: string;
  * }>;
  *
- * const partial: Partial<Omit<User, "id" | "createdAt" | "updatedAt">> = {
+ * const partial: Partial<Omit<User, "_id" | "createdAt" | "updatedAt">> = {
  *   name: 'Alice',
  *   email: 'alice@example.com'
  * };
  *
  * const doc = buildCompleteDocument<User>(partial, {
- *   id: 'user-123',
+ *   _id: 'user-123',
  *   createdAt: 1000,
  *   updatedAt: 1000
  * });
  *
  * // Type: User (no casting needed!)
- * // Value: { id: 'user-123', name: 'Alice', email: 'alice@example.com', createdAt: 1000, updatedAt: 1000 }
+ * // Value: { _id: 'user-123', name: 'Alice', email: 'alice@example.com', createdAt: 1000, updatedAt: 1000 }
  * ```
  */
-export function buildCompleteDocument<T extends { id: string }>(
+export function buildCompleteDocument<T extends { _id: string }>(
   partial:
-    | Partial<Omit<T, "id" | "createdAt" | "updatedAt">>
-    | Omit<T, "id" | "createdAt" | "updatedAt">,
-  metadata: { id: string; createdAt: number; updatedAt: number }
+    | Partial<Omit<T, "_id" | "createdAt" | "updatedAt">>
+    | Omit<T, "_id" | "createdAt" | "updatedAt">,
+  metadata: { _id: string; createdAt: number; updatedAt: number }
 ): T {
   // TypeScript cannot statically prove that spreading partial + metadata produces T
   // But at runtime this is correct for our document structure

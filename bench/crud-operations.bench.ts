@@ -19,7 +19,14 @@ type User = Document<{
   name: string
   email: string
   age: number
-  status: "active" | "inactive" | "pending"
+  status:
+    | "active"
+    | "inactive"
+    | "pending"
+    | "banned"
+    | "deleted"
+    | "suspended"
+    | "review"
   role: string
   tags: string[]
   score: number
@@ -45,13 +52,13 @@ function createTestDb() {
 
 // Sample user data generator
 let emailCounter = 0
-function generateUser(): Omit<User, "id"> {
+function generateUser(): Omit<User, "_id"> {
   emailCounter += 1
   return {
     name: `User ${emailCounter}`,
     email: `user${emailCounter}@example.com`,
     age: 20 + (emailCounter % 50),
-    status: "active",
+    status: "active" as const,
     role: emailCounter % 10 === 0 ? "admin" : "user",
     tags: ["tag1", "tag2"],
     score: emailCounter * 10,
@@ -67,8 +74,8 @@ async function seedDatabase(
   const users = db.collection("users", userSchema)
   const ids: string[] = []
   for (let i = 0; i < count; i += 1) {
-    const result = await users.insertOne(generateUser())
-    ids.push(result.document.id)
+    const user = await users.insertOne(generateUser())
+    ids.push(user._id)
   }
   return ids
 }
@@ -166,22 +173,20 @@ group("Update Operations", () => {
   bench("updateOne - single field", async () => {
     const db = createTestDb()
     const users = db.collection("users", userSchema)
-    await users.insertOne(generateUser())
-    await users.updateOne(
-      { name: { $like: "User%" } },
-      { $set: { score: 999 } }
-    )
+    const inserted = await users.insertOne(generateUser())
+    await users.updateOne(inserted._id, { score: 999 })
     db.close()
   })
 
   bench("updateOne - multiple fields", async () => {
     const db = createTestDb()
     const users = db.collection("users", userSchema)
-    await users.insertOne(generateUser())
-    await users.updateOne(
-      { name: { $like: "User%" } },
-      { $set: { score: 999, status: "inactive", role: "admin" } }
-    )
+    const inserted = await users.insertOne(generateUser())
+    await users.updateOne(inserted._id, {
+      score: 999,
+      status: "inactive",
+      role: "admin",
+    })
     db.close()
   })
 
@@ -190,7 +195,7 @@ group("Update Operations", () => {
     const users = db.collection("users", userSchema)
     const docs = Array.from({ length: 10 }, () => generateUser())
     await users.insertMany(docs)
-    await users.updateMany({ status: "active" }, { $set: { score: 500 } })
+    await users.updateMany({ status: "active" }, { score: 500 })
     db.close()
   })
 })
@@ -203,8 +208,8 @@ group("Delete Operations", () => {
   bench("deleteOne - by filter", async () => {
     const db = createTestDb()
     const users = db.collection("users", userSchema)
-    await users.insertOne(generateUser())
-    await users.deleteOne({ name: { $like: "User%" } })
+    const inserted = await users.insertOne(generateUser())
+    await users.deleteOne(inserted._id)
     db.close()
   })
 
@@ -297,8 +302,206 @@ group("Complex Queries - Medium Dataset (1000 docs)", () => {
   })
 })
 
+// =============================================================================
+// Uniform Filter Support Benchmarks
+// =============================================================================
+
+group("Uniform Filter Support - String ID vs Query Filter", () => {
+  const db = createTestDb()
+  const users = db.collection("users", userSchema)
+
+  // Seed data
+  const seededUsers: User[] = []
+  for (let i = 0; i < 1000; i++) {
+    seededUsers.push({
+      _id: `user-${i}`,
+      name: `User ${i}`,
+      email: `user${i}@example.com`,
+      age: 20 + (i % 50),
+      status: i % 2 === 0 ? "active" : "inactive",
+      role: i % 3 === 0 ? "admin" : "user",
+      tags: [`tag${i % 10}`],
+      score: i * 10,
+      createdAt: Date.now() + i,
+      updatedAt: Date.now() + i,
+    })
+  }
+  users.insertMany(seededUsers)
+
+  const testId = seededUsers[500]._id
+
+  bench("findOne - string ID", async () => {
+    await users.findOne(testId)
+  })
+
+  bench("findOne - query filter { _id }", async () => {
+    await users.findOne({ _id: testId })
+  })
+
+  bench("findOne - query filter { email }", async () => {
+    await users.findOne({ email: "user500@example.com" })
+  })
+
+  bench("updateOne - string ID", async () => {
+    await users.updateOne(testId, { score: 999 })
+  })
+
+  bench("updateOne - query filter { _id }", async () => {
+    await users.updateOne({ _id: testId }, { score: 999 })
+  })
+
+  bench("updateOne - query filter { email }", async () => {
+    await users.updateOne({ email: "user500@example.com" }, { score: 999 })
+  })
+
+  bench("deleteOne - string ID (reseeded)", async () => {
+    const testUser = users.insertOne({
+      name: "Delete Test",
+      email: `delete-${Date.now()}@example.com`,
+      age: 30,
+      status: "active",
+      role: "user",
+      tags: [],
+      score: 100,
+      createdAt: Date.now(),
+    })
+    await users.deleteOne(testUser._id)
+  })
+
+  bench("deleteOne - query filter { _id } (reseeded)", async () => {
+    const testUser = users.insertOne({
+      name: "Delete Test",
+      email: `delete-${Date.now()}@example.com`,
+      age: 30,
+      status: "active",
+      role: "user",
+      tags: [],
+      score: 100,
+      createdAt: Date.now(),
+    })
+    await users.deleteOne({ _id: testUser._id })
+  })
+
+  db.close()
+})
+
+// =============================================================================
+// Atomic Find-and-Modify Operations Benchmarks
+// =============================================================================
+
+group("Atomic Operations", () => {
+  const db = createTestDb()
+  const users = db.collection("users", userSchema)
+
+  // Seed data
+  for (let i = 0; i < 1000; i++) {
+    users.insertOne({
+      name: `User ${i}`,
+      email: `user${i}@example.com`,
+      age: 20 + (i % 50),
+      status: i % 2 === 0 ? "active" : "inactive",
+      role: i % 3 === 0 ? "admin" : "user",
+      tags: [`tag${i % 10}`],
+      score: i * 10,
+      createdAt: Date.now() + i,
+    })
+  }
+
+  bench("findOneAndUpdate - returnDocument: after", async () => {
+    await users.findOneAndUpdate(
+      { email: "user500@example.com" },
+      { score: 999 },
+      { returnDocument: "after" }
+    )
+  })
+
+  bench("findOneAndUpdate - returnDocument: before", async () => {
+    await users.findOneAndUpdate(
+      { email: "user501@example.com" },
+      { score: 999 },
+      { returnDocument: "before" }
+    )
+  })
+
+  bench("findOneAndReplace", async () => {
+    await users.findOneAndReplace(
+      { email: "user502@example.com" },
+      {
+        name: "Replaced User",
+        email: "user502@example.com",
+        age: 40,
+        status: "active",
+        role: "user",
+        tags: ["replaced"],
+        score: 1000,
+        createdAt: Date.now(),
+      }
+    )
+  })
+
+  bench("findOneAndDelete", async () => {
+    const testUser = users.insertOne({
+      name: "Temp User",
+      email: `temp-${Date.now()}@example.com`,
+      age: 30,
+      status: "active",
+      role: "user",
+      tags: [],
+      score: 100,
+      createdAt: Date.now(),
+    })
+    await users.findOneAndDelete(testUser._id)
+  })
+
+  db.close()
+})
+
+// =============================================================================
+// Utility Methods Benchmarks
+// =============================================================================
+
+group("Utility Methods", () => {
+  const db = createTestDb()
+  const users = db.collection("users", userSchema)
+
+  // Seed data
+  for (let i = 0; i < 1000; i++) {
+    users.insertOne({
+      name: `User ${i % 100}`, // Duplicate names
+      email: `user${i}@example.com`,
+      age: 20 + (i % 50), // Multiple duplicates
+      status: i % 2 === 0 ? "active" : "inactive",
+      role: i % 3 === 0 ? "admin" : "user",
+      tags: [`tag${i % 10}`],
+      score: (i % 100) * 10, // Duplicate scores
+      createdAt: Date.now() + i,
+    })
+  }
+
+  bench("distinct - indexed field (age)", async () => {
+    await users.distinct("age")
+  })
+
+  bench("distinct - non-indexed field (name)", async () => {
+    await users.distinct("name")
+  })
+
+  bench("distinct - with filter", async () => {
+    await users.distinct("age", { status: "active" })
+  })
+
+  bench("estimatedDocumentCount", async () => {
+    await users.estimatedDocumentCount()
+  })
+
+  bench("count - exact count for comparison", async () => {
+    await users.count({})
+  })
+
+  db.close()
+})
+
 await run({
-  silent: false,
   avg: true,
   json: false,
   colors: true,

@@ -211,7 +211,9 @@ describe("Collection Builder", () => {
 
     it("should handle validation function that returns correct type", () => {
       const validator = (doc: unknown): doc is TestUser => {
-        if (typeof doc !== "object" || doc === null) return false
+        if (typeof doc !== "object" || doc === null) {
+          return false
+        }
         const obj = doc as Record<string, unknown>
         return typeof obj.name === "string" && obj.name.length > 0
       }
@@ -260,7 +262,7 @@ describe("Collection Builder", () => {
         .timestamps(true)
         .validate(validator)
 
-      const schema = builder.build()
+      const _schema = builder.build()
 
       // The build method returns a Collection, which has schema property
       // But we need to get the schema definition from the builder before building

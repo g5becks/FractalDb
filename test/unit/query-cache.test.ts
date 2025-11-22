@@ -109,14 +109,6 @@ describe("Query Cache", () => {
   })
 
   describe("Non-cacheable operators", () => {
-    it("should not cache queries with $regex", () => {
-      const translator = new SQLiteQueryTranslator(schema)
-
-      // biome-ignore lint/performance/useTopLevelRegex: test value
-      translator.translate({ name: { $regex: /^test/i } })
-      expect(translator.cacheSize).toBe(0)
-    })
-
     it("should not cache queries with $elemMatch", () => {
       const translator = new SQLiteQueryTranslator(schema)
 
@@ -130,8 +122,9 @@ describe("Query Cache", () => {
       const translator = new SQLiteQueryTranslator(schema)
 
       // Non-cacheable
-      // biome-ignore lint/performance/useTopLevelRegex: test value
-      translator.translate({ name: { $regex: /test/ } })
+      translator.translate({
+        items: { $elemMatch: { price: { $gt: 100 } } },
+      } as any)
       expect(translator.cacheSize).toBe(0)
 
       // Cacheable

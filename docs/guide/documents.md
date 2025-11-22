@@ -14,18 +14,17 @@ type UserData = {
   age: number
 }
 
-// Document adds id, createdAt, updatedAt
+// Document adds readonly _id
 type User = Document<UserData>
 
 // Equivalent to:
 type User = {
-  id: string
-  name: string
-  email: string
-  age: number
-  createdAt: number  // Unix timestamp
-  updatedAt: number  // Unix timestamp
+  readonly _id: string
+  readonly name: string
+  readonly email: string
+  readonly age: number
 }
+// Note: createdAt/updatedAt are added when you enable timestamps in the schema
 ```
 
 ## Auto-Generated Fields
@@ -34,25 +33,25 @@ When you insert a document, StrataDB automatically generates:
 
 | Field | Type | Description |
 |-------|------|-------------|
-| `id` | `string` | UUID v4 (or custom if provided) |
-| `createdAt` | `number` | Unix timestamp at insertion |
-| `updatedAt` | `number` | Unix timestamp, updated on modifications |
+| `_id` | `string` | UUID v4 (or custom if provided) |
+| `createdAt` | `number` | Unix timestamp at insertion (if timestamps enabled) |
+| `updatedAt` | `number` | Unix timestamp, updated on modifications (if timestamps enabled) |
 
 ```typescript
-const result = await users.insertOne({
+const user = await users.insertOne({
   name: 'Alice',
   email: 'alice@example.com',
   age: 30
 })
 
-console.log(result.document)
+console.log(user)
 // {
-//   id: '550e8400-e29b-41d4-a716-446655440000',
+//   _id: '550e8400-e29b-41d4-a716-446655440000',
 //   name: 'Alice',
 //   email: 'alice@example.com',
 //   age: 30,
-//   createdAt: 1703001234567,
-//   updatedAt: 1703001234567
+//   createdAt: 1703001234567,  // if timestamps enabled
+//   updatedAt: 1703001234567   // if timestamps enabled
 // }
 ```
 
@@ -62,7 +61,7 @@ You can provide your own ID:
 
 ```typescript
 await users.insertOne({
-  id: 'custom-id-123',
+  _id: 'custom-id-123',
   name: 'Bob',
   email: 'bob@example.com',
   age: 25
@@ -156,10 +155,10 @@ To index nested fields, use JSON path syntax in your schema:
 
 Internally, documents are stored as JSONB in SQLite:
 
-- `id` column: TEXT PRIMARY KEY
-- `body` column: BLOB (JSONB containing all other fields)
-- `createdAt` column: INTEGER (for efficient sorting)
-- `updatedAt` column: INTEGER (for efficient sorting)
+- `_id` column: TEXT PRIMARY KEY
+- `body` column: BLOB (JSONB containing all document fields)
+- `createdAt` column: INTEGER (if timestamps enabled)
+- `updatedAt` column: INTEGER (if timestamps enabled)
 - Generated columns for indexed fields (e.g., `_name`, `_email`)
 
 This gives you the flexibility of document storage with the query performance of relational indexes.

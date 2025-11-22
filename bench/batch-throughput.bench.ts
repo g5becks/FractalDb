@@ -17,7 +17,14 @@ type User = Document<{
   name: string
   email: string
   age: number
-  status: "active" | "inactive" | "pending"
+  status:
+    | "active"
+    | "inactive"
+    | "pending"
+    | "banned"
+    | "deleted"
+    | "suspended"
+    | "review"
   role: string
   tags: string[]
   score: number
@@ -41,13 +48,13 @@ function createTestDb() {
 }
 
 let emailCounter = 0
-function generateUser(): Omit<User, "id"> {
+function generateUser(): Omit<User, "_id"> {
   emailCounter += 1
   return {
     name: `User ${emailCounter}`,
     email: `user${emailCounter}@example.com`,
     age: 20 + (emailCounter % 50),
-    status: "active",
+    status: "active" as const,
     role: emailCounter % 10 === 0 ? "admin" : "user",
     tags: ["tag1", "tag2"],
     score: emailCounter * 10,
@@ -55,7 +62,7 @@ function generateUser(): Omit<User, "id"> {
   }
 }
 
-function generateUsers(count: number): Omit<User, "id">[] {
+function generateUsers(count: number): Omit<User, "_id">[] {
   return Array.from({ length: count }, () => generateUser())
 }
 
@@ -147,7 +154,7 @@ group("Batch Update Throughput", () => {
     const db = createTestDb()
     const users = db.collection("users", userSchema)
     await users.insertMany(generateUsers(100))
-    await users.updateMany({ status: "active" }, { $set: { score: 999 } })
+    await users.updateMany({ status: "active" }, { score: 999 })
     db.close()
   })
 
@@ -157,7 +164,7 @@ group("Batch Update Throughput", () => {
     await users.insertMany(generateUsers(100))
     await users.updateMany(
       { status: "active" },
-      { $set: { score: 999, role: "updated" } }
+      { score: 999, role: "updated" }
     )
     db.close()
   })
@@ -166,7 +173,7 @@ group("Batch Update Throughput", () => {
     const db = createTestDb()
     const users = db.collection("users", userSchema)
     await users.insertMany(generateUsers(1000))
-    await users.updateMany({ status: "active" }, { $set: { score: 999 } })
+    await users.updateMany({ status: "active" }, { score: 999 })
     db.close()
   })
 })
@@ -225,7 +232,6 @@ group("Large Dataset Operations (10000 docs)", () => {
 })
 
 await run({
-  silent: false,
   avg: true,
   json: false,
   colors: true,

@@ -128,7 +128,7 @@ new TypeMismatchError(
 ```typescript
 new QueryError(
   "Query error with operator '$invalidOp': Operator not recognized. " +
-  "Use valid operators like $eq, $gt, $in, $regex.",
+  "Use valid operators like $eq, $gt, $in, $like.",
   JSON.stringify(query)
 )
 ```

@@ -349,7 +349,7 @@ describe("Symbol.dispose Resource Cleanup Tests", () => {
         })
       })
 
-      expect(result.document.id).toBeDefined()
+      expect(result._id).toBeDefined()
 
       // Isabel should exist after execute
       const isabel = await users.findOne({ name: "Isabel" })

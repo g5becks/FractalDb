@@ -66,16 +66,13 @@ import type { SchemaDefinition, SchemaField } from "./schema-types.js"
  * // => { sql: "_age IN (?, ?, ?)", params: [25, 30, 35] }
  *
  * // ✅ String operators
- * const result5 = translator.translate({ email: { $regex: /@example\\.com$/i } });
- * // => { sql: "_email REGEXP ?", params: ['(?i)@example\\.com$'] }
- *
- * const result6 = translator.translate({ name: { $startsWith: 'Admin' } });
+ * const result5 = translator.translate({ name: { $startsWith: 'Admin' } });
  * // => { sql: "_name LIKE ?", params: ['Admin%'] }
  *
- * const result7 = translator.translate({ email: { $endsWith: '@company.com' } });
+ * const result6 = translator.translate({ email: { $endsWith: '@company.com' } });
  * // => { sql: "_email LIKE ?", params: ['%@company.com'] }
  *
- * const result8 = translator.translate({ name: { $like: '%Smith%' } });
+ * const result7 = translator.translate({ name: { $like: '%Smith%' } });
  * // => { sql: "_name LIKE ?", params: ['%Smith%'] }
  * ```
  */
@@ -167,7 +164,7 @@ export class SQLiteQueryTranslator<T extends Document>
    * **Caching:**
    * Queries with the same structure are cached. On cache hit, only parameter
    * extraction is performed, skipping SQL generation entirely.
-   * Note: Queries with $regex (RegExp objects), $elemMatch, or $index are not cached
+   * Note: Queries with $elemMatch, $index, or $all operators are not cached
    * due to their complex value extraction requirements.
    */
   translate(filter: QueryFilter<T>): QueryTranslatorResult {
@@ -247,12 +244,7 @@ export class SQLiteQueryTranslator<T extends Document>
       } else if (this.isOperatorObject(value)) {
         // Check for non-cacheable operators in field conditions
         const ops = value as Record<string, unknown>
-        if (
-          "$regex" in ops ||
-          "$elemMatch" in ops ||
-          "$index" in ops ||
-          "$all" in ops
-        ) {
+        if ("$elemMatch" in ops || "$index" in ops || "$all" in ops) {
           return true
         }
       }
@@ -326,8 +318,8 @@ export class SQLiteQueryTranslator<T extends Document>
         for (const [op, opValue] of Object.entries(
           value as Record<string, unknown>
         )) {
-          if (op === "$options" || op === "$exists") {
-            // Skip $options (handled with $regex) and $exists (no value)
+          if (op === "$exists") {
+            // Skip $exists (no value)
             continue
           }
 
@@ -611,7 +603,7 @@ export class SQLiteQueryTranslator<T extends Document>
     operators: Record<string, unknown>
     params: SQLiteBindValue[]
   }): string | null {
-    const { fieldSql, op, value, operators, params } = context
+    const { fieldSql, op, value, params } = context
     switch (op) {
       case "$eq":
         params.push(this.toBindValue(value))
@@ -642,16 +634,6 @@ export class SQLiteQueryTranslator<T extends Document>
 
       case "$nin":
         return this.translateNotInOperator(fieldSql, value, params)
-
-      case "$regex": {
-        const regex = value
-        const options = operators.$options
-        return this.translateRegexOperator(fieldSql, regex, options, params)
-      }
-
-      case "$options":
-        // Handled together with $regex
-        return null
 
       case "$like":
         params.push(this.toBindValue(value))
@@ -749,57 +731,6 @@ export class SQLiteQueryTranslator<T extends Document>
   }
 
   /**
-   * Translates $regex operator to SQL.
-   *
-   * @param fieldSql - The SQL representation of the field
-   * @param regex - The regex pattern (RegExp or string or unknown)
-   * @param options - Optional flags (currently only 'i' for case-insensitive)
-   * @param params - Array to collect parameter values
-   * @returns SQL string fragment
-   *
-   * @remarks
-   * SQLite's REGEXP operator requires a custom function to be registered.
-   * For case-insensitive matching, we convert the pattern using the i flag.
-   * RegExp objects are converted to their pattern string.
-   *
-   * @internal
-   */
-  private translateRegexOperator(
-    fieldSql: string,
-    regex: unknown,
-    options: unknown,
-    params: SQLiteBindValue[]
-  ): string {
-    // Extract pattern from RegExp or use string directly
-    let pattern: string
-    let caseInsensitive = false
-
-    if (regex instanceof RegExp) {
-      pattern = regex.source
-      caseInsensitive = regex.flags.includes("i")
-    } else if (typeof regex === "string") {
-      pattern = regex
-    } else {
-      // Invalid regex value
-      pattern = String(regex)
-    }
-
-    // Override with explicit $options if provided
-    if (options === "i") {
-      caseInsensitive = true
-    }
-
-    // For case-insensitive matching, we use SQLite's case-insensitive REGEXP
-    // by prefixing the pattern with (?i)
-    if (caseInsensitive) {
-      pattern = `(?i)${pattern}`
-    }
-
-    params.push(pattern)
-    return `${fieldSql} REGEXP ?`
-  }
-
-  /**
    * Resolves field name to SQL column reference.
    *
    * @param fieldName - The field name from the document type
@@ -808,19 +739,31 @@ export class SQLiteQueryTranslator<T extends Document>
    * @remarks
    * Indexed fields use generated columns with underscore prefix (e.g., `_age`).
    * Non-indexed fields use `jsonb_extract(data, '$.field')`.
+   * Special fields like `_id`, `createdAt`, and `updatedAt` are table columns.
    *
    * @internal
    */
   private resolveFieldName(fieldName: keyof T): string {
+    const fieldStr = String(fieldName)
+
+    // Special handling for built-in table columns
+    if (
+      fieldStr === "_id" ||
+      fieldStr === "createdAt" ||
+      fieldStr === "updatedAt"
+    ) {
+      return fieldStr
+    }
+
     const field = this.fieldMap.get(fieldName)
 
     if (field?.indexed) {
       // Indexed field uses generated column with underscore prefix
-      return `_${String(fieldName)}`
+      return `_${fieldStr}`
     }
 
     // Non-indexed field uses jsonb_extract
-    return `jsonb_extract(body, '$.${String(fieldName)}')`
+    return `jsonb_extract(body, '$.${fieldStr}')`
   }
 
   /**

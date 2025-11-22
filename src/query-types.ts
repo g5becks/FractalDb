@@ -119,33 +119,36 @@ export type ComparisonOperator<T> = T extends number | Date
  * These operators provide MongoDB-like string matching capabilities with full
  * type safety. Only available for string fields to prevent runtime errors.
  *
+ * For complex pattern matching that would typically use regular expressions,
+ * consider using these alternatives:
+ * - `$like`: For SQL-style pattern matching with % wildcards
+ * - `$startsWith`: For prefix matching (more efficient than regex)
+ * - `$endsWith`: For suffix matching (more efficient than regex)
+ *
  * @example
  * ```typescript
  * // ✅ Valid string queries
- * const nameQuery: StringOperator = {
- *   $regex: /alice/i,     // Case-insensitive regex
- *   $options: 'i'        // Case-insensitive flag (alternative to regex flags)
- * };
- *
  * const emailQuery: StringOperator = {
  *   $like: '%@example.com',     // SQL LIKE pattern
  *   $startsWith: 'admin',      // Starts with prefix
  *   $endsWith: '@domain.com'   // Ends with suffix
  * };
  *
- * // ❌ TypeScript errors - not for non-string types
- * const invalidQuery: StringOperator = {
- *   $regex: 123  // Error: regex must be RegExp or string
+ * // ✅ Pattern matching alternatives
+ * const namePatterns: StringOperator = {
+ *   $startsWith: 'A',          // Names starting with 'A'
+ *   $endsWith: 'son',          // Names ending with 'son'
+ *   $like: '%admin%'           // Contains 'admin' anywhere
+ * };
+ *
+ * // ✅ Combining multiple string conditions
+ * const complexStringQuery: StringOperator = {
+ *   $startsWith: 'Dr.',
+ *   $like: '%PhD%'
  * };
  * ```
  */
 export type StringOperator = {
-  /** Regular expression match with optional case-insensitive flag */
-  readonly $regex?: RegExp | string
-
-  /** Case-insensitive flag for regex matching ('i' only) */
-  readonly $options?: "i"
-
   /** SQL-style LIKE pattern matching */
   readonly $like?: string
 
@@ -191,7 +194,7 @@ export type StringOperator = {
  * const contactsQuery: ArrayOperator<User['contacts']> = {
  *   $elemMatch: {
  *     name: 'Alice',
- *     email: { $regex: /@example.com$/ }
+ *     email: { $endsWith: '@example.com' }
  *   }
  * };
  *
@@ -266,7 +269,7 @@ export type ExistenceOperator = {
  * // String field gets string operators
  * const nameField: FieldOperator<User['name']> = {
  *   $eq: 'Alice',
- *   $regex: /admin/i,
+ *   $like: '%admin%',
  *   $startsWith: 'A'
  * };
  *
@@ -327,7 +330,7 @@ export type FieldOperator<T> = T extends string
  * // ✅ OR - At least one condition must match
  * const adminOrModerator: LogicalOperator<User> = {
  *   $or: [
- *     { name: { $regex: /^admin/i } },
+ *     { name: { $startsWith: 'admin' } },
  *     { status: 'active' }
  *   ]
  * };
@@ -355,7 +358,7 @@ export type FieldOperator<T> = T extends string
  *       ]
  *     },
  *     {
- *       $not: { email: { $regex: /@spam\.com$/ } }
+ *       $not: { email: { $endsWith: '@spam.com' } }
  *     }
  *   ]
  * };
@@ -416,7 +419,7 @@ export type LogicalOperator<T> = {
  * // ✅ Field operators
  * const operatorQuery: QueryFilter<User> = {
  *   age: { $gt: 18, $lte: 65 },
- *   email: { $regex: /@example\.com$/ }
+ *   email: { $endsWith: '@example.com' }
  * };
  *
  * // ✅ Nested path queries (dot notation)
@@ -427,7 +430,7 @@ export type LogicalOperator<T> = {
  *
  * // ✅ Nested paths with operators
  * const nestedOperatorQuery: QueryFilter<User> = {
- *   'profile.bio': { $regex: /engineer/i },
+ *   'profile.bio': { $like: '%engineer%' },
  *   'profile.settings.theme': { $in: ['light', 'dark'] }
  * };
  *
@@ -459,7 +462,7 @@ export type LogicalOperator<T> = {
  *     },
  *     {
  *       $not: {
- *         email: { $regex: /@spam\.com$/ }
+ *         email: { $endsWith: '@spam.com' }
  *       }
  *     },
  *     {
@@ -476,7 +479,7 @@ export type LogicalOperator<T> = {
  *   tags: {
  *     $elemMatch: {
  *       // This recursively uses QueryFilter for array elements
- *       $regex: /^premium/i
+ *       $startsWith: 'premium'
  *     }
  *   }
  * };

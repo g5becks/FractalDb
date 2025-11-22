@@ -1,5 +1,5 @@
 import type { Document } from "./core-types.js"
-import type { QueryOptions } from "./query-options-types.js"
+import type { QueryOptions, SortSpec } from "./query-options-types.js"
 import type { QueryFilter } from "./query-types.js"
 import type { SchemaDefinition } from "./schema-types.js"
 
@@ -9,15 +9,17 @@ import type { SchemaDefinition } from "./schema-types.js"
  * @typeParam T - The document type
  *
  * @remarks
- * Contains the inserted document with its generated ID and metadata.
+ * Represents the inserted document with its generated ID.
+ * Since SQLite is ACID and local, if this function returns without throwing,
+ * the operation succeeded - no acknowledgment flag needed.
+ *
+ * @example
+ * ```typescript
+ * const result = await users.insertOne({ name: 'Alice', email: 'alice@example.com' });
+ * console.log(result._id); // Auto-generated UUID
+ * ```
  */
-export type InsertOneResult<T extends Document> = {
-  /** The inserted document with its generated ID */
-  readonly document: T
-
-  /** Whether the insert operation succeeded */
-  readonly acknowledged: true
-}
+export type InsertOneResult<T extends Document> = T
 
 /**
  * Result of inserting multiple documents into a collection.
@@ -25,7 +27,19 @@ export type InsertOneResult<T extends Document> = {
  * @typeParam T - The document type
  *
  * @remarks
- * Contains all successfully inserted documents with their generated IDs.
+ * Contains all successfully inserted documents with their generated IDs and count.
+ * Since SQLite is ACID and local, if this function returns without throwing,
+ * all inserts succeeded.
+ *
+ * @example
+ * ```typescript
+ * const result = await users.insertMany([
+ *   { name: 'Alice', email: 'alice@example.com' },
+ *   { name: 'Bob', email: 'bob@example.com' }
+ * ]);
+ * console.log(`Inserted ${result.insertedCount} users`);
+ * console.log('User IDs:', result.documents.map(d => d._id));
+ * ```
  */
 export type InsertManyResult<T extends Document> = {
   /** Array of inserted documents with their generated IDs */
@@ -33,9 +47,6 @@ export type InsertManyResult<T extends Document> = {
 
   /** Number of documents successfully inserted */
   readonly insertedCount: number
-
-  /** Whether the insert operation succeeded */
-  readonly acknowledged: true
 }
 
 /**
@@ -43,6 +54,17 @@ export type InsertManyResult<T extends Document> = {
  *
  * @remarks
  * Provides statistics about documents matched and modified by the update.
+ * Since SQLite is ACID and local, if this function returns without throwing,
+ * the operation succeeded.
+ *
+ * @example
+ * ```typescript
+ * const result = await users.updateMany(
+ *   { status: 'inactive' },
+ *   { $set: { status: 'deleted' } }
+ * );
+ * console.log(`Matched: ${result.matchedCount}, Modified: ${result.modifiedCount}`);
+ * ```
  */
 export type UpdateResult = {
   /** Number of documents that matched the filter */
@@ -50,9 +72,6 @@ export type UpdateResult = {
 
   /** Number of documents that were actually modified */
   readonly modifiedCount: number
-
-  /** Whether the update operation succeeded */
-  readonly acknowledged: true
 }
 
 /**
@@ -60,13 +79,18 @@ export type UpdateResult = {
  *
  * @remarks
  * Provides the count of documents deleted by the operation.
+ * Since SQLite is ACID and local, if this function returns without throwing,
+ * the operation succeeded.
+ *
+ * @example
+ * ```typescript
+ * const result = await users.deleteMany({ status: 'inactive' });
+ * console.log(`Deleted ${result.deletedCount} users`);
+ * ```
  */
 export type DeleteResult = {
   /** Number of documents deleted */
   readonly deletedCount: number
-
-  /** Whether the delete operation succeeded */
-  readonly acknowledged: true
 }
 
 /**
@@ -89,7 +113,7 @@ export type DeleteResult = {
  * **Document Storage:**
  * - All documents stored in a single `data` JSONB column
  * - Indexed fields have generated columns with underscore prefix (e.g., `_age`)
- * - Auto-generated `id` and `createdAt` fields
+ * - Auto-generated `_id` and `createdAt` fields
  * - Optional `updatedAt` tracking
  *
  * **Comparison to MongoDB:**
@@ -137,7 +161,7 @@ export type DeleteResult = {
  *   age: 30,
  *   role: 'admin'
  * });
- * console.log(result.document.id); // Auto-generated UUID
+ * console.log(result._id); // Auto-generated UUID
  *
  * // Query documents
  * const admins = await users.find({ role: 'admin' });
@@ -234,9 +258,9 @@ export type Collection<T extends Document> = {
   find(filter: QueryFilter<T>, options?: QueryOptions<T>): Promise<readonly T[]>
 
   /**
-   * Find the first document matching the query filter.
+   * Find the first document matching the query filter or ID.
    *
-   * @param filter - Query filter to match documents
+   * @param filter - Document ID or query filter to match documents
    * @param options - Query options for sorting and projection
    * @returns Promise resolving to the first matching document, or null if none found
    *
@@ -244,12 +268,22 @@ export type Collection<T extends Document> = {
    * Equivalent to `find(filter, { ...options, limit: 1 })[0]` but more efficient
    * since it stops after finding the first match.
    *
+   * Accepts either a string ID or a full QueryFilter object for flexible querying:
+   * - String ID: `{ _id: string }` filter is applied automatically
+   * - QueryFilter: Full MongoDB-style query filtering
+   *
    * @example
    * ```typescript
-   * // Find any admin user
+   * // Find by document ID
+   * const user = await users.findOne('123e4567-e89b-12d3-a456-426614174000');
+   * if (user) {
+   *   console.log(user.name);
+   * }
+   *
+   * // Find by query filter
    * const admin = await users.findOne({ role: 'admin' });
    *
-   * // Find most recent user
+   * // Find with options
    * const latest = await users.findOne(
    *   {},
    *   { sort: { createdAt: -1 } }
@@ -263,7 +297,7 @@ export type Collection<T extends Document> = {
    * ```
    */
   findOne(
-    filter: QueryFilter<T>,
+    filter: string | QueryFilter<T>,
     options?: Omit<QueryOptions<T>, "limit" | "skip">
   ): Promise<T | null>
 
@@ -299,13 +333,13 @@ export type Collection<T extends Document> = {
   /**
    * Insert a single document into the collection.
    *
-   * @param doc - Document to insert (without id, createdAt, updatedAt)
-   * @returns Promise resolving to insert result with the new document
+   * @param doc - Document to insert (without _id, createdAt, updatedAt)
+   * @returns Promise resolving to the inserted document with generated _id
    *
    * @remarks
    * Validates the document against the schema before inserting.
    * Automatically generates:
-   * - `id`: UUID v4
+   * - `_id`: UUID v4
    * - `createdAt`: Current timestamp
    * - `updatedAt`: Current timestamp (if schema has this field)
    *
@@ -318,13 +352,14 @@ export type Collection<T extends Document> = {
    * @example
    * ```typescript
    * try {
-   *   const result = await users.insertOne({
+   *   const user = await users.insertOne({
    *     name: 'Bob',
    *     email: 'bob@example.com',
    *     age: 25,
    *     role: 'user'
    *   });
-   *   console.log(`Inserted user with ID: ${result.document.id}`);
+   *   console.log(`Inserted user with ID: ${user._id}`);
+   *   console.log(`User name: ${user.name}`);
    * } catch (err) {
    *   if (err instanceof ValidationError) {
    *     console.error('Invalid user:', err.message);
@@ -332,72 +367,80 @@ export type Collection<T extends Document> = {
    * }
    * ```
    */
-  insertOne(
-    doc: Omit<T, "id" | "createdAt" | "updatedAt">
-  ): Promise<InsertOneResult<T>>
+  insertOne(doc: Omit<T, "_id" | "createdAt" | "updatedAt">): Promise<T>
 
   /**
-   * Update a single document matching the query filter.
+   * Update a single document matching the query filter or ID.
    *
-   * @param filter - Query filter to find the document to update
-   * @param update - Update operations to apply
-   * @returns Promise resolving to update result with statistics
+   * @param filter - Document ID or query filter to find the document to update
+   * @param update - Partial document with fields to update
+   * @param options - Optional upsert configuration
+   * @returns Promise resolving to the updated document, or null if not found
    *
    * @remarks
    * Updates the first document that matches the filter.
-   * Uses MongoDB-style update operators like `$set`, `$inc`, etc.
+   * Merges the provided partial document with the existing document.
    * Automatically updates `updatedAt` if present in schema.
    *
-   * **Update Operators:**
-   * - `$set`: Set field values
-   * - `$inc`: Increment numeric fields
-   * - `$unset`: Remove fields
-   * - `$push`: Add to arrays
-   * - `$pull`: Remove from arrays
+   * Accepts either a string ID or a full QueryFilter object for flexible targeting:
+   * - String ID: `{ _id: string }` filter is applied automatically
+   * - QueryFilter: Full MongoDB-style query filtering
    *
    * @example
    * ```typescript
-   * // Set field values
-   * await users.updateOne(
-   *   { email: 'alice@example.com' },
-   *   { $set: { role: 'admin', verified: true } }
+   * // Update by document ID
+   * const updated = await users.updateOne(
+   *   '123e4567-e89b-12d3-a456-426614174000',
+   *   { role: 'admin', verified: true }
    * );
    *
-   * // Increment counter
+   * // Update by query filter
    * await users.updateOne(
-   *   { id: userId },
-   *   { $inc: { loginCount: 1 } }
+   *   { email: 'alice@example.com' },
+   *   { role: 'admin', verified: true }
+   * );
+   *
+   * // Update with upsert
+   * await users.updateOne(
+   *   { email: 'new@example.com' },
+   *   { role: 'user' },
+   *   { upsert: true }
    * );
    * ```
    */
   updateOne(
-    id: string,
-    update: Omit<Partial<T>, "id" | "createdAt" | "updatedAt">,
+    filter: string | QueryFilter<T>,
+    update: Omit<Partial<T>, "_id" | "createdAt" | "updatedAt">,
     options?: { upsert?: boolean }
   ): Promise<T | null>
 
   /**
-   * Replace a single document matching the query filter.
+   * Replace a single document by ID or filter.
    *
-   * @param filter - Query filter to find the document to replace
-   * @param doc - New document to replace with (without id, createdAt)
-   * @returns Promise resolving to update result with statistics
+   * @param filter - Document ID (string) or query filter
+   * @param doc - New document to replace with (without _id, createdAt, updatedAt)
+   * @returns Promise resolving to the replaced document, or null if not found
    *
    * @remarks
+   * This method accepts either a string ID or a query filter for maximum flexibility.
+   * When you have the document ID, pass it directly as a string for convenience.
+   * When you need to replace by other fields, pass a filter object.
+   *
    * Completely replaces the matched document with the new document.
-   * Preserves `id` and `createdAt`, updates `updatedAt`.
+   * Preserves `_id` and `createdAt`, updates `updatedAt`.
    * Validates the new document against the schema.
    *
    * **Difference from updateOne:**
-   * - `updateOne`: Modifies specific fields
-   * - `replaceOne`: Replaces entire document
+   * - `updateOne`: Merges specific fields into existing document
+   * - `replaceOne`: Replaces entire document (except _id, createdAt)
    *
    * @throws {ValidationError} If new document fails schema validation
    *
    * @example
    * ```typescript
-   * await users.replaceOne(
-   *   { id: userId },
+   * // Replace by ID (string)
+   * const replaced = await users.replaceOne(
+   *   'user-123',
    *   {
    *     name: 'Alice Smith',
    *     email: 'alice.smith@example.com',
@@ -405,34 +448,216 @@ export type Collection<T extends Document> = {
    *     role: 'admin'
    *   }
    * );
+   *
+   * // Replace by filter
+   * const replaced = await users.replaceOne(
+   *   { email: 'old@example.com' },
+   *   {
+   *     name: 'Alice Smith',
+   *     email: 'new@example.com',
+   *     age: 31,
+   *     role: 'admin'
+   *   }
+   * );
    * ```
    */
   replaceOne(
-    id: string,
-    doc: Omit<T, "id" | "createdAt" | "updatedAt">
+    filter: string | QueryFilter<T>,
+    doc: Omit<T, "_id" | "createdAt" | "updatedAt">
   ): Promise<T | null>
 
   /**
-   * Delete a single document matching the query filter.
+   * Delete a single document by ID or filter.
    *
-   * @param filter - Query filter to find the document to delete
-   * @returns Promise resolving to delete result with statistics
+   * @param filter - Document ID (string) or query filter
+   * @returns Promise resolving to `true` if document was deleted, `false` if not found
    *
    * @remarks
+   * This method accepts either a string ID or a query filter for maximum flexibility.
+   * When you have the document ID, pass it directly as a string for convenience.
+   * When you need to delete by other fields, pass a filter object.
+   *
    * Deletes the first document that matches the filter.
-   * If no document matches, returns `{ deletedCount: 0 }`.
+   * If no document matches, returns `false`.
    *
    * @example
    * ```typescript
-   * const result = await users.deleteOne({ id: userId });
-   * if (result.deletedCount > 0) {
-   *   console.log('User deleted successfully');
-   * } else {
-   *   console.log('User not found');
+   * // Delete by ID (string)
+   * const deleted = await users.deleteOne('user-123')
+   * if (deleted) {
+   *   console.log('User deleted successfully')
    * }
+   *
+   * // Delete by filter
+   * const deleted = await users.deleteOne({ email: 'inactive@example.com' })
+   *
+   * // Delete with complex filter
+   * const deleted = await users.deleteOne({
+   *   status: 'inactive',
+   *   lastLogin: { $lt: Date.now() - 90 * 24 * 60 * 60 * 1000 } // 90 days
+   * })
    * ```
    */
-  deleteOne(id: string): Promise<boolean>
+  deleteOne(filter: string | QueryFilter<T>): Promise<boolean>
+
+  // ===== Atomic Find-and-Modify Operations =====
+
+  /**
+   * Find and delete a single document atomically.
+   *
+   * @param filter - Document ID (string) or query filter
+   * @param options - Query options (sort)
+   * @returns Promise resolving to the deleted document, or null if not found
+   *
+   * @remarks
+   * This method accepts either a string ID or a query filter for maximum flexibility.
+   * When you have the document ID, pass it directly as a string for convenience.
+   * When you need to delete by other fields, pass a filter object.
+   *
+   * This operation is atomic - it finds and deletes in a single operation.
+   * Useful when you need the deleted document's data (e.g., for logging, undo operations).
+   *
+   * When multiple documents match the filter, the sort option determines which one is deleted.
+   *
+   * @example
+   * ```typescript
+   * // Delete by ID
+   * const deleted = await users.findOneAndDelete('user-123');
+   * if (deleted) {
+   *   console.log(`Deleted user: ${deleted.name}`);
+   *   await logDeletion(deleted);
+   * }
+   *
+   * // Delete by filter
+   * const deleted = await users.findOneAndDelete({ email: 'old@example.com' });
+   *
+   * // Delete with sort (delete oldest inactive user)
+   * const deleted = await users.findOneAndDelete(
+   *   { status: 'inactive' },
+   *   { sort: { createdAt: 1 } }
+   * );
+   * ```
+   */
+  findOneAndDelete(
+    filter: string | QueryFilter<T>,
+    options?: { sort?: SortSpec<T> }
+  ): Promise<T | null>
+
+  /**
+   * Find and update a single document atomically.
+   *
+   * @param filter - Document ID (string) or query filter
+   * @param update - Partial document with fields to update
+   * @param options - Update options (sort, returnDocument, upsert)
+   * @returns Promise resolving to the document before or after update, or null if not found
+   *
+   * @remarks
+   * This method accepts either a string ID or a query filter for maximum flexibility.
+   * When you have the document ID, pass it directly as a string for convenience.
+   * When you need to update by other fields, pass a filter object.
+   *
+   * This operation is atomic - it finds and updates in a single logical operation.
+   * Use `returnDocument` to control whether you get the document state before or after the update.
+   * Default is 'after'.
+   *
+   * @example
+   * ```typescript
+   * // Update by ID
+   * const updated = await users.findOneAndUpdate(
+   *   'user-123',
+   *   { loginCount: 5 },
+   *   { returnDocument: 'after' }
+   * );
+   *
+   * // Update by filter
+   * const updated = await users.findOneAndUpdate(
+   *   { email: 'alice@example.com' },
+   *   { loginCount: 5 },
+   *   { returnDocument: 'after' }
+   * );
+   * console.log(`New login count: ${updated?.loginCount}`);
+   *
+   * // Get previous state before update
+   * const before = await users.findOneAndUpdate(
+   *   { _id: userId },
+   *   { status: 'archived' },
+   *   { returnDocument: 'before' }
+   * );
+   * await logStatusChange(before, 'archived');
+   *
+   * // Upsert with returnDocument
+   * const result = await users.findOneAndUpdate(
+   *   { email: 'new@example.com' },
+   *   { name: 'New User', age: 25 },
+   *   { upsert: true, returnDocument: 'after' }
+   * );
+   * ```
+   */
+  findOneAndUpdate(
+    filter: string | QueryFilter<T>,
+    update: Omit<Partial<T>, "_id" | "createdAt" | "updatedAt">,
+    options?: {
+      sort?: SortSpec<T>
+      returnDocument?: "before" | "after"
+      upsert?: boolean
+    }
+  ): Promise<T | null>
+
+  /**
+   * Find and replace a single document atomically.
+   *
+   * @param filter - Document ID (string) or query filter
+   * @param replacement - Complete replacement document (without _id, createdAt, updatedAt)
+   * @param options - Replace options (sort, returnDocument, upsert)
+   * @returns Promise resolving to the document before or after replacement, or null if not found
+   *
+   * @remarks
+   * This method accepts either a string ID or a query filter for maximum flexibility.
+   * When you have the document ID, pass it directly as a string for convenience.
+   * When you need to replace by other fields, pass a filter object.
+   *
+   * This operation replaces the ENTIRE document (except _id, createdAt).
+   * Unlike `findOneAndUpdate` which merges fields, this replaces everything.
+   * The replacement document is validated against the schema.
+   * Default returnDocument is 'after'.
+   *
+   * @example
+   * ```typescript
+   * // Replace by ID
+   * const replaced = await users.findOneAndReplace(
+   *   'user-123',
+   *   {
+   *     name: 'New Name',
+   *     email: 'new@example.com',
+   *     age: 30,
+   *     active: true,
+   *     tags: []
+   *   },
+   *   { returnDocument: 'after' }
+   * );
+   *
+   * // Replace by filter
+   * const replaced = await users.findOneAndReplace(
+   *   { email: 'old@example.com' },
+   *   {
+   *     name: 'New Name',
+   *     email: 'new@example.com',
+   *     age: 30,
+   *     active: true,
+   *     tags: []
+   *   }
+   * );
+   * ```
+   */
+  findOneAndReplace(
+    filter: string | QueryFilter<T>,
+    replacement: Omit<T, "_id" | "createdAt" | "updatedAt">,
+    options?: {
+      sort?: SortSpec<T>
+      returnDocument?: "before" | "after"
+      upsert?: boolean
+    }
+  ): Promise<T | null>
 
   // ===== Batch Write Operations =====
 
@@ -464,7 +689,7 @@ export type Collection<T extends Document> = {
    * ```
    */
   insertMany(
-    docs: readonly Omit<T, "id" | "createdAt" | "updatedAt">[]
+    docs: readonly Omit<T, "_id" | "createdAt" | "updatedAt">[]
   ): Promise<InsertManyResult<T>>
 
   /**
@@ -497,7 +722,7 @@ export type Collection<T extends Document> = {
    */
   updateMany(
     filter: QueryFilter<T>,
-    update: Omit<Partial<T>, "id" | "createdAt" | "updatedAt">
+    update: Omit<Partial<T>, "_id" | "createdAt" | "updatedAt">
   ): Promise<UpdateResult>
 
   /**
@@ -525,6 +750,89 @@ export type Collection<T extends Document> = {
    * ```
    */
   deleteMany(filter: QueryFilter<T>): Promise<DeleteResult>
+
+  // ===== Utility Methods =====
+
+  /**
+   * Find distinct values for a specified field across the collection.
+   *
+   * @param field - The field name to get distinct values for
+   * @param filter - Optional query filter to narrow results
+   * @returns Promise resolving to array of unique values for the field
+   *
+   * @remarks
+   * Returns an array of unique values for the specified field.
+   * If a filter is provided, only documents matching the filter are considered.
+   *
+   * The method uses SQLite's DISTINCT clause for efficient querying.
+   * For indexed fields, uses the generated column; for non-indexed fields, uses JSON extraction.
+   *
+   * @example
+   * ```typescript
+   * // Get all unique ages
+   * const ages = await users.distinct('age');
+   * console.log(ages); // [25, 30, 35, 40]
+   *
+   * // Get unique roles for active users
+   * const activeRoles = await users.distinct('role', { active: true });
+   *
+   * // Get unique tags (array field)
+   * const tags = await users.distinct('tags');
+   * ```
+   */
+  distinct<K extends keyof Omit<T, "_id" | "createdAt" | "updatedAt">>(
+    field: K,
+    filter?: QueryFilter<T>
+  ): Promise<T[K][]>
+
+  /**
+   * Get an estimated count of documents in the collection.
+   *
+   * @returns Promise resolving to the estimated document count
+   *
+   * @remarks
+   * Returns a fast estimate of the document count using SQLite table statistics.
+   * This is much faster than count() for large collections but may not be exact.
+   *
+   * Uses SQLite's internal statistics which are updated periodically.
+   * For exact counts, use the count() method instead.
+   *
+   * @example
+   * ```typescript
+   * const estimate = await users.estimatedDocumentCount();
+   * console.log(`Approximately ${estimate} users`);
+   *
+   * // Compare with exact count
+   * const exact = await users.count({});
+   * console.log(`Exact: ${exact}, Estimated: ${estimate}`);
+   * ```
+   */
+  estimatedDocumentCount(): Promise<number>
+
+  /**
+   * Drop the collection (delete the table).
+   *
+   * @returns Promise resolving when the collection is dropped
+   *
+   * @remarks
+   * Permanently deletes the collection and all its documents.
+   * This operation cannot be undone.
+   *
+   * The table and all associated indexes are removed from the database.
+   * Use with caution in production environments.
+   *
+   * @example
+   * ```typescript
+   * // Drop a temporary collection
+   * await tempCollection.drop();
+   *
+   * // Drop with confirmation
+   * if (confirm('Really delete all users?')) {
+   *   await users.drop();
+   * }
+   * ```
+   */
+  drop(): Promise<void>
 
   // ===== Validation =====
 

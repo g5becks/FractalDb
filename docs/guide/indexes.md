@@ -9,10 +9,10 @@ StrataDB stores documents as JSONB but creates **generated columns** for indexed
 ```sql
 -- What StrataDB creates for an indexed 'email' field:
 CREATE TABLE users (
-  id TEXT PRIMARY KEY,
+  _id TEXT PRIMARY KEY,
   body BLOB NOT NULL,                    -- JSONB document
-  createdAt INTEGER NOT NULL,
-  updatedAt INTEGER NOT NULL,
+  createdAt INTEGER,                     -- if timestamps enabled
+  updatedAt INTEGER,                     -- if timestamps enabled
   _email TEXT GENERATED ALWAYS AS (jsonb_extract(body, '$.email')) VIRTUAL
 );
 CREATE UNIQUE INDEX idx_users_email ON users(_email);

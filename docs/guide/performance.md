@@ -99,7 +99,6 @@ const users = db.collection<User>('users')
 
 Some operators bypass the cache due to complex value extraction:
 
-- `$regex` with RegExp objects
 - `$elemMatch` (nested array matching)
 - `$index` (array index access)
 - `$all` (array containment)
@@ -170,7 +169,7 @@ const schema = createSchema<User>()
 await users.find({ email: 'alice@example.com' })
 
 // ❌ Slower - non-indexed field
-await users.find({ bio: { $regex: /developer/ } })
+await users.find({ bio: { $like: '%developer%' } })
 ```
 
 ### 2. Limit Results Early

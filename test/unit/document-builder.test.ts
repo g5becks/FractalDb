@@ -13,17 +13,18 @@ describe("Document Builder", () => {
 
   describe("buildCompleteDocument", () => {
     it("should build complete document from partial data and metadata", () => {
-      const partial: Partial<Omit<TestUser, "id" | "createdAt" | "updatedAt">> =
-        {
-          name: "Alice",
-          email: "alice@example.com",
-          age: 30,
-          active: true,
-          tags: ["user"],
-        }
+      const partial: Partial<
+        Omit<TestUser, "_id" | "createdAt" | "updatedAt">
+      > = {
+        name: "Alice",
+        email: "alice@example.com",
+        age: 30,
+        active: true,
+        tags: ["user"],
+      }
 
       const metadata = {
-        id: "user-123",
+        _id: "user-123",
         createdAt: 1_700_000_000_000,
         updatedAt: 1_700_000_000_000,
       }
@@ -31,7 +32,7 @@ describe("Document Builder", () => {
       const result = buildCompleteDocument<TestUser>(partial, metadata)
 
       expect(result).toEqual({
-        id: "user-123",
+        _id: "user-123",
         name: "Alice",
         email: "alice@example.com",
         age: 30,
@@ -42,7 +43,7 @@ describe("Document Builder", () => {
       })
 
       // Verify type
-      expect(typeof result.id).toBe("string")
+      expect(typeof result._id).toBe("string")
       expect(typeof result.name).toBe("string")
       expect(typeof result.age).toBe("number")
       expect(typeof result.active).toBe("boolean")
@@ -54,7 +55,7 @@ describe("Document Builder", () => {
       }
 
       const metadata = {
-        id: "user-456",
+        _id: "user-456",
         createdAt: 1_700_000_005_000,
         updatedAt: 1_700_000_005_000,
       }
@@ -64,7 +65,7 @@ describe("Document Builder", () => {
       const result = buildCompleteDocument<MinimalUser>(partial, metadata)
 
       expect(result).toEqual({
-        id: "user-456",
+        _id: "user-456",
         name: "Bob",
         createdAt: 1_700_000_005_000,
         updatedAt: 1_700_000_005_000,
@@ -72,21 +73,22 @@ describe("Document Builder", () => {
     })
 
     it("should handle empty partial data", () => {
-      const partial: Partial<Omit<TestUser, "id" | "createdAt" | "updatedAt">> =
-        {}
+      const partial: Partial<
+        Omit<TestUser, "_id" | "createdAt" | "updatedAt">
+      > = {}
 
       const metadata = {
-        id: "user-empty",
+        _id: "user-empty",
         createdAt: 1_700_000_010_000,
         updatedAt: 1_700_000_010_000,
       }
 
-      type EmptyUser = Document<{}>
+      type EmptyUser = Document<Record<string, never>>
 
       const result = buildCompleteDocument<EmptyUser>(partial, metadata)
 
       expect(result).toEqual({
-        id: "user-empty",
+        _id: "user-empty",
         createdAt: 1_700_000_010_000,
         updatedAt: 1_700_000_010_000,
       })
@@ -95,19 +97,19 @@ describe("Document Builder", () => {
     it("should override partial data with metadata fields", () => {
       // If partial contains metadata fields, metadata should take precedence
       const partial: Partial<
-        Omit<TestUser, "id" | "createdAt" | "updatedAt">
+        Omit<TestUser, "_id" | "createdAt" | "updatedAt">
       > & {
-        id?: string
+        _id?: string
         createdAt?: number
         updatedAt?: number
       } = {
         name: "Charlie",
-        id: "partial-id", // This should be overridden
+        _id: "partial-id", // This should be overridden
         createdAt: 1_600_000_000_000, // This should be overridden
       }
 
       const metadata = {
-        id: "correct-id",
+        _id: "correct-id",
         createdAt: 1_700_000_000_000,
         updatedAt: 1_700_000_015_000,
       }
@@ -115,7 +117,7 @@ describe("Document Builder", () => {
       const result = buildCompleteDocument<TestUser>(partial, metadata)
 
       expect(result).toEqual({
-        id: "correct-id", // Metadata value should win
+        _id: "correct-id", // Metadata value should win
         name: "Charlie",
         createdAt: 1_700_000_000_000, // Metadata value should win
         updatedAt: 1_700_000_015_000,
@@ -136,7 +138,7 @@ describe("Document Builder", () => {
       }
 
       const metadata = {
-        id: "user-789",
+        _id: "user-789",
         createdAt: 1_700_000_020_000,
         updatedAt: 1_700_000_020_000,
       }
@@ -144,7 +146,7 @@ describe("Document Builder", () => {
       const result = buildCompleteDocument<TestUser>(partial, metadata)
 
       expect(result).toEqual({
-        id: "user-789",
+        _id: "user-789",
         name: "Diana",
         email: "diana@example.com",
         age: 25,
@@ -156,7 +158,7 @@ describe("Document Builder", () => {
     })
 
     it("should handle partial as complete object without metadata fields", () => {
-      const partial: Omit<TestUser, "id" | "createdAt" | "updatedAt"> = {
+      const partial: Omit<TestUser, "_id" | "createdAt" | "updatedAt"> = {
         name: "Eve",
         email: "eve@example.com",
         age: 35,
@@ -165,7 +167,7 @@ describe("Document Builder", () => {
       }
 
       const metadata = {
-        id: "user-999",
+        _id: "user-999",
         createdAt: 1_700_000_025_000,
         updatedAt: 1_700_000_025_000,
       }
@@ -173,7 +175,7 @@ describe("Document Builder", () => {
       const result = buildCompleteDocument<TestUser>(partial, metadata)
 
       expect(result).toEqual({
-        id: "user-999",
+        _id: "user-999",
         name: "Eve",
         email: "eve@example.com",
         age: 35,
@@ -188,7 +190,7 @@ describe("Document Builder", () => {
       const partial = { name: "Frank" }
 
       const metadata = {
-        id: "user-type-test",
+        _id: "user-type-test",
         createdAt: 1_700_000_030_000,
         updatedAt: 1_700_000_030_000,
       }
@@ -198,7 +200,7 @@ describe("Document Builder", () => {
       const result = buildCompleteDocument<SimpleUser>(partial, metadata)
 
       // TypeScript should correctly infer that result is of type SimpleUser
-      expect(result.id).toBe("user-type-test")
+      expect(result._id).toBe("user-type-test")
       expect(result.name).toBe("Frank")
       expect(result.createdAt).toBe(1_700_000_030_000)
       expect(result.updatedAt).toBe(1_700_000_030_000)
@@ -226,7 +228,7 @@ describe("Document Builder", () => {
       }
 
       const metadata = {
-        id: "user-nested",
+        _id: "user-nested",
         createdAt: 1_700_000_035_000,
         updatedAt: 1_700_000_035_000,
       }
@@ -234,7 +236,7 @@ describe("Document Builder", () => {
       const result = buildCompleteDocument<UserWithProfile>(partial, metadata)
 
       expect(result).toEqual({
-        id: "user-nested",
+        _id: "user-nested",
         name: "Grace",
         profile: {
           age: 28,

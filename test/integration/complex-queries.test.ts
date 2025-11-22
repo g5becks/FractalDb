@@ -405,50 +405,6 @@ describe("Complex Query Integration Tests", () => {
   })
 
   describe("String Operators", () => {
-    // biome-ignore lint/suspicious/noSkippedTests: TODO: Requires REGEXP function to be registered with SQLite
-    it.skip("should handle $regex operator correctly", async () => {
-      const schema = createSchema<Product>()
-        .field("name", { type: "TEXT", indexed: true })
-        .build()
-
-      const products = db.collection("products", schema)
-
-      await products.insertMany([
-        {
-          name: "Laptop Pro",
-          category: "Electronics",
-          price: 999,
-          tags: [],
-          inStock: true,
-          rating: 4.5,
-        },
-        {
-          name: "Laptop Air",
-          category: "Electronics",
-          price: 799,
-          tags: [],
-          inStock: true,
-          rating: 4.4,
-        },
-        {
-          name: "Desktop PC",
-          category: "Electronics",
-          price: 1299,
-          tags: [],
-          inStock: true,
-          rating: 4.3,
-        },
-      ])
-
-      const results = await products.find({
-        name: { $regex: "Laptop" },
-      })
-
-      expect(results).toHaveLength(2)
-      const names = results.map((p) => p.name).sort()
-      expect(names).toEqual(["Laptop Air", "Laptop Pro"])
-    })
-
     it("should handle $like operator correctly", async () => {
       const schema = createSchema<Product>()
         .field("name", { type: "TEXT", indexed: true })
@@ -765,7 +721,7 @@ describe("Complex Query Integration Tests", () => {
       for (const product of results) {
         expect(product.name).toBeDefined()
         expect(product.price).toBeDefined()
-        expect(product.id).toBeDefined() // ID always included
+        expect(product._id).toBeDefined() // ID always included
         expect(product.createdAt).toBeDefined() // Timestamps always included
         expect(product.updatedAt).toBeDefined()
         // category should not be included

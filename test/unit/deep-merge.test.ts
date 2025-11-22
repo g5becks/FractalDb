@@ -162,7 +162,7 @@ describe("Deep Merge Utilities", () => {
       }
 
       const metadata = {
-        id: "test-123",
+        _id: "test-123",
         updatedAt: 1_700_000_005_000,
         profile: { preferences: { notifications: false } }, // Partial update
         tags: ["admin"], // Replace array
@@ -174,7 +174,7 @@ describe("Deep Merge Utilities", () => {
       )
 
       expect(result).toEqual({
-        id: "test-123",
+        _id: "test-123",
         name: "Alice",
         age: 30,
         profile: {
@@ -194,7 +194,7 @@ describe("Deep Merge Utilities", () => {
       }
 
       const metadata = {
-        id: "test-456",
+        _id: "test-456",
         createdAt: 1_700_000_000_000,
         updatedAt: 1_700_000_000_000,
       }
@@ -208,7 +208,7 @@ describe("Deep Merge Utilities", () => {
       )
 
       expect(result).toEqual({
-        id: "test-456",
+        _id: "test-456",
         name: "Bob",
         age: 25,
         createdAt: 1_700_000_000_000,
@@ -225,7 +225,7 @@ describe("Deep Merge Utilities", () => {
       }
 
       const metadata = {
-        id: "test-789",
+        _id: "test-789",
         updatedAt: 1_700_000_010_000,
         age: 36, // Update existing field
       }
@@ -238,7 +238,7 @@ describe("Deep Merge Utilities", () => {
       )
 
       expect(result).toEqual({
-        id: "test-789",
+        _id: "test-789",
         name: "Charlie", // Preserved
         age: 36, // Updated
         createdAt: 1_700_000_000_000, // Preserved
@@ -256,7 +256,7 @@ describe("Deep Merge Utilities", () => {
       }
 
       const metadata = {
-        id: "test-000",
+        _id: "test-000",
         updatedAt: 1_700_000_015_000,
         email: undefined, // Mark for deletion
       }
@@ -269,7 +269,7 @@ describe("Deep Merge Utilities", () => {
       )
 
       expect(result).toEqual({
-        id: "test-000",
+        _id: "test-000",
         name: "David",
         email: undefined, // Preserved as undefined for deletion
         age: 40,
@@ -287,7 +287,7 @@ describe("Deep Merge Utilities", () => {
       }
 
       const metadata = {
-        id: "test-eve",
+        _id: "test-eve",
         updatedAt: 1_700_000_020_000,
       }
 
@@ -299,11 +299,11 @@ describe("Deep Merge Utilities", () => {
       )
 
       // TypeScript should recognize the result as UserDoc type
-      expect(result.id).toBe("test-eve")
+      expect(result._id).toBe("test-eve")
       expect(result.name).toBe("Eve")
       expect(result.age).toBe(28)
       expect(result.updatedAt).toBe(1_700_000_020_000)
-      expect(typeof result.id).toBe("string")
+      expect(typeof result._id).toBe("string")
     })
   })
 })

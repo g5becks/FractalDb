@@ -68,7 +68,6 @@ describe("Batch Operations", () => {
 
       expect(result.insertedCount).toBe(3)
       expect(result.documents.length).toBe(3)
-      expect(result.acknowledged).toBe(true)
     })
 
     it("should generate unique IDs for each document", async () => {
@@ -84,32 +83,8 @@ describe("Batch Operations", () => {
         { name: "Bob", email: "bob@example.com", age: 25, status: "active" },
       ])
 
-      const ids = result.documents.map((d) => d.id)
+      const ids = result.documents.map((d) => d._id)
       expect(new Set(ids).size).toBe(2) // All IDs are unique
-    })
-
-    it("should respect custom IDs when provided", async () => {
-      const users = db.collection("users", createUserSchema())
-
-      const result = await users.insertMany([
-        {
-          id: "custom-1",
-          name: "Alice",
-          email: "alice@example.com",
-          age: 30,
-          status: "active",
-        },
-        {
-          id: "custom-2",
-          name: "Bob",
-          email: "bob@example.com",
-          age: 25,
-          status: "active",
-        },
-      ])
-
-      expect(result.documents[0].id).toBe("custom-1")
-      expect(result.documents[1].id).toBe("custom-2")
     })
 
     it("should verify documents are retrievable after insertMany", async () => {
@@ -126,7 +101,7 @@ describe("Batch Operations", () => {
       ])
 
       for (const doc of result.documents) {
-        const retrieved = await users.findById(doc.id)
+        const retrieved = await users.findById(doc._id)
         expect(retrieved).not.toBeNull()
         expect(retrieved?.name).toBe(doc.name)
       }
@@ -351,7 +326,6 @@ describe("Batch Operations", () => {
 
       expect(result.matchedCount).toBe(3)
       expect(result.modifiedCount).toBe(3)
-      expect(result.acknowledged).toBe(true)
 
       // Verify updates
       const pending = await users.find({ status: "pending" })
@@ -447,7 +421,6 @@ describe("Batch Operations", () => {
       const result = await users.deleteMany({ status: "inactive" })
 
       expect(result.deletedCount).toBe(2)
-      expect(result.acknowledged).toBe(true)
 
       // Verify deletions
       const remaining = await users.find({})

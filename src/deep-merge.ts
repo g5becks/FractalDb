@@ -116,7 +116,7 @@ export const deepMerge = deepmergeCustom({
  *   tags: string[];
  * }>;
  *
- * const existingBody: Omit<User, "id"> = {
+ * const existingBody: Omit<User, "_id"> = {
  *   name: 'Alice',
  *   profile: { age: 25, city: 'NYC' },
  *   tags: ['user'],
@@ -125,14 +125,14 @@ export const deepMerge = deepmergeCustom({
  * };
  *
  * const merged = mergeDocumentUpdate<User>(existingBody, {
- *   id: 'user-123',
+ *   _id: 'user-123',
  *   updatedAt: 2000,
  *   profile: { age: 26 }  // Partial update
  * });
  *
  * // Type: User (no casting needed!)
  * // Value: {
- * //   id: 'user-123',
+ * //   _id: 'user-123',
  * //   name: 'Alice',
  * //   profile: { age: 26, city: 'NYC' },  // Deep merged
  * //   tags: ['user'],
@@ -142,9 +142,9 @@ export const deepMerge = deepmergeCustom({
  * ```
  */
 export function mergeDocumentUpdate<
-  T extends { id: string },
-  U extends { id: string },
->(existingBody: Omit<T, "id">, metadata: U): T {
+  T extends { _id: string },
+  U extends { _id: string },
+>(existingBody: Omit<T, "_id">, metadata: U): T {
   // deepmerge-ts returns a complex inferred type that represents the merge result
   // For our use case (merging document body with metadata), the runtime result IS type T
   // TypeScript cannot prove this statically due to the complexity of deep merge inference

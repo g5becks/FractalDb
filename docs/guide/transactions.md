@@ -46,10 +46,10 @@ await db.execute(async (tx) => {
   const users = tx.collection('users', userSchema)
   const logs = tx.collection('logs', logSchema)
 
-  const result = await users.insertOne({ name: 'Alice' })
-  await logs.insertOne({ action: 'user_created', userId: result.document.id })
+  const user = await users.insertOne({ name: 'Alice' })
+  await logs.insertOne({ action: 'user_created', userId: user._id })
 
-  return result.document
+  return user
 })
 // Commits on success, rolls back on error
 ```
@@ -101,17 +101,17 @@ await db.execute(async (tx) => {
   const user = await users.insertOne({ email: 'new@example.com' })
 
   await profiles.insertOne({
-    userId: user.document.id,
+    userId: user._id,
     displayName: 'New User'
   })
 
   await settings.insertOne({
-    userId: user.document.id,
+    userId: user._id,
     theme: 'dark',
     notifications: true
   })
 
-  return user.document
+  return user
 })
 ```
 

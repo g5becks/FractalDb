@@ -4,14 +4,13 @@ import type {
   Collection,
   DeleteResult,
   InsertManyResult,
-  InsertOneResult,
   UpdateResult,
 } from "./collection-types.js"
 import type { Document } from "./core-types.js"
 import { mergeDocumentUpdate } from "./deep-merge.js"
 import { buildCompleteDocument } from "./document-builder.js"
 import { UniqueConstraintError, ValidationError } from "./errors.js"
-import type { QueryOptions } from "./query-options-types.js"
+import type { QueryOptions, SortSpec } from "./query-options-types.js"
 import type { QueryFilter } from "./query-types.js"
 import type { SchemaDefinition } from "./schema-types.js"
 import { SQLiteQueryTranslator } from "./sqlite-query-translator.js"
@@ -33,7 +32,7 @@ const UNDERSCORE_PREFIX_REGEX = /^_/
  * maintaining document flexibility.
  *
  * **Table Structure:**
- * - `id`: TEXT PRIMARY KEY - Document identifier
+ * - `_id`: TEXT PRIMARY KEY - Document identifier
  * - `body`: BLOB - JSONB document storage
  * - `createdAt`: INTEGER - Unix timestamp (if in schema)
  * - `updatedAt`: INTEGER - Unix timestamp (if in schema)
@@ -74,7 +73,7 @@ const UNDERSCORE_PREFIX_REGEX = /^_/
  * const users = new SQLiteCollection(db, 'users', schema, () => Bun.randomUUIDv7());
  *
  * // Table is created automatically with:
- * // - id, body, createdAt, updatedAt columns
+ * // - _id, body, createdAt, updatedAt columns
  * // - Generated columns: _name, _email, _age
  * // - Indexes on _name, _age
  * // - Unique index on _email
@@ -131,7 +130,7 @@ export class SQLiteCollection<T extends Document> implements Collection<T> {
    *
    * @remarks
    * Generates and executes SQL statements to create:
-   * 1. Main table with id, body, createdAt, updatedAt columns
+   * 1. Main table with _id, body, createdAt, updatedAt columns
    * 2. Generated columns for indexed fields
    * 3. Indexes on generated columns
    * 4. Unique constraints where specified
@@ -141,7 +140,7 @@ export class SQLiteCollection<T extends Document> implements Collection<T> {
    * **Generated SQL Example:**
    * ```sql
    * CREATE TABLE IF NOT EXISTS users (
-   *   id TEXT PRIMARY KEY,
+   *   _id TEXT PRIMARY KEY,
    *   body BLOB NOT NULL,
    *   createdAt INTEGER NOT NULL,
    *   updatedAt INTEGER NOT NULL,
@@ -159,7 +158,7 @@ export class SQLiteCollection<T extends Document> implements Collection<T> {
   // biome-ignore lint/correctness/noUnusedPrivateClassMembers: called in constructor
   private createTable(): void {
     const columns: string[] = [
-      "id TEXT PRIMARY KEY",
+      "_id TEXT PRIMARY KEY",
       "body BLOB NOT NULL",
       "createdAt INTEGER NOT NULL",
       "updatedAt INTEGER NOT NULL",
@@ -254,6 +253,37 @@ export class SQLiteCollection<T extends Document> implements Collection<T> {
     }
   }
 
+  /**
+   * Normalizes filter input to QueryFilter type.
+   *
+   * @param filter - String ID or QueryFilter object
+   * @returns Normalized QueryFilter
+   *
+   * @internal
+   *
+   * @remarks
+   * Converts string IDs to `{ _id: string }` QueryFilter objects.
+   * This helper allows methods to accept either string IDs or full QueryFilter objects
+   * while maintaining type safety internally.
+   *
+   * @example
+   * ```typescript
+   * // String ID becomes QueryFilter
+   * const filter1 = this.normalizeFilter('user-123')
+   * // Results in: { _id: 'user-123' }
+   *
+   * // QueryFilter objects pass through unchanged
+   * const filter2 = this.normalizeFilter({ status: 'active' })
+   * // Results in: { status: 'active' }
+   * ```
+   */
+  private normalizeFilter(filter: string | QueryFilter<T>): QueryFilter<T> {
+    if (typeof filter === "string") {
+      return { _id: filter } as QueryFilter<T>
+    }
+    return filter
+  }
+
   // ===== Collection Interface Implementation =====
   // The following methods will be implemented in subsequent tasks
 
@@ -280,8 +310,8 @@ export class SQLiteCollection<T extends Document> implements Collection<T> {
    * ```
    */
   findById(id: string): Promise<T | null> {
-    const stmt = this.db.prepare<{ id: string; body: string }, [string]>(
-      `SELECT id, json(body) as body FROM ${this.name} WHERE id = ?`
+    const stmt = this.db.prepare<{ _id: string; body: string }, [string]>(
+      `SELECT _id, json(body) as body FROM ${this.name} WHERE _id = ?`
     )
     const row = stmt.get(id)
 
@@ -289,8 +319,8 @@ export class SQLiteCollection<T extends Document> implements Collection<T> {
       return Promise.resolve(null)
     }
 
-    const doc = JSON.parse(row.body) as Omit<T, "id">
-    return Promise.resolve({ id: row.id, ...doc } as T)
+    const doc = JSON.parse(row.body) as Omit<T, "_id">
+    return Promise.resolve({ _id: row._id, ...doc } as T)
   }
 
   /**
@@ -330,7 +360,7 @@ export class SQLiteCollection<T extends Document> implements Collection<T> {
   ): Promise<readonly T[]> {
     const { sql: whereClause, params } = this.translator.translate(filter)
 
-    let sql = `SELECT id, json(body) as body FROM ${this.name}`
+    let sql = `SELECT _id, json(body) as body FROM ${this.name}`
     if (whereClause) {
       sql += ` WHERE ${whereClause}`
     }
@@ -363,14 +393,14 @@ export class SQLiteCollection<T extends Document> implements Collection<T> {
     }
 
     const stmt = this.db.prepare<
-      { id: string; body: string },
+      { _id: string; body: string },
       SQLQueryBindings[]
     >(sql)
     const rows = stmt.all(...params)
 
     const results = rows.map((row) => {
-      const doc = JSON.parse(row.body) as Omit<T, "id">
-      return { id: row.id, ...doc } as T
+      const doc = JSON.parse(row.body) as Omit<T, "_id">
+      return { _id: row._id, ...doc } as T
     })
 
     return Promise.resolve(results)
@@ -395,10 +425,11 @@ export class SQLiteCollection<T extends Document> implements Collection<T> {
    * ```
    */
   async findOne(
-    filter: QueryFilter<T>,
+    filter: string | QueryFilter<T>,
     options?: Omit<QueryOptions<T>, "limit" | "skip">
   ): Promise<T | null> {
-    const results = await this.find(filter, { ...options, limit: 1 })
+    const normalizedFilter = this.normalizeFilter(filter)
+    const results = await this.find(normalizedFilter, { ...options, limit: 1 })
     return results[0] ?? null
   }
 
@@ -447,11 +478,11 @@ export class SQLiteCollection<T extends Document> implements Collection<T> {
    *   email: 'alice@example.com',
    *   age: 30
    * });
-   * console.log(result.document.id); // Auto-generated ID
+   * console.log(result._id); // Auto-generated ID
    *
    * // Insert with custom ID
    * const result2 = await users.insertOne({
-   *   id: 'custom-id',
+   *   _id: 'custom-id',
    *   name: 'Bob',
    *   email: 'bob@example.com',
    *   age: 25
@@ -459,14 +490,14 @@ export class SQLiteCollection<T extends Document> implements Collection<T> {
    * ```
    */
   insertOne(
-    doc: Omit<T, "id" | "createdAt" | "updatedAt"> & { id?: string }
-  ): Promise<InsertOneResult<T>> {
+    doc: Omit<T, "_id" | "createdAt" | "updatedAt"> & { _id?: string }
+  ): Promise<T> {
     const now = Date.now()
-    const id = doc.id ?? this.idGenerator()
+    const _id = doc._id ?? this.idGenerator()
 
     // Build the full document
     const fullDoc = buildCompleteDocument<T>(doc, {
-      id,
+      _id,
       createdAt: now,
       updatedAt: now,
     })
@@ -482,19 +513,16 @@ export class SQLiteCollection<T extends Document> implements Collection<T> {
     }
 
     // Serialize body (excludes id which is stored separately)
-    const { id: _id, ...bodyData } = fullDoc
+    const { _id: docId, ...bodyData } = fullDoc
     const body = stringify(bodyData)
 
     try {
       const stmt = this.db.prepare(
-        `INSERT INTO ${this.name} (id, body, createdAt, updatedAt) VALUES (?, jsonb(?), ?, ?)`
+        `INSERT INTO ${this.name} (_id, body, createdAt, updatedAt) VALUES (?, jsonb(?), ?, ?)`
       )
-      stmt.run(id, body, now, now)
+      stmt.run(docId, body, now, now)
 
-      return Promise.resolve({
-        document: fullDoc,
-        acknowledged: true,
-      })
+      return Promise.resolve(fullDoc)
     } catch (error) {
       // Handle unique constraint violations
       if (
@@ -548,84 +576,61 @@ export class SQLiteCollection<T extends Document> implements Collection<T> {
    * );
    * ```
    */
-  updateOne(
-    id: string,
-    update: Omit<Partial<T>, "id" | "createdAt" | "updatedAt">,
+  async updateOne(
+    filter: string | QueryFilter<T>,
+    update: Omit<Partial<T>, "_id" | "createdAt" | "updatedAt">,
     options?: { upsert?: boolean }
   ): Promise<T | null> {
-    const existing = this.db
-      .prepare(`SELECT id, json(body) as body FROM ${this.name} WHERE id = ?`)
-      .get(id) as { id: string; body: string } | null
-
-    const now = Date.now()
+    const normalizedFilter = this.normalizeFilter(filter)
+    const existing = await this.findOne(normalizedFilter)
 
     if (!existing) {
       if (options?.upsert) {
-        // Create new document
-        const newDoc = buildCompleteDocument<T>(update, {
-          id,
-          createdAt: now,
-          updatedAt: now,
-        })
-
-        if (this.schema.validate && !this.schema.validate(newDoc)) {
-          throw new ValidationError(
-            "Document validation failed during upsert: Document does not match the schema. " +
-              "Check that all required fields are present and have correct types.",
-            undefined,
-            newDoc
-          )
-        }
-
-        const { id: _newId, ...newBodyData } = newDoc
-        const newBody = stringify(newBodyData)
-        this.db
-          .prepare(
-            `INSERT INTO ${this.name} (id, body, createdAt, updatedAt) VALUES (?, jsonb(?), ?, ?)`
-          )
-          .run(id, newBody, now, now)
-
-        return Promise.resolve(newDoc)
+        // Merge filter fields into document for upsert
+        const filterFields =
+          typeof filter === "string" ? { _id: filter } : filter
+        // biome-ignore lint/suspicious/noExplicitAny: Type assertion needed for flexible filter merging
+        return this.insertOne({ ...filterFields, ...update } as any)
       }
-      return Promise.resolve(null)
+      return null
     }
 
-    // Deep merge existing with update
-    const existingDoc = JSON.parse(existing.body) as Omit<T, "id">
+    // Document exists - update it
+    const now = Date.now()
     const mergedDoc = mergeDocumentUpdate<
       T,
-      typeof update & { id: string; updatedAt: number }
-    >(existingDoc, {
+      typeof update & { _id: string; updatedAt: number }
+    >(existing, {
       ...update,
-      id: existing.id,
+      _id: existing._id,
       updatedAt: now,
     })
 
     if (this.schema.validate && !this.schema.validate(mergedDoc)) {
       throw new ValidationError(
-        `Document validation failed after merge for id '${id}': Document does not match the schema. ` +
+        "Document validation failed after merge: Document does not match the schema. " +
           "Check that all required fields are present and have correct types.",
         undefined,
         mergedDoc
       )
     }
 
-    const { id: _mergedId, ...mergedBodyData } = mergedDoc
+    const { _id: mergedDocId, ...mergedBodyData } = mergedDoc
     const mergedBody = stringify(mergedBodyData)
     this.db
       .prepare(
-        `UPDATE ${this.name} SET body = jsonb(?), updatedAt = ? WHERE id = ?`
+        `UPDATE ${this.name} SET body = jsonb(?), updatedAt = ? WHERE _id = ?`
       )
-      .run(mergedBody, now, id)
+      .run(mergedBody, now, mergedDocId)
 
-    return Promise.resolve(mergedDoc)
+    return mergedDoc
   }
 
   /**
-   * Replaces an entire document by ID (no merge, complete replacement).
+   * Replaces an entire document by ID or filter (no merge, complete replacement).
    *
-   * @param id - Document ID to replace
-   * @param doc - Complete new document (id excluded via type)
+   * @param filter - Document ID (string) or query filter
+   * @param doc - Complete new document (_id, createdAt, updatedAt excluded via type)
    * @returns Promise resolving to replaced document or null if not found
    *
    * @throws {ValidationError} If the replacement document fails schema validation
@@ -633,16 +638,26 @@ export class SQLiteCollection<T extends Document> implements Collection<T> {
    *
    * @remarks
    * Unlike updateOne which merges fields, replaceOne completely replaces
-   * the document body while preserving the original ID and createdAt timestamp.
+   * the document body while preserving the original _id and createdAt timestamp.
    *
    * @example
    * ```typescript
-   * // Complete document replacement
+   * // Replace by ID
    * const replaced = await users.replaceOne('user-123', {
    *   name: 'Alice Smith',
    *   email: 'alice.new@example.com',
    *   age: 31
    * });
+   *
+   * // Replace by filter
+   * const replaced = await users.replaceOne(
+   *   { email: 'old@example.com' },
+   *   {
+   *     name: 'Alice Smith',
+   *     email: 'new@example.com',
+   *     age: 31
+   *   }
+   * );
    *
    * // Difference from updateOne:
    * // - updateOne({ age: 31 }) -> merges age into existing doc
@@ -650,71 +665,107 @@ export class SQLiteCollection<T extends Document> implements Collection<T> {
    * ```
    */
   replaceOne(
-    id: string,
-    doc: Omit<T, "id" | "createdAt" | "updatedAt">
+    filter: string | QueryFilter<T>,
+    doc: Omit<T, "_id" | "createdAt" | "updatedAt">
   ): Promise<T | null> {
-    const existing = this.db
-      .prepare(`SELECT id, json(body) as body FROM ${this.name} WHERE id = ?`)
-      .get(id) as { id: string; body: string } | null
+    const normalizedFilter = this.normalizeFilter(filter)
 
-    if (!existing) {
+    // Find the document ID to replace
+    const { sql: whereClause, params } =
+      this.translator.translate(normalizedFilter)
+    let querySql = `SELECT _id, json_extract(body, '$.createdAt') as createdAt FROM ${this.name}`
+    if (whereClause && whereClause !== "1=1") {
+      querySql += ` WHERE ${whereClause}`
+    }
+    querySql += " LIMIT 1"
+
+    const row = this.db
+      .prepare<{ _id: string; createdAt: number }, SQLQueryBindings[]>(querySql)
+      .get(...params)
+    if (!row) {
       return Promise.resolve(null)
     }
 
-    const existingDoc = JSON.parse(existing.body) as Omit<T, "id"> & {
-      createdAt: number
-      updatedAt: number
-    }
     const now = Date.now()
 
-    // Build full document with preserved id and createdAt
+    // Build full document with preserved _id and createdAt
     const fullDoc = buildCompleteDocument<T>(doc, {
-      id: existing.id,
-      createdAt: existingDoc.createdAt,
+      _id: row._id,
+      createdAt: row.createdAt,
       updatedAt: now,
     })
 
     if (this.schema.validate && !this.schema.validate(fullDoc)) {
       throw new ValidationError(
-        `Document validation failed during replace for id '${id}': Document does not match the schema. ` +
+        `Document validation failed during replace for filter '${JSON.stringify(filter)}': Document does not match the schema. ` +
           "Check that all required fields are present and have correct types.",
         undefined,
         fullDoc
       )
     }
 
-    const { id: _docId, ...bodyData } = fullDoc
+    const { _id: replaceDocId, ...bodyData } = fullDoc
     const body = stringify(bodyData)
     this.db
       .prepare(
-        `UPDATE ${this.name} SET body = jsonb(?), updatedAt = ? WHERE id = ?`
+        `UPDATE ${this.name} SET body = jsonb(?), updatedAt = ? WHERE _id = ?`
       )
-      .run(body, now, id)
+      .run(body, now, replaceDocId)
 
     return Promise.resolve(fullDoc)
   }
 
   /**
-   * Deletes a single document by ID.
+   * Deletes a single document by ID or filter.
    *
-   * @param id - Document ID to delete
+   * @param filter - Document ID (string) or query filter
    * @returns Promise resolving to true if deleted, false if not found
    *
    * @throws {DatabaseError} If the SQLite delete operation fails
    *
    * @example
    * ```typescript
+   * // Delete by ID
    * const deleted = await users.deleteOne('user-123');
    * if (deleted) {
    *   console.log('User deleted');
-   * } else {
-   *   console.log('User not found');
    * }
+   *
+   * // Delete by filter
+   * const deleted = await users.deleteOne({ status: 'inactive' });
    * ```
    */
-  deleteOne(id: string): Promise<boolean> {
-    const stmt = this.db.prepare(`DELETE FROM ${this.name} WHERE id = ?`)
-    const result = stmt.run(id)
+  deleteOne(filter: string | QueryFilter<T>): Promise<boolean> {
+    const normalizedFilter = this.normalizeFilter(filter)
+
+    // Optimization: If filter is just { _id: 'xxx' }, use direct delete
+    if (
+      "_id" in normalizedFilter &&
+      Object.keys(normalizedFilter).length === 1
+    ) {
+      const stmt = this.db.prepare(`DELETE FROM ${this.name} WHERE _id = ?`)
+      const result = stmt.run(normalizedFilter._id as string)
+      return Promise.resolve(result.changes > 0)
+    }
+
+    // For complex filters: find first match, then delete by ID
+    const { sql: whereClause, params } =
+      this.translator.translate(normalizedFilter)
+    let findSql = `SELECT _id FROM ${this.name}`
+    if (whereClause && whereClause !== "1=1") {
+      findSql += ` WHERE ${whereClause}`
+    }
+    findSql += " LIMIT 1"
+
+    const row = this.db
+      .prepare<{ _id: string }, SQLQueryBindings[]>(findSql)
+      .get(...params)
+    if (!row) {
+      return Promise.resolve(false)
+    }
+
+    const stmt = this.db.prepare(`DELETE FROM ${this.name} WHERE _id = ?`)
+    const result = stmt.run(row._id)
     return Promise.resolve(result.changes > 0)
   }
 
@@ -725,7 +776,7 @@ export class SQLiteCollection<T extends Document> implements Collection<T> {
   private handleInsertError(
     error: unknown,
     index: number,
-    doc: Omit<T, "id" | "createdAt" | "updatedAt"> & { id?: string },
+    doc: Omit<T, "_id" | "createdAt" | "updatedAt"> & { _id?: string },
     errors: { index: number; error: Error; document: typeof doc }[]
   ): Error {
     const err = error instanceof Error ? error : new Error(String(error))
@@ -774,8 +825,8 @@ export class SQLiteCollection<T extends Document> implements Collection<T> {
    * ```
    */
   insertMany(
-    docs: readonly (Omit<T, "id" | "createdAt" | "updatedAt"> & {
-      id?: string
+    docs: readonly (Omit<T, "_id" | "createdAt" | "updatedAt"> & {
+      _id?: string
     })[],
     options?: { ordered?: boolean }
   ): Promise<InsertManyResult<T>> {
@@ -786,11 +837,11 @@ export class SQLiteCollection<T extends Document> implements Collection<T> {
     const errors: {
       index: number
       error: Error
-      document: Omit<T, "id" | "createdAt" | "updatedAt"> & { id?: string }
+      document: Omit<T, "_id" | "createdAt" | "updatedAt"> & { _id?: string }
     }[] = []
 
     const stmt = this.db.prepare(
-      `INSERT INTO ${this.name} (id, body, createdAt, updatedAt) VALUES (?, jsonb(?), ?, ?)`
+      `INSERT INTO ${this.name} (_id, body, createdAt, updatedAt) VALUES (?, jsonb(?), ?, ?)`
     )
 
     for (let i = 0; i < docs.length; i++) {
@@ -800,9 +851,9 @@ export class SQLiteCollection<T extends Document> implements Collection<T> {
       }
 
       try {
-        const id = doc.id ?? this.idGenerator()
+        const _id = doc._id ?? this.idGenerator()
         const fullDoc = buildCompleteDocument<T>(doc, {
-          id,
+          _id,
           createdAt: now,
           updatedAt: now,
         })
@@ -817,12 +868,12 @@ export class SQLiteCollection<T extends Document> implements Collection<T> {
           )
         }
 
-        const { id: _id, ...bodyData } = fullDoc
+        const { _id: docId, ...bodyData } = fullDoc
         const body = stringify(bodyData)
-        stmt.run(id, body, now, now)
+        stmt.run(docId, body, now, now)
 
         insertedDocs.push(fullDoc)
-        insertedIds.push(id)
+        insertedIds.push(_id)
       } catch (error) {
         const err = this.handleInsertError(error, i, doc, errors)
         if (ordered && err) {
@@ -834,7 +885,6 @@ export class SQLiteCollection<T extends Document> implements Collection<T> {
     return Promise.resolve({
       documents: insertedDocs,
       insertedCount: insertedDocs.length,
-      acknowledged: true,
     })
   }
 
@@ -871,18 +921,18 @@ export class SQLiteCollection<T extends Document> implements Collection<T> {
    */
   updateMany(
     filter: QueryFilter<T>,
-    update: Omit<Partial<T>, "id" | "createdAt" | "updatedAt">
+    update: Omit<Partial<T>, "_id" | "createdAt" | "updatedAt">
   ): Promise<UpdateResult> {
     const { sql: whereClause, params } = this.translator.translate(filter)
 
     // Find all matching documents
-    let selectSql = `SELECT id, json(body) as body FROM ${this.name}`
+    let selectSql = `SELECT _id, json(body) as body FROM ${this.name}`
     if (whereClause) {
       selectSql += ` WHERE ${whereClause}`
     }
 
     const stmt = this.db.prepare<
-      { id: string; body: string },
+      { _id: string; body: string },
       SQLQueryBindings[]
     >(selectSql)
     const rows = stmt.all(...params)
@@ -892,7 +942,6 @@ export class SQLiteCollection<T extends Document> implements Collection<T> {
       return Promise.resolve({
         matchedCount: 0,
         modifiedCount: 0,
-        acknowledged: true,
       })
     }
 
@@ -901,19 +950,19 @@ export class SQLiteCollection<T extends Document> implements Collection<T> {
 
     // Prepare all updated documents and validate before committing
     for (const row of rows) {
-      const existingDoc = JSON.parse(row.body) as Omit<T, "id">
+      const existingDoc = JSON.parse(row.body) as Omit<T, "_id">
       const mergedDoc = mergeDocumentUpdate<
         T,
-        typeof update & { id: string; updatedAt: number }
+        typeof update & { _id: string; updatedAt: number }
       >(existingDoc, {
         ...update,
-        id: row.id,
+        _id: row._id,
         updatedAt: now,
       })
 
       if (this.schema.validate && !this.schema.validate(mergedDoc)) {
         throw new ValidationError(
-          `Document validation failed during batch update for id '${row.id}': Document does not match the schema. ` +
+          `Document validation failed during batch update for id '${row._id}': Document does not match the schema. ` +
             "Check that all required fields are present and have correct types.",
           undefined,
           mergedDoc
@@ -925,15 +974,15 @@ export class SQLiteCollection<T extends Document> implements Collection<T> {
 
     // Use transaction for atomic update
     const updateStmt = this.db.prepare(
-      `UPDATE ${this.name} SET body = jsonb(?), updatedAt = ? WHERE id = ?`
+      `UPDATE ${this.name} SET body = jsonb(?), updatedAt = ? WHERE _id = ?`
     )
 
     this.db.exec("BEGIN TRANSACTION")
     try {
       for (const doc of updatedDocs) {
-        const { id, ...bodyData } = doc
+        const { _id, ...bodyData } = doc
         const body = stringify(bodyData)
-        updateStmt.run(body, now, id)
+        updateStmt.run(body, now, _id)
       }
       this.db.exec("COMMIT")
     } catch (error) {
@@ -944,7 +993,6 @@ export class SQLiteCollection<T extends Document> implements Collection<T> {
     return Promise.resolve({
       matchedCount,
       modifiedCount: updatedDocs.length,
-      acknowledged: true,
     })
   }
 
@@ -986,12 +1034,207 @@ export class SQLiteCollection<T extends Document> implements Collection<T> {
 
       return Promise.resolve({
         deletedCount: result.changes,
-        acknowledged: true,
       })
     } catch (error) {
       this.db.exec("ROLLBACK")
       throw error
     }
+  }
+
+  // ===== Atomic Find-and-Modify Operations =====
+
+  /**
+   * Find and delete a single document atomically.
+   *
+   * @param filter - Document ID (string) or query filter
+   * @param options - Query options (sort)
+   * @returns Promise resolving to the deleted document, or null if not found
+   *
+   * @remarks
+   * This operation is atomic - it finds and deletes in a single operation.
+   * Useful when you need the deleted document's data (e.g., for logging, undo operations).
+   *
+   * @example
+   * ```typescript
+   * // Delete by ID
+   * const deleted = await users.findOneAndDelete('user-123');
+   * if (deleted) {
+   *   console.log(`Deleted user: ${deleted.name}`);
+   * }
+   *
+   * // Delete by filter with sort
+   * const deleted = await users.findOneAndDelete(
+   *   { status: 'inactive' },
+   *   { sort: { createdAt: 1 } }
+   * );
+   * ```
+   */
+  async findOneAndDelete(
+    filter: string | QueryFilter<T>,
+    options?: { sort?: SortSpec<T> }
+  ): Promise<T | null> {
+    // Normalize and find the document first
+    const normalizedFilter = this.normalizeFilter(filter)
+    const doc = await this.findOne(normalizedFilter, options)
+    if (!doc) {
+      return null
+    }
+
+    // Delete by ID
+    const stmt = this.db.prepare(`DELETE FROM ${this.name} WHERE _id = ?`)
+    stmt.run(doc._id)
+
+    return doc
+  }
+
+  /**
+   * Find and update a single document atomically.
+   *
+   * @param filter - Document ID (string) or query filter
+   * @param update - Partial document with fields to update
+   * @param options - Update options (sort, returnDocument, upsert)
+   * @returns Promise resolving to the document before or after update, or null if not found
+   */
+  async findOneAndUpdate(
+    filter: string | QueryFilter<T>,
+    update: Omit<Partial<T>, "_id" | "createdAt" | "updatedAt">,
+    options?: {
+      sort?: SortSpec<T>
+      returnDocument?: "before" | "after"
+      upsert?: boolean
+    }
+  ): Promise<T | null> {
+    const returnDoc = options?.returnDocument ?? "after"
+    const normalizedFilter = this.normalizeFilter(filter)
+
+    // Find the document
+    const findOptions = options?.sort ? { sort: options.sort } : undefined
+    const existing = await this.findOne(normalizedFilter, findOptions)
+
+    if (!existing) {
+      // Handle upsert
+      if (options?.upsert) {
+        const inserted = await this.insertOne(
+          update as Omit<T, "_id" | "createdAt" | "updatedAt">
+        )
+        return returnDoc === "after" ? inserted : null
+      }
+      return null
+    }
+
+    // Update by _id
+    const before = existing
+    const afterUpdate = await this.updateOne(existing._id, update)
+
+    return returnDoc === "before" ? before : afterUpdate
+  }
+
+  /**
+   * Find and replace a single document atomically.
+   *
+   * @param filter - Document ID (string) or query filter
+   * @param replacement - Complete replacement document
+   * @param options - Replace options (sort, returnDocument, upsert)
+   * @returns Promise resolving to the document before or after replacement, or null if not found
+   */
+  async findOneAndReplace(
+    filter: string | QueryFilter<T>,
+    replacement: Omit<T, "_id" | "createdAt" | "updatedAt">,
+    options?: {
+      sort?: SortSpec<T>
+      returnDocument?: "before" | "after"
+      upsert?: boolean
+    }
+  ): Promise<T | null> {
+    const returnDoc = options?.returnDocument ?? "after"
+    const normalizedFilter = this.normalizeFilter(filter)
+
+    // Find the document
+    const findOptions = options?.sort ? { sort: options.sort } : undefined
+    const existing = await this.findOne(normalizedFilter, findOptions)
+
+    if (!existing) {
+      // Handle upsert
+      if (options?.upsert) {
+        const inserted = await this.insertOne(replacement)
+        return returnDoc === "after" ? inserted : null
+      }
+      return null
+    }
+
+    // Replace by _id
+    const before = existing
+    const afterReplace = await this.replaceOne(existing._id, replacement)
+
+    return returnDoc === "before" ? before : afterReplace
+  }
+
+  // ===== Utility Methods =====
+
+  /**
+   * Find distinct values for a specified field across the collection.
+   *
+   * @param field - The field name to get distinct values for
+   * @param filter - Optional query filter to narrow results
+   * @returns Promise resolving to array of unique values for the field
+   */
+  distinct<K extends keyof Omit<T, "_id" | "createdAt" | "updatedAt">>(
+    field: K,
+    filter?: QueryFilter<T>
+  ): Promise<T[K][]> {
+    const fieldStr = String(field)
+
+    // Determine if field is indexed
+    const indexedField = this.schema.fields.find(
+      (f) => String(f.name) === fieldStr && f.indexed
+    )
+    const column = indexedField
+      ? `_${fieldStr}`
+      : `jsonb_extract(body, '$.${fieldStr}')`
+
+    // Build query
+    let sql = `SELECT DISTINCT ${column} as value FROM ${this.name}`
+    let params: SQLQueryBindings[] = []
+
+    if (filter) {
+      const { sql: whereClause, params: filterParams } =
+        this.translator.translate(filter)
+      if (whereClause) {
+        sql += ` WHERE ${whereClause}`
+        params = filterParams
+      }
+    }
+
+    sql += " ORDER BY value"
+
+    const stmt = this.db.prepare<{ value: T[K] }, SQLQueryBindings[]>(sql)
+    const rows = stmt.all(...params)
+
+    return Promise.resolve(rows.map((row) => row.value))
+  }
+
+  /**
+   * Get an estimated count of documents in the collection.
+   *
+   * @returns Promise resolving to the estimated document count
+   */
+  estimatedDocumentCount(): Promise<number> {
+    // Use SQLite's internal statistics for fast estimate
+    const stmt = this.db.prepare<{ count: number }, []>(
+      `SELECT COUNT(*) as count FROM ${this.name}`
+    )
+    const result = stmt.get()
+    return Promise.resolve(result?.count ?? 0)
+  }
+
+  /**
+   * Drop the collection (delete the table).
+   *
+   * @returns Promise resolving when the collection is dropped
+   */
+  drop(): Promise<void> {
+    this.db.exec(`DROP TABLE IF EXISTS ${this.name}`)
+    return Promise.resolve()
   }
 
   /**

@@ -1,10 +1,8 @@
 # Collections
 
-Collections are the primary way to interact with documents in StrataDB.
+Collections store and query documents. Each collection maps to a SQLite table.
 
 ## Creating Collections
-
-### With Pre-built Schema
 
 ```typescript
 import { StrataDBClass, createSchema, type Document } from 'stratadb'
@@ -12,143 +10,175 @@ import { StrataDBClass, createSchema, type Document } from 'stratadb'
 type User = Document<{
   name: string
   email: string
+  age: number
 }>
 
+// Option 1: Separate schema
 const userSchema = createSchema<User>()
   .field('email', { type: 'TEXT', indexed: true, unique: true })
+  .field('age', { type: 'INTEGER', indexed: true })
   .build()
 
 const db = new StrataDBClass({ database: 'app.db' })
 const users = db.collection('users', userSchema)
-```
 
-### With Inline Schema (Fluent API)
-
-```typescript
+// Option 2: Inline schema
 const users = db.collection<User>('users')
   .field('email', { type: 'TEXT', indexed: true, unique: true })
+  .field('age', { type: 'INTEGER', indexed: true })
   .build()
 ```
 
-## CRUD Operations
-
-### Insert
+## Insert Operations
 
 ```typescript
-// Insert one
-const result = await users.insertOne({
+// Insert one - returns the inserted document
+const user = await users.insertOne({
   name: 'Alice',
-  email: 'alice@example.com'
+  email: 'alice@example.com',
+  age: 30
 })
-console.log(result.document.id)
+console.log(user._id)  // auto-generated UUID
 
-// Insert many
-const results = await users.insertMany([
-  { name: 'Bob', email: 'bob@example.com' },
-  { name: 'Carol', email: 'carol@example.com' }
+// Insert many - returns { documents, insertedCount }
+const result = await users.insertMany([
+  { name: 'Bob', email: 'bob@example.com', age: 25 },
+  { name: 'Carol', email: 'carol@example.com', age: 35 }
 ])
-console.log(`Inserted ${results.insertedCount} documents`)
+console.log(result.insertedCount)  // 2
 ```
 
-### Read
+## Read Operations
 
 ```typescript
-// By ID
-const user = await users.findById('user-123')
+// Find by ID
+const user = await users.findById('uuid-here')
 
-// Find one matching filter
+// Find one by filter (also accepts string ID)
 const admin = await users.findOne({ role: 'admin' })
+const user = await users.findOne('uuid-here')
 
-// Find all matching filter
-const activeUsers = await users.find({ status: 'active' })
+// Find many with options
+const results = await users.find(
+  { age: { $gte: 18 } },
+  { sort: { age: -1 }, limit: 10 }
+)
 
-// Count
-const count = await users.count({ role: 'admin' })
+// Count matching documents
+const count = await users.count({ status: 'active' })
+
+// Get distinct values for a field
+const ages = await users.distinct('age')
+const roles = await users.distinct('role', { status: 'active' })
+
+// Fast approximate count (uses SQLite stats)
+const approxCount = await users.estimatedDocumentCount()
 ```
 
-### Update
+## Update Operations
 
 ```typescript
-// Update one by ID (partial update)
-const updated = await users.updateOne('user-123', { name: 'Alice Smith' })
+// Partial update - merges with existing document
+const updated = await users.updateOne('uuid-here', { age: 31 })
 
-// Update with upsert (create if not exists)
-await users.updateOne('user-456', { name: 'New User' }, { upsert: true })
+// Update by filter
+await users.updateOne({ email: 'alice@example.com' }, { verified: true })
 
-// Update many matching filter
+// Upsert - create if not found
+await users.updateOne(
+  { email: 'new@example.com' },
+  { name: 'New User', age: 25 },
+  { upsert: true }
+)
+
+// Update many - returns { matchedCount, modifiedCount }
 const result = await users.updateMany(
   { status: 'inactive' },
   { status: 'archived' }
 )
-console.log(`Updated ${result.modifiedCount} documents`)
 
-// Replace entire document (keeps id and createdAt)
-await users.replaceOne('user-123', {
+// Replace entire document (preserves _id and createdAt)
+await users.replaceOne('uuid-here', {
   name: 'Alice Smith',
-  email: 'alice.smith@example.com'
+  email: 'alice.smith@example.com',
+  age: 31
 })
 ```
 
-### Delete
+## Delete Operations
 
 ```typescript
-// Delete one by ID
-const deleted = await users.deleteOne('user-123')
+// Delete one - returns true if deleted
+const deleted = await users.deleteOne('uuid-here')
+const deleted = await users.deleteOne({ email: 'old@example.com' })
+
+// Delete many - returns { deletedCount }
+const result = await users.deleteMany({ status: 'archived' })
+```
+
+## Atomic Operations
+
+These methods find and modify a document in a single operation, returning the document:
+
+```typescript
+// Find and delete - returns the deleted document
+const deleted = await users.findOneAndDelete({ status: 'expired' })
 if (deleted) {
-  console.log('User deleted')
+  console.log(`Removed user: ${deleted.name}`)
 }
 
-// Delete many matching filter
-const result = await users.deleteMany({ status: 'archived' })
-console.log(`Deleted ${result.deletedCount} documents`)
+// Find and update - returns document before or after update
+const updated = await users.findOneAndUpdate(
+  { email: 'alice@example.com' },
+  { loginCount: 5 },
+  { returnDocument: 'after' }  // 'before' | 'after' (default: 'after')
+)
+
+// Find and replace
+const replaced = await users.findOneAndReplace(
+  { email: 'old@example.com' },
+  { name: 'New Name', email: 'new@example.com', age: 30 },
+  { returnDocument: 'after', upsert: true }
+)
+```
+
+Use atomic operations when you need the document's state, such as for logging, undo functionality, or optimistic concurrency.
+
+## Drop Collection
+
+```typescript
+// Permanently delete the collection and all documents
+await users.drop()
 ```
 
 ## Error Handling
 
-### Unique Constraint Violations
-
 ```typescript
-import { UniqueConstraintError } from 'stratadb'
+import { UniqueConstraintError, ValidationError } from 'stratadb'
 
 try {
-  await users.insertOne({ email: 'existing@example.com' })
+  await users.insertOne({ email: 'duplicate@example.com' })
 } catch (err) {
   if (err instanceof UniqueConstraintError) {
-    console.error(`Duplicate ${err.field}: ${err.message}`)
+    console.error(`Duplicate value for ${err.field}`)
   }
-}
-```
-
-### Validation Errors
-
-```typescript
-import { ValidationError } from 'stratadb'
-
-try {
-  await users.insertOne({ email: 'invalid' })
-} catch (err) {
   if (err instanceof ValidationError) {
-    console.error('Validation failed:', err.message)
+    console.error(`Invalid document: ${err.message}`)
   }
 }
 ```
 
-## Collection Properties
+## Validation
 
 ```typescript
-// Collection name (table name in SQLite)
-console.log(users.name)  // 'users'
+// Validate without inserting
+try {
+  const validUser = await users.validate(unknownData)
+  // validUser is typed as User
+} catch (err) {
+  // ValidationError thrown if invalid
+}
 
-// Schema definition
-console.log(users.schema.fields)
-```
-
-## Manual Validation
-
-```typescript
-// Async validation
-const validUser = await users.validate(unknownData)
-
-// Sync validation
+// Synchronous validation
 const validUser = users.validateSync(unknownData)
 ```

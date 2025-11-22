@@ -59,7 +59,7 @@ const simpleQuery: QueryFilter<User> = {
 // ✅ Field operators
 const operatorQuery: QueryFilter<User> = {
   age: { $gt: 18, $lte: 65 },
-  email: { $regex: /@example\.com$/ }
+  email: { $like: '%@example.com$' }
 };
 
 // ✅ Nested path queries (dot notation)
@@ -70,7 +70,7 @@ const nestedQuery: QueryFilter<User> = {
 
 // ✅ Nested paths with operators
 const nestedOperatorQuery: QueryFilter<User> = {
-  'profile.bio': { $regex: /engineer/i },
+  'profile.bio': { $like: '%engineer%' },
   'profile.settings.theme': { $in: ['light', 'dark'] }
 };
 
@@ -102,7 +102,7 @@ const complexQuery: QueryFilter<User> = {
     },
     {
       $not: {
-        email: { $regex: /@spam\.com$/ }
+        email: { $like: '%@spam.com$' }
       }
     },
     {

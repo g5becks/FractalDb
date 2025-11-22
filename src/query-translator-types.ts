@@ -120,7 +120,7 @@ export function createQueryResult(
  * - Generate parameter placeholders in the SQL string
  * - Extract parameter values into the params array
  * - Handle nested queries and logical operators
- * - Support all query operators ($eq, $gt, $regex, etc.)
+ * - Support all query operators ($eq, $gt, $like, $startsWith, $endsWith, etc.)
  *
  * **SQL Injection Prevention:**
  * All translators must produce parameterized queries. User-provided values are never
@@ -192,7 +192,7 @@ export function createQueryResult(
  *     { status: 'active' },
  *     {
  *       $or: [
- *         { name: { $regex: /^admin/i } },
+ *         { name: { $startsWith: 'admin' } },
  *         { email: { $like: '%@company.com' } }
  *       ]
  *     }
@@ -205,7 +205,7 @@ export function createQueryResult(
  * // "(age >= ? AND age <= ?) AND status = ? AND (name LIKE ? OR email LIKE ?)"
  *
  * // Generated params:
- * // [18, 65, 'active', '%admin%', '%@company.com']
+ * // [18, 65, 'active', 'admin%', '%@company.com']
  * ```
  */
 export type QueryTranslator<T extends Document> = {
@@ -242,8 +242,8 @@ export type QueryTranslator<T extends Document> = {
    * // => { sql: "(age >= ? AND age < ?)", params: [18, 65] }
    *
    * // String operators
-   * translator.translate({ email: { $regex: /@example\\.com$/ } });
-   * // => { sql: "email REGEXP ?", params: ['@example\\.com$'] }
+   * translator.translate({ email: { $endsWith: '@example.com' } });
+   * // => { sql: "email LIKE ?", params: ['%@example.com'] }
    *
    * // Array operators
    * translator.translate({ tags: { $all: ['admin', 'verified'] } });
