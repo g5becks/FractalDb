@@ -4,7 +4,7 @@ import typedocSidebar from "../api/typedoc-sidebar.json"
 export default defineConfig({
   title: "StrataDB",
   description: "Type-safe document database built on bun:sqlite",
-  base: "/stratadb/",
+  base: "/StrataDB/",
 
   themeConfig: {
     nav: [
