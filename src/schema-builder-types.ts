@@ -1,6 +1,6 @@
 import type { Document } from "./core-types.js"
 import type { JsonPath } from "./path-types.js"
-import type { SchemaDefinition, TypeScriptToSQLite } from "./schema-types.js"
+import type { SchemaDefinition } from "./schema-types.js"
 
 /**
  * Fluent builder interface for defining collection schemas.
@@ -51,32 +51,28 @@ export type SchemaBuilder<T extends Document> = {
   /**
    * Define an indexed field with type checking.
    *
-   * @param name - The field name from the document type
+   * @param name - The field name (supports dot notation for nested fields like 'profile.bio' or 'watchlistItem.ticker')
    * @param options - Field configuration options
    * @returns This builder instance for method chaining
    *
    * @remarks
-   * The `path` option is optional and defaults to `$.{name}` for top-level fields.
-   * Only specify `path` when accessing nested properties or creating custom field mappings.
+   * Field names support dot notation for accessing nested properties.
+   * When a dot is detected in the name, it automatically becomes the JSON path.
    *
-   * The `type` parameter is constrained to valid SQLite types for the TypeScript type,
-   * ensuring compile-time type safety between your document definition and database schema.
+   * For top-level fields, the path defaults to `$.{name}`.
+   * For nested fields like 'profile.bio', the path becomes '$.profile.bio'.
+   * For deeply nested fields, any nesting depth is supported.
    *
    * @example
    * ```typescript
-   * // ✅ Top-level field (path defaults to $.name)
+   * // ✅ Top-level fields
    * .field('name', { type: 'TEXT', indexed: true })
+   * .field('email', { type: 'TEXT', indexed: true, unique: true })
    *
-   * // ✅ Nested property with explicit path
-   * .field('bio', { path: '$.profile.bio', type: 'TEXT', indexed: true })
-   *
-   * // ✅ Unique email with nullable constraint
-   * .field('email', {
-   *   type: 'TEXT',
-   *   indexed: true,
-   *   unique: true,
-   *   nullable: false
-   * })
+   * // ✅ Nested fields with dot notation
+   * .field('profile.bio', { type: 'TEXT', indexed: true })
+   * .field('watchlistItem.ticker', { type: 'TEXT', indexed: true })
+   * .field('user.settings.theme', { type: 'TEXT', indexed: true })
    *
    * // ✅ Field with default value
    * .field('status', {
@@ -84,18 +80,15 @@ export type SchemaBuilder<T extends Document> = {
    *   indexed: true,
    *   default: 'active'
    * })
-   *
-   * // ❌ Compiler error - type mismatch
-   * .field('name', { type: 'INTEGER' })  // Error: string field cannot use INTEGER
    * ```
    */
-  field<K extends keyof T>(
+  field<K extends keyof T | string>(
     name: K,
     options: {
-      /** JSON path (defaults to $.{name} if omitted) */
+      /** JSON path (defaults to $.{name} if omitted, or auto-generated from dot notation) */
       readonly path?: JsonPath
-      /** SQLite column type (must match TypeScript type) */
-      readonly type: TypeScriptToSQLite<T[K]>
+      /** SQLite column type */
+      readonly type: string
       /** Whether field can be null */
       readonly nullable?: boolean
       /** Create index for faster queries */
@@ -103,7 +96,7 @@ export type SchemaBuilder<T extends Document> = {
       /** Enforce uniqueness constraint */
       readonly unique?: boolean
       /** Default value when not provided */
-      readonly default?: T[K]
+      readonly default?: unknown
     }
   ): SchemaBuilder<T>
 
@@ -111,21 +104,25 @@ export type SchemaBuilder<T extends Document> = {
    * Define a compound index spanning multiple fields.
    *
    * @param name - Unique name for the index
-   * @param fields - Array of field names (order matters for query optimization)
+   * @param fields - Array of field names (order matters, supports dot notation for nested fields)
    * @param options - Index options (unique constraint)
    * @returns This builder instance for method chaining
    *
    * @remarks
    * Compound indexes improve query performance when filtering by multiple fields together.
+   * Field names can use dot notation to reference nested properties.
    * The order of fields matters - queries must use fields from left to right for the
    * index to be effective.
    *
    * @example
    * ```typescript
-   * // ✅ Compound index for common query pattern
+   * // ✅ Compound index for top-level fields
    * .compoundIndex('age_status', ['age', 'status'])
    *
-   * // ✅ Unique compound constraint (e.g., no duplicate email per tenant)
+   * // ✅ Compound index with nested fields
+   * .compoundIndex('watchlist_active', ['watchlistItem.ticker', 'isActive'])
+   *
+   * // ✅ Unique compound constraint
    * .compoundIndex('email_tenant', ['email', 'tenantId'], { unique: true })
    *
    * // Query optimization example:
@@ -137,7 +134,7 @@ export type SchemaBuilder<T extends Document> = {
    */
   compoundIndex(
     name: string,
-    fields: readonly (keyof T)[],
+    fields: readonly (keyof T | string)[],
     options?: { readonly unique?: boolean }
   ): SchemaBuilder<T>
 

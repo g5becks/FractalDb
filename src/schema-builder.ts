@@ -52,45 +52,63 @@ class SchemaBuilderImpl<T extends Document> implements SchemaBuilder<T> {
   /**
    * Define an indexed field with type checking.
    *
-   * @param name - The field name from the document type
+   * @param name - The field name (supports dot notation for nested fields, e.g., 'profile.bio' or 'watchlistItem.ticker')
    * @param options - Field configuration options
    * @returns This builder instance for method chaining
    *
    * @remarks
-   * If no path is provided, it defaults to `$.{name}` for top-level field access.
-   * This is a convenience feature that reduces boilerplate for common cases.
+   * Field names support dot notation for accessing nested properties.
+   * When a dot is detected in the name, it automatically becomes the JSON path.
+   *
+   * For top-level fields, the path defaults to `$.{name}`.
+   * For nested fields like 'profile.bio', the path becomes '$.profile.bio'.
+   * For deeply nested fields like 'user.profile.settings.theme', the path becomes '$.user.profile.settings.theme'.
    *
    * @example
    * ```typescript
    * builder
+   *   // Top-level fields
    *   .field('name', { type: 'TEXT', indexed: true })
    *   .field('email', { type: 'TEXT', indexed: true, unique: true })
-   *   .field('bio', { path: '$.profile.bio', type: 'TEXT', indexed: true })
+   *
+   *   // Nested fields (dot notation automatically becomes JSON path)
+   *   .field('profile.bio', { type: 'TEXT', indexed: true })
+   *   .field('watchlistItem.ticker', { type: 'TEXT', indexed: true })
+   *   .field('watchlistItem.symbol', { type: 'TEXT', indexed: true })
+   *   .field('user.settings.theme', { type: 'TEXT', indexed: true })
    * ```
    */
-  field<K extends keyof T>(
+  field<K extends keyof T | string>(
     name: K,
     options: {
       readonly path?: JsonPath
-      readonly type: TypeScriptToSQLite<T[K]>
+      readonly type: string
       readonly nullable?: boolean
       readonly indexed?: boolean
       readonly unique?: boolean
-      readonly default?: T[K]
+      readonly default?: unknown
     }
   ): SchemaBuilder<T> {
-    // Default path to $.{fieldName} if not provided
-    const path = options.path ?? (`$.${String(name)}` as JsonPath)
+    // If path is explicitly provided, use it
+    // Otherwise, if name contains a dot, it's a nested field - use as JSON path
+    // Otherwise, it's a top-level field - use $.{name}
+    const path =
+      options.path ??
+      (String(name).includes(".")
+        ? (`$.${String(name)}` as JsonPath)
+        : (`$.${String(name)}` as JsonPath))
 
     // Build field object conditionally to avoid undefined values
-    const field: SchemaField<T, K> = {
-      name,
+    const field: SchemaField<T, keyof T> = {
+      name: name as keyof T,
       path,
-      type: options.type,
+      type: options.type as TypeScriptToSQLite<T[keyof T]>,
       ...(options.nullable !== undefined && { nullable: options.nullable }),
       ...(options.indexed !== undefined && { indexed: options.indexed }),
       ...(options.unique !== undefined && { unique: options.unique }),
-      ...(options.default !== undefined && { default: options.default }),
+      ...(options.default !== undefined && {
+        default: options.default as T[keyof T],
+      }),
     }
 
     this.fields.push(field)
@@ -102,25 +120,36 @@ class SchemaBuilderImpl<T extends Document> implements SchemaBuilder<T> {
    * Define a compound index spanning multiple fields.
    *
    * @param name - Unique name for the index
-   * @param fields - Array of field names (order matters)
+   * @param fields - Array of field names (order matters, supports dot notation for nested fields)
    * @param options - Index options (unique constraint)
    * @returns This builder instance for method chaining
+   *
+   * @remarks
+   * Field names can use dot notation to reference nested properties.
+   * The field names must match those used in .field() declarations.
+   * This allows compound indexes across both top-level and nested fields.
    *
    * @example
    * ```typescript
    * builder
+   *   // Simple compound index
    *   .compoundIndex('age_status', ['age', 'status'])
+   *
+   *   // Compound index with nested fields (using dot notation)
+   *   .compoundIndex('watchlist_active', ['watchlistItem.ticker', 'isActive'])
+   *
+   *   // Unique compound constraint
    *   .compoundIndex('email_tenant', ['email', 'tenantId'], { unique: true })
    * ```
    */
   compoundIndex(
     name: string,
-    fields: readonly (keyof T)[],
+    fields: readonly (keyof T | string)[],
     options?: { readonly unique?: boolean }
   ): SchemaBuilder<T> {
     const index: CompoundIndex<T> = {
       name,
-      fields,
+      fields: fields as readonly (keyof T)[],
       ...(options?.unique !== undefined && { unique: options.unique }),
     }
 
@@ -202,47 +231,48 @@ class SchemaBuilderImpl<T extends Document> implements SchemaBuilder<T> {
 /**
  * Creates a new schema builder for defining collection schemas.
  *
- * @typeParam T - The document type extending Document
- * @returns A new SchemaBuilder instance
+ * @typeParam T - The document payload type (without _id, createdAt, updatedAt)
+ * @returns A new SchemaBuilder instance for Document<T>
  *
  * @remarks
- * This factory function creates a new `SchemaBuilder<T>` that provides
+ * This factory function creates a new `SchemaBuilder<Document<T>>` that provides
  * a fluent API for constructing schemas. The builder ensures type safety
  * at every step and returns an immutable schema definition when built.
+ *
+ * **Important**: Pass your payload type (without Document wrapper) to createSchema.
+ * The function automatically wraps it with Document<T> which adds _id, createdAt, updatedAt.
  *
  * @example
  * ```typescript
  * import { createSchema, type Document } from 'stratadb';
  *
- * type User = Document<{
+ * // Define your payload type (no _id needed!)
+ * type UserPayload = {
  *   name: string;
  *   email: string;
  *   age: number;
  *   status: 'active' | 'inactive';
- * }>;
+ * };
  *
- * // ✅ Create and build schema
- * const userSchema = createSchema<User>()
+ * // The full document type includes _id automatically
+ * type User = Document<UserPayload>;
+ *
+ * // ✅ Create schema using payload type
+ * const userSchema = createSchema<UserPayload>()
  *   .field('name', { type: 'TEXT', indexed: true })
  *   .field('email', { type: 'TEXT', indexed: true, unique: true })
  *   .field('age', { type: 'INTEGER', indexed: true })
  *   .field('status', { type: 'TEXT', indexed: true })
  *   .compoundIndex('age_status', ['age', 'status'])
  *   .timestamps(true)
- *   .validate((doc): doc is User => {
- *     return typeof doc === 'object' &&
- *            doc !== null &&
- *            'name' in doc &&
- *            typeof doc.name === 'string' &&
- *            'email' in doc &&
- *            typeof doc.email === 'string';
- *   })
  *   .build();
  *
- * // ✅ Use with database
+ * // ✅ Use with database (User type has _id automatically)
  * const users = db.collection<User>('users', userSchema);
  * ```
  */
-export function createSchema<T extends Document>(): SchemaBuilder<T> {
-  return new SchemaBuilderImpl<T>()
+export function createSchema<
+  T extends Record<string, unknown> = Record<string, unknown>,
+>(): SchemaBuilder<Document<T>> {
+  return new SchemaBuilderImpl<Document<T>>()
 }
