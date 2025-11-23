@@ -170,6 +170,30 @@ const users = await collection.find(
 `select` and `omit` are cleaner alternatives to `projection`. Use whichever style you prefer.
 :::
 
+::: tip Type-Safe Projections (v0.3.2+)
+The `select` and `omit` options are fully type-safe! TypeScript automatically narrows the return type based on your projection:
+
+```typescript
+// TypeScript knows this returns Pick<User, '_id' | 'name' | 'email'>[]
+const users = await collection.find(
+  { status: 'active' },
+  { select: ['name', 'email'] as const }
+)
+users[0].name      // ✅ TypeScript knows this exists
+users[0].password  // ❌ TypeScript error: Property 'password' does not exist
+
+// With omit, TypeScript returns Omit<User, 'password' | 'ssn'>[]
+const safeUsers = await collection.find(
+  { status: 'active' },
+  { omit: ['password', 'ssn'] as const }
+)
+safeUsers[0].name     // ✅ TypeScript knows this exists
+safeUsers[0].password // ❌ TypeScript error: Property 'password' does not exist
+```
+
+Use `as const` with your field arrays for the best type inference.
+:::
+
 ## Text Search (v0.3.0+)
 
 Search across multiple fields with the dedicated `search()` method:

@@ -14,6 +14,8 @@ import type {
   CursorSpec,
   ProjectionSpec,
   QueryOptions,
+  QueryOptionsWithOmit,
+  QueryOptionsWithSelect,
   SortSpec,
   TextSearchSpec,
 } from "./query-options-types.js"
@@ -618,6 +620,22 @@ export class SQLiteCollection<T extends Document> implements Collection<T> {
    * });
    * ```
    */
+  // Overload 1: With select - returns Pick<T, K | '_id'>
+  find<K extends keyof T>(
+    filter: QueryFilter<T>,
+    options: QueryOptionsWithSelect<T, K>
+  ): Promise<readonly Pick<T, K | (keyof T & "_id")>[]>
+
+  // Overload 2: With omit - returns Omit<T, K>
+  find<K extends keyof T>(
+    filter: QueryFilter<T>,
+    options: QueryOptionsWithOmit<T, K>
+  ): Promise<readonly Omit<T, K>[]>
+
+  // Overload 3: No projection - returns T
+  find(filter: QueryFilter<T>, options?: QueryOptions<T>): Promise<readonly T[]>
+
+  // Implementation
   find(
     filter: QueryFilter<T>,
     options?: QueryOptions<T>
@@ -707,6 +725,25 @@ export class SQLiteCollection<T extends Document> implements Collection<T> {
    * }
    * ```
    */
+  // Overload 1: With select - returns Pick<T, K | '_id'>
+  findOne<K extends keyof T>(
+    filter: string | QueryFilter<T>,
+    options: Omit<QueryOptionsWithSelect<T, K>, "limit" | "skip">
+  ): Promise<Pick<T, K | (keyof T & "_id")> | null>
+
+  // Overload 2: With omit - returns Omit<T, K>
+  findOne<K extends keyof T>(
+    filter: string | QueryFilter<T>,
+    options: Omit<QueryOptionsWithOmit<T, K>, "limit" | "skip">
+  ): Promise<Omit<T, K> | null>
+
+  // Overload 3: No projection - returns T
+  findOne(
+    filter: string | QueryFilter<T>,
+    options?: Omit<QueryOptions<T>, "limit" | "skip">
+  ): Promise<T | null>
+
+  // Implementation
   async findOne(
     filter: string | QueryFilter<T>,
     options?: Omit<QueryOptions<T>, "limit" | "skip">
@@ -765,6 +802,37 @@ export class SQLiteCollection<T extends Document> implements Collection<T> {
    * });
    * ```
    */
+  // Overload 1: With select - returns Pick<T, K | '_id'>
+  search<K extends keyof T>(
+    text: string,
+    fields: readonly (keyof T | string)[],
+    options: Omit<QueryOptionsWithSelect<T, K>, "search"> & {
+      filter?: QueryFilter<T>
+      caseSensitive?: boolean
+    }
+  ): Promise<readonly Pick<T, K | (keyof T & "_id")>[]>
+
+  // Overload 2: With omit - returns Omit<T, K>
+  search<K extends keyof T>(
+    text: string,
+    fields: readonly (keyof T | string)[],
+    options: Omit<QueryOptionsWithOmit<T, K>, "search"> & {
+      filter?: QueryFilter<T>
+      caseSensitive?: boolean
+    }
+  ): Promise<readonly Omit<T, K>[]>
+
+  // Overload 3: No projection - returns T
+  search(
+    text: string,
+    fields: readonly (keyof T | string)[],
+    options?: Omit<QueryOptions<T>, "search"> & {
+      filter?: QueryFilter<T>
+      caseSensitive?: boolean
+    }
+  ): Promise<readonly T[]>
+
+  // Implementation
   search(
     text: string,
     fields: readonly (keyof T | string)[],

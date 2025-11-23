@@ -5,6 +5,40 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.2] - 2025-11-23
+
+### Added
+
+- **Type-safe projections** - `select` and `omit` options now narrow the TypeScript return type:
+  ```typescript
+  // TypeScript knows this returns Pick<User, '_id' | 'name' | 'email'>[]
+  const users = await collection.find(
+    { status: 'active' },
+    { select: ['name', 'email'] as const }
+  )
+  users[0].name      // ✅ TypeScript knows this exists
+  users[0].password  // ❌ TypeScript error: Property 'password' does not exist
+
+  // With omit, TypeScript returns Omit<User, 'password'>[]
+  const safeUsers = await collection.find(
+    { status: 'active' },
+    { omit: ['password'] as const }
+  )
+  ```
+
+- **New exported types for type-safe projections**:
+  - `QueryOptionsBase<T>` - Base query options without projection
+  - `QueryOptionsWithSelect<T, K>` - Query options with select projection
+  - `QueryOptionsWithOmit<T, K>` - Query options with omit projection
+  - `QueryOptionsWithoutProjection<T>` - Query options explicitly without projection
+  - `ProjectedDocument<T, K>` - Helper type for projected document results
+
+### Notes
+
+- Use `as const` with select/omit arrays for best type inference
+- Method overloads added for `find()`, `findOne()`, and `search()` to support type-safe projections
+- Comprehensive type tests added for projection type safety
+
 ## [0.3.1] - 2024-11-23
 
 ### Fixed

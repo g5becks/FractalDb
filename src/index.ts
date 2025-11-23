@@ -71,8 +71,13 @@ export type { DocumentPath, JsonPath, PathValue } from "./path-types.js"
 export type {
   CursorSpec,
   OmitSpec,
+  ProjectedDocument,
   ProjectionSpec,
   QueryOptions,
+  QueryOptionsBase,
+  QueryOptionsWithOmit,
+  QueryOptionsWithoutProjection,
+  QueryOptionsWithSelect,
   SelectSpec,
   SortSpec,
   TextSearchSpec,
