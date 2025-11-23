@@ -1,15 +1,15 @@
 {
   "name": "stratadb",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "description": "Type-safe embedded document database for Bun with MongoDB-like queries",
   "type": "module",
-  "main": "./dist/index.js",
-  "module": "./dist/index.js",
-  "types": "./dist/index.d.ts",
+  "main": "./dist/index.mjs",
+  "module": "./dist/index.mjs",
+  "types": "./dist/index.d.mts",
   "exports": {
     ".": {
-      "types": "./dist/index.d.ts",
-      "import": "./dist/index.js"
+      "types": "./dist/index.d.mts",
+      "import": "./dist/index.mjs"
     }
   },
   "files": [
@@ -31,6 +31,7 @@
     "lefthook": "^2.0.4",
     "mitata": "^1.0.34",
     "tsd": "^0.33.0",
+    "tsdown": "^0.16.6",
     "type-fest": "^5.2.0",
     "typescript": "^5.9.3",
     "ultracite": "6.3.4",
@@ -43,10 +44,9 @@
     "directory": "test/type"
   },
   "scripts": {
-    "build": "tsc",
-    "build:watch": "tsc --watch",
+    "build": "tsdown",
+    "build:watch": "tsdown --watch",
     "clean": "rm -rf dist",
-    "prebuild": "bun run clean",
     "test": "bun test",
     "test:types": "bun run build && bunx tsd",
     "test:watch": "bun test --watch",
