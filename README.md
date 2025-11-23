@@ -30,6 +30,8 @@ bun add stratadb
 
 Requires [Bun](https://bun.sh) runtime.
 
+> **Note:** StrataDB is ESM-only. It does not provide CommonJS exports.
+
 ## Quick Start
 
 ```typescript

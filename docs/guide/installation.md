@@ -6,6 +6,10 @@
 StrataDB **only works with Bun**. It uses `bun:sqlite` which is not available in Node.js or Deno.
 :::
 
+::: warning ESM Only
+StrataDB is an ESM-only package. It does not provide CommonJS exports.
+:::
+
 - [Bun](https://bun.sh) v1.0 or later
 
 ## Install StrataDB
