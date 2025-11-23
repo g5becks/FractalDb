@@ -1,0 +1,52 @@
+# Changelog
+
+All notable changes to this project will be documented in this file.
+
+The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
+and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+
+## [0.3.0] - 2024-11-23
+
+### Added
+
+- **Dedicated `search()` method** - Clean API for text search across multiple fields:
+  ```typescript
+  const results = await collection.search('typescript', ['title', 'content'])
+  ```
+
+- **String operators** - New query operators for flexible string matching:
+  - `$ilike` - Case-insensitive LIKE matching
+  - `$contains` - Substring matching (shorthand for `$like: '%value%'`)
+
+- **Field projection helpers** - Cleaner alternatives to `projection`:
+  - `select` - Include only specified fields: `{ select: ['name', 'email'] }`
+  - `omit` - Exclude specified fields: `{ omit: ['password'] }`
+
+- **Text search option** - Multi-field text search via `find()`:
+  ```typescript
+  await collection.find({}, {
+    search: { text: 'query', fields: ['title', 'content'] }
+  })
+  ```
+
+- **Cursor pagination** - Efficient pagination for large datasets:
+  ```typescript
+  const page1 = await collection.find({}, { sort: { createdAt: -1 }, limit: 20 })
+  const page2 = await collection.find({}, {
+    sort: { createdAt: -1 },
+    limit: 20,
+    cursor: { after: page1.at(-1)?._id }
+  })
+  ```
+
+- **New exported types**:
+  - `SelectSpec<T>` - Type for select field arrays
+  - `OmitSpec<T>` - Type for omit field arrays
+  - `TextSearchSpec<T>` - Type for search configuration
+  - `CursorSpec` - Type for cursor pagination
+
+### Notes
+
+- All changes are backward compatible
+- Existing `projection` option continues to work alongside new `select`/`omit` helpers
+- The `search` option in `find()` remains available for complex queries requiring filters

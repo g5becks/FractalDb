@@ -67,6 +67,14 @@ const results = await users.find(
 // Count matching documents
 const count = await users.count({ status: 'active' })
 
+// Search across multiple fields
+const results = await users.search('alice', ['name', 'email'])
+const filtered = await users.search('admin', ['role', 'notes'], {
+  filter: { status: 'active' },
+  sort: { createdAt: -1 },
+  limit: 10
+})
+
 // Get distinct values for a field
 const ages = await users.distinct('age')
 const roles = await users.distinct('role', { status: 'active' })

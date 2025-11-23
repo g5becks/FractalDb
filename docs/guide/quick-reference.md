@@ -82,13 +82,25 @@ const count = await users.count({ age: { $gte: 18 } })
 
 // Find with options (sort, limit, skip)
 const recentUsers = await users.find(
-  { active: true }, 
-  { 
+  { active: true },
+  {
     sort: { createdAt: -1 },  // Sort by creation date, newest first
     limit: 10,                // Limit to 10 results
     skip: 20                  // Skip first 20 results
   }
 )
+
+// Search across multiple fields (v0.3.0+)
+const results = await users.search('alice', ['name', 'email'])
+const filtered = await users.search('admin', ['role', 'bio'], {
+  filter: { active: true },
+  sort: { createdAt: -1 },
+  limit: 10
+})
+
+// Field projection (v0.3.0+)
+const names = await users.find({}, { select: ['name', 'email'] })  // Include only these fields
+const safe = await users.find({}, { omit: ['password', 'ssn'] })   // Exclude these fields
 ```
 
 ### Update Documents
@@ -181,6 +193,12 @@ await users.find({
 // $like - SQL LIKE pattern matching
 await users.find({ email: { $like: '%@gmail.com' } })
 
+// $ilike - Case-insensitive LIKE (v0.3.0+)
+await users.find({ name: { $ilike: 'john' } })  // Matches John, JOHN, john
+
+// $contains - Substring matching (v0.3.0+)
+await users.find({ bio: { $contains: 'developer' } })  // Shorthand for $like: '%developer%'
+
 // $startsWith - string starts with
 await users.find({ name: { $startsWith: 'John' } })
 
@@ -188,7 +206,7 @@ await users.find({ name: { $startsWith: 'John' } })
 await users.find({ email: { $endsWith: '@company.com' } })
 ```
 
-> **Note**: Regular expressions (`$regex`) are not supported. Use `$like`, `$startsWith`, and `$endsWith` for pattern matching.
+> **Note**: Regular expressions (`$regex`) are not supported. Use `$like`, `$ilike`, `$contains`, `$startsWith`, and `$endsWith` for pattern matching.
 
 ### Logical Operators
 
@@ -389,19 +407,20 @@ const result = await users.updateOne(
 ### Pagination
 
 ```typescript
+// Offset-based pagination
 const getPaginatedUsers = async (page: number, limit: number, filter: any = {}) => {
   const skip = (page - 1) * limit
-  
-  const users = await users.find(filter, {
+
+  const data = await users.find(filter, {
     sort: { createdAt: -1 },
     skip,
     limit
   })
-  
+
   const total = await users.count(filter)
-  
+
   return {
-    data: users,
+    data,
     pagination: {
       page,
       limit,
@@ -410,6 +429,15 @@ const getPaginatedUsers = async (page: number, limit: number, filter: any = {}) 
     }
   }
 }
+
+// Cursor-based pagination (v0.3.0+) - more efficient for large datasets
+const page1 = await users.find({}, { sort: { createdAt: -1 }, limit: 20 })
+const page2 = await users.find({}, {
+  sort: { createdAt: -1 },
+  limit: 20,
+  cursor: { after: page1.at(-1)?._id }
+})
+// Go back: cursor: { before: page2[0]._id }
 ```
 
 ### Bulk Operations

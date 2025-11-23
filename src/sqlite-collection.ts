@@ -10,7 +10,13 @@ import type { Document } from "./core-types.js"
 import { mergeDocumentUpdate } from "./deep-merge.js"
 import { buildCompleteDocument } from "./document-builder.js"
 import { UniqueConstraintError, ValidationError } from "./errors.js"
-import type { QueryOptions, SortSpec } from "./query-options-types.js"
+import type {
+  CursorSpec,
+  ProjectionSpec,
+  QueryOptions,
+  SortSpec,
+  TextSearchSpec,
+} from "./query-options-types.js"
 import type { QueryFilter } from "./query-types.js"
 import type { SchemaDefinition } from "./schema-types.js"
 import { SQLiteQueryTranslator } from "./sqlite-query-translator.js"
@@ -284,6 +290,264 @@ export class SQLiteCollection<T extends Document> implements Collection<T> {
     return filter
   }
 
+  /**
+   * Normalizes select/omit options into ProjectionSpec format.
+   *
+   * @param options - Query options that may contain select, omit, or projection
+   * @returns ProjectionSpec or undefined if no projection is needed
+   *
+   * @remarks
+   * Precedence: projection > select > omit.
+   * - If projection is set, it's returned directly
+   * - If select is set, converts to inclusion projection `{ field: 1 }`
+   * - If omit is set, converts to exclusion projection `{ field: 0 }`
+   *
+   * @internal
+   */
+  private normalizeProjection(
+    options?: QueryOptions<T>
+  ): ProjectionSpec<T> | undefined {
+    if (!options) {
+      return
+    }
+
+    // Precedence: projection > select > omit
+    if (options.projection) {
+      return options.projection
+    }
+
+    if (options.select) {
+      const projection: Record<string, 1> = {}
+      for (const field of options.select) {
+        projection[field as string] = 1
+      }
+      return projection as ProjectionSpec<T>
+    }
+
+    if (options.omit) {
+      const projection: Record<string, 0> = {}
+      for (const field of options.omit) {
+        projection[field as string] = 0
+      }
+      return projection as ProjectionSpec<T>
+    }
+
+    return
+  }
+
+  /**
+   * Builds SQL WHERE clause for text search across multiple fields.
+   *
+   * @param search - Text search specification
+   * @returns Object with SQL clause and parameters, or undefined if no search
+   *
+   * @remarks
+   * Generates OR-connected LIKE clauses for each field.
+   * Uses COLLATE NOCASE for case-insensitive matching by default.
+   *
+   * @internal
+   */
+  private buildSearchClause(
+    search: TextSearchSpec<T>
+  ): { sql: string; params: string[] } | undefined {
+    if (!search.text || search.fields.length === 0) {
+      return
+    }
+
+    const pattern = `%${search.text}%`
+    const collate = search.caseSensitive ? "" : " COLLATE NOCASE"
+    const clauses: string[] = []
+    const params: string[] = []
+
+    for (const field of search.fields) {
+      const fieldStr = String(field)
+
+      // Check if it's an indexed field (top-level only, no dots)
+      const isIndexed =
+        !fieldStr.includes(".") &&
+        this.schema.fields.some((f) => String(f.name) === fieldStr && f.indexed)
+
+      const column = isIndexed
+        ? `_${fieldStr}`
+        : `jsonb_extract(body, '$.${fieldStr}')`
+
+      clauses.push(`${column} LIKE ?${collate}`)
+      params.push(pattern)
+    }
+
+    return {
+      sql: `(${clauses.join(" OR ")})`,
+      params,
+    }
+  }
+
+  /**
+   * Builds SQL ORDER BY clause from sort specification.
+   *
+   * @param sort - Sort specification
+   * @returns SQL ORDER BY clause or empty string
+   *
+   * @internal
+   */
+  private buildSortClause(sort: SortSpec<T>): string {
+    const sortClauses: string[] = []
+    for (const [field, direction] of Object.entries(sort)) {
+      const order = direction === 1 ? "ASC" : "DESC"
+      // Use generated column name for indexed fields, otherwise jsonb_extract
+      const indexedField = this.schema.fields.find(
+        (f) => String(f.name) === field && f.indexed
+      )
+      const column = indexedField
+        ? `_${field}`
+        : `jsonb_extract(body, '$.${field}')`
+      sortClauses.push(`${column} ${order}`)
+    }
+    return sortClauses.length > 0 ? ` ORDER BY ${sortClauses.join(", ")}` : ""
+  }
+
+  /**
+   * Builds SQL WHERE clause for cursor-based pagination.
+   *
+   * @param cursor - Cursor specification with after/before
+   * @param sort - Sort specification (required for cursor pagination)
+   * @returns Object with SQL clause and parameters, or undefined if no cursor
+   *
+   * @remarks
+   * Uses the cursor document's sort field value and _id to determine position.
+   * For forward pagination (after), gets items where (sortValue, _id) > cursor.
+   * For backward pagination (before), gets items where (sortValue, _id) < cursor.
+   *
+   * @internal
+   */
+  private buildCursorClause(
+    cursor: CursorSpec,
+    sort: SortSpec<T>
+  ): { sql: string; params: SQLQueryBindings[] } | undefined {
+    const cursorId = cursor.after ?? cursor.before
+    if (!cursorId) {
+      return
+    }
+
+    // Get the first sort field and direction
+    const sortEntries = Object.entries(sort)
+    const firstEntry = sortEntries[0]
+    if (!firstEntry) {
+      return
+    }
+
+    const [sortField, sortDir] = firstEntry
+    const isAsc = sortDir === 1
+    const isAfter = cursor.after !== undefined
+
+    // Determine comparison operator based on sort direction and cursor type
+    // after + asc = > | after + desc = < | before + asc = < | before + desc = >
+    const operator = isAfter === isAsc ? ">" : "<"
+
+    // Get column reference for sort field
+    const indexedField = this.schema.fields.find(
+      (f) => String(f.name) === sortField && f.indexed
+    )
+    const sortColumn = indexedField
+      ? `_${sortField}`
+      : `jsonb_extract(body, '$.${sortField}')`
+
+    // Look up the cursor document's sort value
+    const cursorQuery = `SELECT ${sortColumn} as sortVal FROM ${this.name} WHERE _id = ?`
+    const cursorRow = this.db
+      .prepare<{ sortVal: SQLQueryBindings }, [string]>(cursorQuery)
+      .get(cursorId)
+
+    if (!cursorRow) {
+      return // Cursor document not found, skip cursor filtering
+    }
+
+    // Build compound comparison: (sortCol, _id) > (cursorSortVal, cursorId)
+    // This ensures stable pagination even with duplicate sort values
+    const sql = `((${sortColumn} ${operator} ?) OR (${sortColumn} = ? AND _id ${operator} ?))`
+    const params: SQLQueryBindings[] = [
+      cursorRow.sortVal,
+      cursorRow.sortVal,
+      cursorId,
+    ]
+
+    return { sql, params }
+  }
+
+  /**
+   * Applies projection to filter document fields.
+   *
+   * @param docs - Array of documents to project
+   * @param projection - Projection specification (inclusion or exclusion)
+   * @returns Projected documents with only the specified fields
+   *
+   * @remarks
+   * - Include mode (values are 1): Keep only _id and specified fields
+   * - Exclude mode (values are 0): Remove only specified fields
+   * - The _id field is always preserved unless explicitly set to 0
+   *
+   * @internal
+   */
+  private applyProjection(
+    docs: readonly T[],
+    projection: ProjectionSpec<T>
+  ): readonly T[] {
+    const entries = Object.entries(projection)
+    if (entries.length === 0) {
+      return docs
+    }
+
+    // Detect mode: if any value is 1, it's include mode; otherwise exclude mode
+    const isIncludeMode = entries.some(([, value]) => value === 1)
+
+    if (isIncludeMode) {
+      return this.applyIncludeProjection(docs, entries, projection)
+    }
+    return this.applyExcludeProjection(docs, projection)
+  }
+
+  /**
+   * Applies include-mode projection (keep only specified fields).
+   * @internal
+   */
+  private applyIncludeProjection(
+    docs: readonly T[],
+    entries: [string, 1 | 0 | undefined][],
+    projection: ProjectionSpec<T>
+  ): readonly T[] {
+    return docs.map((doc) => {
+      // Start with _id unless explicitly excluded
+      const result: Record<string, unknown> =
+        projection._id === 0 ? {} : { _id: doc._id }
+
+      for (const [field, value] of entries) {
+        if (value === 1 && field in doc) {
+          result[field] = doc[field as keyof T]
+        }
+      }
+      return result as T
+    })
+  }
+
+  /**
+   * Applies exclude-mode projection (remove specified fields).
+   * @internal
+   */
+  private applyExcludeProjection(
+    docs: readonly T[],
+    projection: ProjectionSpec<T>
+  ): readonly T[] {
+    return docs.map((doc) => {
+      const result: Record<string, unknown> = {}
+      for (const key of Object.keys(doc)) {
+        const projectionValue = projection[key as keyof T]
+        if (projectionValue !== 0) {
+          result[key] = doc[key as keyof T]
+        }
+      }
+      return result as T
+    })
+  }
+
   // ===== Collection Interface Implementation =====
   // The following methods will be implemented in subsequent tasks
 
@@ -361,27 +625,40 @@ export class SQLiteCollection<T extends Document> implements Collection<T> {
     const { sql: whereClause, params } = this.translator.translate(filter)
 
     let sql = `SELECT _id, json(body) as body FROM ${this.name}`
+
+    // Build WHERE clause combining filter and search
+    const whereParts: string[] = []
+    const allParams: SQLQueryBindings[] = [...params]
+
     if (whereClause) {
-      sql += ` WHERE ${whereClause}`
+      whereParts.push(whereClause)
+    }
+
+    // Add search clause if provided
+    if (options?.search) {
+      const searchResult = this.buildSearchClause(options.search)
+      if (searchResult) {
+        whereParts.push(searchResult.sql)
+        allParams.push(...searchResult.params)
+      }
+    }
+
+    // Add cursor clause if provided (requires sort)
+    if (options?.cursor && options?.sort) {
+      const cursorResult = this.buildCursorClause(options.cursor, options.sort)
+      if (cursorResult) {
+        whereParts.push(cursorResult.sql)
+        allParams.push(...cursorResult.params)
+      }
+    }
+
+    if (whereParts.length > 0) {
+      sql += ` WHERE ${whereParts.join(" AND ")}`
     }
 
     // Apply sort
     if (options?.sort) {
-      const sortClauses: string[] = []
-      for (const [field, direction] of Object.entries(options.sort)) {
-        const order = direction === 1 ? "ASC" : "DESC"
-        // Use generated column name for indexed fields, otherwise jsonb_extract
-        const indexedField = this.schema.fields.find(
-          (f) => String(f.name) === field && f.indexed
-        )
-        const column = indexedField
-          ? `_${field}`
-          : `jsonb_extract(body, '$.${field}')`
-        sortClauses.push(`${column} ${order}`)
-      }
-      if (sortClauses.length > 0) {
-        sql += ` ORDER BY ${sortClauses.join(", ")}`
-      }
+      sql += this.buildSortClause(options.sort)
     }
 
     // Apply limit and skip
@@ -396,12 +673,18 @@ export class SQLiteCollection<T extends Document> implements Collection<T> {
       { _id: string; body: string },
       SQLQueryBindings[]
     >(sql)
-    const rows = stmt.all(...params)
+    const rows = stmt.all(...allParams)
 
-    const results = rows.map((row) => {
+    let results = rows.map((row) => {
       const doc = JSON.parse(row.body) as Omit<T, "_id">
       return { _id: row._id, ...doc } as T
     })
+
+    // Apply projection (select/omit/projection)
+    const projection = this.normalizeProjection(options)
+    if (projection) {
+      results = this.applyProjection(results, projection) as T[]
+    }
 
     return Promise.resolve(results)
   }
@@ -459,6 +742,56 @@ export class SQLiteCollection<T extends Document> implements Collection<T> {
     const stmt = this.db.prepare<{ count: number }, SQLQueryBindings[]>(sql)
     const row = stmt.get(...params)
     return Promise.resolve(row?.count ?? 0)
+  }
+
+  /**
+   * Search for documents across multiple fields.
+   *
+   * @param text - The search text to find
+   * @param fields - Array of field names to search within
+   * @param options - Optional query options (filter, sort, limit, projection, etc.)
+   * @returns Promise resolving to array of matching documents
+   *
+   * @example
+   * ```typescript
+   * // Search for "typescript" in title and content
+   * const articles = await posts.search('typescript', ['title', 'content']);
+   *
+   * // Search with additional filtering
+   * const results = await posts.search('react', ['title', 'content'], {
+   *   filter: { category: 'programming' },
+   *   sort: { createdAt: -1 },
+   *   limit: 10
+   * });
+   * ```
+   */
+  search(
+    text: string,
+    fields: readonly (keyof T | string)[],
+    options?: Omit<QueryOptions<T>, "search"> & {
+      filter?: QueryFilter<T>
+      caseSensitive?: boolean
+    }
+  ): Promise<readonly T[]> {
+    // Delegate to find() with the search option
+    const filter = options?.filter ?? ({} as QueryFilter<T>)
+    const { filter: _, caseSensitive, ...restOptions } = options ?? {}
+
+    const searchSpec: {
+      text: string
+      fields: readonly (keyof T | string)[]
+    } & {
+      caseSensitive?: boolean
+    } = { text, fields }
+
+    if (caseSensitive !== undefined) {
+      searchSpec.caseSensitive = caseSensitive
+    }
+
+    return this.find(filter, {
+      ...restOptions,
+      search: searchSpec,
+    })
   }
 
   /**

@@ -18,6 +18,9 @@ Unlike MongoDB or other client-server databases, StrataDB runs **in-process** wi
 - **MongoDB-like API** - Familiar operators: `$eq`, `$gt`, `$in`, `$and`, `$or`, etc.
 - **JSONB Storage** - Flexible documents with indexed generated columns
 - **Portable** - Single file database, easy to backup and deploy
+- **Text Search** - Multi-field search with case-insensitive matching
+- **Cursor Pagination** - Efficient, stable pagination for large datasets
+- **Field Projection** - Clean `select`/`omit` helpers for controlling returned fields
 
 ## Installation
 
@@ -66,6 +69,20 @@ await users.updateOne(user._id, { age: 31 })
 
 // Delete
 await users.deleteOne(user._id)
+
+// Text search across fields
+const results = await users.search('alice', ['name', 'email'])
+
+// Cursor pagination for large datasets
+const page1 = await users.find({}, { sort: { createdAt: -1 }, limit: 20 })
+const page2 = await users.find(
+  {},
+  { sort: { createdAt: -1 }, limit: 20, cursor: { after: page1.at(-1)?._id } }
+)
+
+// Field projection
+const names = await users.find({}, { select: ['name', 'email'] })
+const safe = await users.find({}, { omit: ['password'] })
 ```
 
 ## Type Safety

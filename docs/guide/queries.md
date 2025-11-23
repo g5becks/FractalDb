@@ -31,9 +31,19 @@ await users.find({ name: { $startsWith: 'A' } })
 await users.find({ email: { $endsWith: '@example.com' } })
 await users.find({ name: { $like: 'J%n' } })      // John, Jan, Jason
 await users.find({ bio: { $like: '%engineer%' } })  // contains
+
+// Case-insensitive LIKE (v0.3.0+)
+await users.find({ name: { $ilike: 'john' } })    // John, JOHN, john
+
+// Contains substring (v0.3.0+)
+await users.find({ bio: { $contains: 'engineer' } })  // simpler than $like
 ```
 
 The `$like` operator uses SQL LIKE syntax: `%` matches any sequence, `_` matches one character.
+
+The `$ilike` operator is identical to `$like` but case-insensitive.
+
+The `$contains` operator is a convenient shorthand for `$like: '%value%'`.
 
 ## Array Operators
 
@@ -120,10 +130,161 @@ await users.find(
   {
     sort: { createdAt: -1, name: 1 },  // -1 desc, 1 asc
     limit: 20,
-    skip: 40  // for pagination
+    skip: 40  // for offset pagination
   }
 )
 ```
+
+## Field Projection (v0.3.0+)
+
+Control which fields are returned using `select` or `omit`:
+
+```typescript
+// Select only specific fields
+const users = await collection.find(
+  { status: 'active' },
+  { select: ['name', 'email'] }
+)
+// Returns: [{ _id, name, email }, ...]
+
+// Omit specific fields
+const users = await collection.find(
+  { status: 'active' },
+  { omit: ['password', 'internalNotes'] }
+)
+// Returns all fields except password and internalNotes
+
+// Traditional MongoDB-style projection also supported
+const users = await collection.find(
+  { status: 'active' },
+  { projection: { name: 1, email: 1 } }  // include
+)
+
+const users = await collection.find(
+  { status: 'active' },
+  { projection: { password: 0, internalNotes: 0 } }  // exclude
+)
+```
+
+::: tip
+`select` and `omit` are cleaner alternatives to `projection`. Use whichever style you prefer.
+:::
+
+## Text Search (v0.3.0+)
+
+Search across multiple fields with the dedicated `search()` method:
+
+```typescript
+// Simple search across title and content
+const articles = await collection.search('typescript', ['title', 'content'])
+
+// Search with filter
+const results = await collection.search('react', ['title', 'content'], {
+  filter: { category: 'programming' },
+  sort: { createdAt: -1 },
+  limit: 10
+})
+
+// Search with projection
+const titles = await collection.search('javascript', ['title', 'content'], {
+  select: ['title', 'author']
+})
+```
+
+You can also use the `search` option with `find()` for more complex queries:
+
+```typescript
+// Search across title and content fields
+const articles = await collection.find(
+  {},
+  {
+    search: {
+      text: 'typescript',
+      fields: ['title', 'content']
+    }
+  }
+)
+
+// Combine with filters
+const articles = await collection.find(
+  { category: 'programming' },
+  {
+    search: {
+      text: 'react hooks',
+      fields: ['title', 'content', 'tags']
+    }
+  }
+)
+
+// Search nested fields
+const articles = await collection.find(
+  {},
+  {
+    search: {
+      text: 'optimization',
+      fields: ['title', 'metadata.keywords']
+    }
+  }
+)
+
+// Case-sensitive search (default is case-insensitive)
+const articles = await collection.find(
+  {},
+  {
+    search: {
+      text: 'TypeScript',
+      fields: ['title'],
+      caseSensitive: true
+    }
+  }
+)
+```
+
+Text search uses SQL `LIKE '%term%'` patterns internally and matches any field containing the search text.
+
+## Cursor Pagination (v0.3.0+)
+
+For efficient pagination through large datasets, use cursor-based pagination instead of `skip`:
+
+```typescript
+// First page
+const page1 = await collection.find(
+  { status: 'active' },
+  { sort: { createdAt: -1 }, limit: 20 }
+)
+
+// Next page - use cursor with last item's ID
+const lastItem = page1[page1.length - 1]
+const page2 = await collection.find(
+  { status: 'active' },
+  {
+    sort: { createdAt: -1 },
+    limit: 20,
+    cursor: { after: lastItem._id }
+  }
+)
+
+// Previous page - use 'before' cursor
+const firstItem = page2[0]
+const backToPage1 = await collection.find(
+  { status: 'active' },
+  {
+    sort: { createdAt: -1 },
+    limit: 20,
+    cursor: { before: firstItem._id }
+  }
+)
+```
+
+::: tip Why cursor pagination?
+- **Consistent**: Skip-based pagination breaks when items are inserted/deleted
+- **Performant**: Cursors use indexed lookups, skip scans through rows
+- **Scalable**: Performance stays constant regardless of page number
+:::
+
+::: warning
+Cursor pagination requires a `sort` option. If no sort is provided, the cursor is ignored.
+:::
 
 ## Nested Fields
 

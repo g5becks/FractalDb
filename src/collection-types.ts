@@ -328,6 +328,68 @@ export type Collection<T extends Document> = {
    */
   count(filter: QueryFilter<T>): Promise<number>
 
+  /**
+   * Search for documents across multiple fields.
+   *
+   * @param text - The search text to find
+   * @param fields - Array of field names to search within
+   * @param options - Optional query options (filter, sort, limit, projection, etc.)
+   * @returns Promise resolving to array of matching documents
+   *
+   * @remarks
+   * Performs case-insensitive text search across the specified fields using
+   * SQL LIKE patterns. A document matches if the search text appears in ANY
+   * of the specified fields.
+   *
+   * **Search behavior:**
+   * - Case-insensitive by default
+   * - Matches partial strings (e.g., "script" matches "TypeScript")
+   * - Uses OR logic across fields (match in any field returns the document)
+   *
+   * **Performance:**
+   * - Indexed fields use generated columns for faster matching
+   * - Non-indexed fields use JSON extraction (slower for large datasets)
+   * - Consider indexing frequently searched fields
+   *
+   * **Comparison to find() with search option:**
+   * - `search()` is cleaner when text search is the primary operation
+   * - `find()` with `search` option is better when combining with complex filters
+   *
+   * @example
+   * ```typescript
+   * // Search for "typescript" in title and content
+   * const articles = await posts.search('typescript', ['title', 'content']);
+   *
+   * // Search with additional filtering
+   * const results = await posts.search('react', ['title', 'content'], {
+   *   filter: { category: 'programming' },
+   *   sort: { createdAt: -1 },
+   *   limit: 10
+   * });
+   *
+   * // Search in nested fields
+   * const docs = await articles.search('hooks', ['title', 'metadata.keywords']);
+   *
+   * // Search with projection
+   * const titles = await posts.search('javascript', ['title', 'content'], {
+   *   select: ['title', 'author']
+   * });
+   *
+   * // Case-sensitive search
+   * const exact = await posts.search('TypeScript', ['title'], {
+   *   caseSensitive: true
+   * });
+   * ```
+   */
+  search(
+    text: string,
+    fields: readonly (keyof T | string)[],
+    options?: Omit<QueryOptions<T>, "search"> & {
+      filter?: QueryFilter<T>
+      caseSensitive?: boolean
+    }
+  ): Promise<readonly T[]>
+
   // ===== Single Write Operations =====
 
   /**

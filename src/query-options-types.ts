@@ -118,6 +118,293 @@ export type ProjectionSpec<T> = {
 }
 
 /**
+ * Array-based field selection for query results (inclusion).
+ *
+ * @typeParam T - The document type being queried
+ *
+ * @remarks
+ * Provides a cleaner, more intuitive alternative to `projection: { field: 1 }`
+ * for specifying which fields to include in query results. Instead of using
+ * MongoDB-style projection objects, simply pass an array of field names.
+ *
+ * **How it works:**
+ * - Only the specified fields (plus `_id`) will be returned
+ * - All other fields are excluded from the result
+ * - The `_id` field is always included automatically
+ *
+ * **When to use `select` vs `projection`:**
+ * - Use `select` when you want to include specific fields (most common case)
+ * - Use `projection` when you need more control (e.g., excluding `_id`)
+ * - Cannot use both `select` and `projection` in the same query
+ *
+ * @example
+ * ```typescript
+ * import type { SelectSpec, Document } from 'stratadb';
+ *
+ * type User = Document<{
+ *   name: string;
+ *   email: string;
+ *   password: string;
+ *   age: number;
+ *   status: 'active' | 'inactive';
+ * }>;
+ *
+ * // ✅ Select specific fields to return
+ * const publicFields: SelectSpec<User> = ['name', 'email', 'age'];
+ *
+ * // ✅ Minimal fields for list view
+ * const listFields: SelectSpec<User> = ['name', 'status'];
+ *
+ * // Usage with collection.find()
+ * const users = await collection.find(
+ *   { status: 'active' },
+ *   { select: ['name', 'email'] }
+ * );
+ * // Returns: [{ _id: '...', name: 'Alice', email: 'alice@example.com' }, ...]
+ *
+ * // ✅ Combining with sort and limit
+ * const results = await collection.find(
+ *   { status: 'active' },
+ *   {
+ *     select: ['name', 'email', 'createdAt'],
+ *     sort: { createdAt: -1 },
+ *     limit: 10
+ *   }
+ * );
+ * ```
+ */
+export type SelectSpec<T> = readonly (keyof T)[]
+
+/**
+ * Array-based field exclusion for query results.
+ *
+ * @typeParam T - The document type being queried
+ *
+ * @remarks
+ * Provides a cleaner, more intuitive alternative to `projection: { field: 0 }`
+ * for specifying which fields to exclude from query results. Instead of using
+ * MongoDB-style projection objects, simply pass an array of field names to omit.
+ *
+ * **How it works:**
+ * - All fields except the specified ones will be returned
+ * - The `_id` field is always included (use projection to exclude it)
+ * - Useful for excluding sensitive fields like passwords or tokens
+ *
+ * **When to use `omit` vs `projection`:**
+ * - Use `omit` when you want to exclude a few specific fields
+ * - Use `projection` when you need more control (e.g., excluding `_id`)
+ * - Cannot use both `omit` and `select` in the same query
+ * - Cannot use `omit` with `projection` in the same query
+ *
+ * @example
+ * ```typescript
+ * import type { OmitSpec, Document } from 'stratadb';
+ *
+ * type User = Document<{
+ *   name: string;
+ *   email: string;
+ *   password: string;
+ *   ssn: string;
+ *   age: number;
+ *   status: 'active' | 'inactive';
+ * }>;
+ *
+ * // ✅ Omit sensitive fields
+ * const safeFields: OmitSpec<User> = ['password', 'ssn'];
+ *
+ * // ✅ Omit internal fields
+ * const publicFields: OmitSpec<User> = ['password'];
+ *
+ * // Usage with collection.find()
+ * const users = await collection.find(
+ *   { status: 'active' },
+ *   { omit: ['password', 'ssn'] }
+ * );
+ * // Returns: [{ _id: '...', name: 'Alice', email: 'alice@...', age: 30, status: 'active' }, ...]
+ *
+ * // ✅ Combining with sort and limit
+ * const results = await collection.find(
+ *   { status: 'active' },
+ *   {
+ *     omit: ['password'],
+ *     sort: { createdAt: -1 },
+ *     limit: 10
+ *   }
+ * );
+ * ```
+ */
+export type OmitSpec<T> = readonly (keyof T)[]
+
+/**
+ * Text search configuration for multi-field full-text searching.
+ *
+ * @typeParam T - The document type being searched
+ *
+ * @remarks
+ * Enables searching across multiple document fields simultaneously using
+ * case-insensitive LIKE patterns. This is useful for implementing search
+ * boxes, autocomplete, and filtering features.
+ *
+ * **How it works:**
+ * - The `text` value is wrapped with `%` wildcards for substring matching
+ * - All specified `fields` are searched with OR logic (match any field)
+ * - By default, search is case-insensitive (uses SQLite COLLATE NOCASE)
+ * - Set `caseSensitive: true` for exact case matching
+ *
+ * **Field paths:**
+ * - Use field names directly for top-level fields: `['name', 'email']`
+ * - Use dot notation for nested fields: `['profile.bio', 'address.city']`
+ * - Mix both: `['name', 'profile.bio', 'tags']`
+ *
+ * **Performance considerations:**
+ * - Indexed fields are searched more efficiently
+ * - Searching many fields increases query complexity
+ * - For large datasets, consider using dedicated search solutions
+ *
+ * @example
+ * ```typescript
+ * import type { TextSearchSpec, Document } from 'stratadb';
+ *
+ * type User = Document<{
+ *   name: string;
+ *   email: string;
+ *   profile: {
+ *     bio: string;
+ *     company: string;
+ *   };
+ * }>;
+ *
+ * // Search across name and email
+ * const simpleSearch: TextSearchSpec<User> = {
+ *   text: 'alice',
+ *   fields: ['name', 'email']
+ * };
+ *
+ * // Search including nested fields
+ * const nestedSearch: TextSearchSpec<User> = {
+ *   text: 'engineer',
+ *   fields: ['name', 'profile.bio', 'profile.company']
+ * };
+ *
+ * // Case-sensitive search
+ * const caseSensitiveSearch: TextSearchSpec<User> = {
+ *   text: 'Alice',
+ *   fields: ['name'],
+ *   caseSensitive: true
+ * };
+ *
+ * // Usage with collection.find()
+ * const results = await users.find(
+ *   { status: 'active' },
+ *   {
+ *     search: {
+ *       text: 'alice',
+ *       fields: ['name', 'email']
+ *     },
+ *     limit: 10
+ *   }
+ * );
+ * ```
+ */
+export type TextSearchSpec<T> = {
+  /** The search text to find (wrapped with % wildcards for substring matching) */
+  readonly text: string
+
+  /**
+   * Fields to search. Use field names for top-level, dot notation for nested.
+   * All fields are searched with OR logic (match any).
+   */
+  readonly fields: readonly (keyof T | string)[]
+
+  /** Whether to perform case-sensitive matching. Default: false (case-insensitive) */
+  readonly caseSensitive?: boolean
+}
+
+/**
+ * Cursor-based pagination specification for efficient large dataset navigation.
+ *
+ * @typeParam T - The document type being paginated
+ *
+ * @remarks
+ * Cursor pagination provides consistent, efficient pagination that doesn't suffer
+ * from the "shifting window" problem of skip/limit pagination. It's especially
+ * beneficial for:
+ *
+ * - **Large datasets**: O(1) vs O(n) for skip-based pagination
+ * - **Real-time data**: New inserts don't affect pagination position
+ * - **Consistent ordering**: Results remain stable across page requests
+ *
+ * **How it works:**
+ * - Use `after` to get items after a specific cursor (forward pagination)
+ * - Use `before` to get items before a specific cursor (backward pagination)
+ * - The cursor is the `_id` of the boundary document
+ *
+ * **Requirements:**
+ * - A `sort` option MUST be provided when using cursor pagination
+ * - The `limit` option should be set to control page size
+ *
+ * **Cursor value format:**
+ * The cursor is simply the `_id` of the last/first document from the previous page.
+ * The sort field value is extracted from the database for proper comparison.
+ *
+ * @example
+ * ```typescript
+ * import type { CursorSpec, Document } from 'stratadb';
+ *
+ * type User = Document<{
+ *   name: string;
+ *   createdAt: number;
+ * }>;
+ *
+ * // Forward pagination - get next page after cursor
+ * const page2: CursorSpec = {
+ *   after: 'user-abc123'  // _id of last item from page 1
+ * };
+ *
+ * // Usage with collection.find()
+ * const firstPage = await users.find(
+ *   { status: 'active' },
+ *   { sort: { createdAt: -1 }, limit: 20 }
+ * );
+ *
+ * // Get next page using last item's _id as cursor
+ * const lastItem = firstPage[firstPage.length - 1];
+ * const secondPage = await users.find(
+ *   { status: 'active' },
+ *   {
+ *     sort: { createdAt: -1 },
+ *     limit: 20,
+ *     cursor: { after: lastItem._id }
+ *   }
+ * );
+ *
+ * // Backward pagination - get previous page
+ * const firstItem = secondPage[0];
+ * const backToFirstPage = await users.find(
+ *   { status: 'active' },
+ *   {
+ *     sort: { createdAt: -1 },
+ *     limit: 20,
+ *     cursor: { before: firstItem._id }
+ *   }
+ * );
+ * ```
+ */
+export type CursorSpec = {
+  /**
+   * Get items after this cursor (forward pagination).
+   * Value is the `_id` of the boundary document.
+   */
+  readonly after?: string
+
+  /**
+   * Get items before this cursor (backward pagination).
+   * Value is the `_id` of the boundary document.
+   */
+  readonly before?: string
+}
+
+/**
  * Complete query options for controlling result set behavior.
  *
  * @typeParam T - The document type being queried
@@ -127,13 +414,21 @@ export type ProjectionSpec<T> = {
  * - `sort`: Order results by one or more fields
  * - `limit`: Maximum number of results to return
  * - `skip`: Number of results to skip (for pagination)
- * - `projection`: Which fields to include/exclude
+ * - `select`: Array of fields to include (cleaner than projection)
+ * - `omit`: Array of fields to exclude (cleaner than projection)
+ * - `projection`: Which fields to include/exclude (MongoDB-style)
+ *
+ * **Field selection options (mutually exclusive):**
+ * - Use `select` to include specific fields: `{ select: ['name', 'email'] }`
+ * - Use `omit` to exclude specific fields: `{ omit: ['password'] }`
+ * - Use `projection` for MongoDB-style control: `{ projection: { name: 1 } }`
+ * - Cannot combine `select`, `omit`, or `projection` in the same query
  *
  * These options work together to enable:
  * - Pagination (limit + skip)
  * - Sorting (sort)
- * - Field selection (projection)
- * - Performance optimization (limit + projection)
+ * - Field selection (select, omit, or projection)
+ * - Performance optimization (limit + select/omit)
  *
  * @example
  * ```typescript
@@ -209,6 +504,30 @@ export type ProjectionSpec<T> = {
  *     }
  *   );
  * }
+ *
+ * // ✅ Using select (cleaner field inclusion)
+ * const withSelect: QueryOptions<User> = {
+ *   select: ['name', 'email', 'status'],  // Only these fields + _id
+ *   sort: { name: 1 }
+ * };
+ *
+ * // ✅ Using omit (exclude sensitive fields)
+ * const withOmit: QueryOptions<User> = {
+ *   omit: ['password'],  // All fields except password
+ *   sort: { createdAt: -1 },
+ *   limit: 10
+ * };
+ *
+ * // Usage with collection
+ * const publicUsers = await users.find(
+ *   { status: 'active' },
+ *   { select: ['name', 'email'] }
+ * );
+ *
+ * const safeUsers = await users.find(
+ *   {},
+ *   { omit: ['password', 'ssn'] }
+ * );
  * ```
  */
 export type QueryOptions<T> = {
@@ -221,6 +540,34 @@ export type QueryOptions<T> = {
   /** Number of documents to skip (for pagination) */
   readonly skip?: number
 
-  /** Which fields to include (1) or exclude (0) from results */
+  /**
+   * Array of fields to include in results (plus _id).
+   * Mutually exclusive with `omit` and `projection`.
+   */
+  readonly select?: SelectSpec<T>
+
+  /**
+   * Array of fields to exclude from results.
+   * Mutually exclusive with `select` and `projection`.
+   */
+  readonly omit?: OmitSpec<T>
+
+  /**
+   * Which fields to include (1) or exclude (0) from results.
+   * Mutually exclusive with `select` and `omit`.
+   */
   readonly projection?: ProjectionSpec<T>
+
+  /**
+   * Multi-field text search configuration.
+   * Searches across specified fields with OR logic (match any field).
+   * Combined with filter using AND logic.
+   */
+  readonly search?: TextSearchSpec<T>
+
+  /**
+   * Cursor-based pagination configuration.
+   * Requires `sort` to be set. More efficient than skip/limit for large datasets.
+   */
+  readonly cursor?: CursorSpec
 }

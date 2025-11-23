@@ -69,9 +69,13 @@ export { generateId, type IdGenerator } from "./id-generator.js"
 // Path types for advanced schema definitions
 export type { DocumentPath, JsonPath, PathValue } from "./path-types.js"
 export type {
+  CursorSpec,
+  OmitSpec,
   ProjectionSpec,
   QueryOptions,
+  SelectSpec,
   SortSpec,
+  TextSearchSpec,
 } from "./query-options-types.js"
 // Query types
 export type {

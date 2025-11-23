@@ -121,7 +121,9 @@ export type ComparisonOperator<T> = T extends number | Date
  *
  * For complex pattern matching that would typically use regular expressions,
  * consider using these alternatives:
- * - `$like`: For SQL-style pattern matching with % wildcards
+ * - `$like`: For SQL-style pattern matching with % wildcards (case-sensitive)
+ * - `$ilike`: For SQL-style pattern matching with % wildcards (case-insensitive)
+ * - `$contains`: For substring containment (sugar for `$like: '%value%'`)
  * - `$startsWith`: For prefix matching (more efficient than regex)
  * - `$endsWith`: For suffix matching (more efficient than regex)
  *
@@ -129,28 +131,105 @@ export type ComparisonOperator<T> = T extends number | Date
  * ```typescript
  * // ✅ Valid string queries
  * const emailQuery: StringOperator = {
- *   $like: '%@example.com',     // SQL LIKE pattern
+ *   $like: '%@example.com',     // SQL LIKE pattern (case-sensitive)
  *   $startsWith: 'admin',      // Starts with prefix
  *   $endsWith: '@domain.com'   // Ends with suffix
+ * };
+ *
+ * // ✅ Case-insensitive pattern matching
+ * const caseInsensitiveQuery: StringOperator = {
+ *   $ilike: '%alice%'          // Matches 'Alice', 'ALICE', 'alice', etc.
+ * };
+ *
+ * // ✅ Substring containment (sugar for $like: '%value%')
+ * const containsQuery: StringOperator = {
+ *   $contains: 'admin'         // Equivalent to: $like: '%admin%'
  * };
  *
  * // ✅ Pattern matching alternatives
  * const namePatterns: StringOperator = {
  *   $startsWith: 'A',          // Names starting with 'A'
  *   $endsWith: 'son',          // Names ending with 'son'
- *   $like: '%admin%'           // Contains 'admin' anywhere
+ *   $contains: 'john'          // Contains 'john' anywhere
  * };
  *
  * // ✅ Combining multiple string conditions
  * const complexStringQuery: StringOperator = {
  *   $startsWith: 'Dr.',
- *   $like: '%PhD%'
+ *   $ilike: '%phd%'            // Case-insensitive search for 'PhD'
  * };
  * ```
  */
 export type StringOperator = {
-  /** SQL-style LIKE pattern matching */
+  /** SQL-style LIKE pattern matching (case-sensitive) */
   readonly $like?: string
+
+  /**
+   * SQL-style LIKE pattern matching (case-insensitive).
+   *
+   * @remarks
+   * The `$ilike` operator performs case-insensitive pattern matching using
+   * SQLite's `COLLATE NOCASE`. Use the same `%` and `_` wildcards as `$like`:
+   * - `%` matches zero or more characters
+   * - `_` matches exactly one character
+   *
+   * This is particularly useful for user-facing search features where users
+   * expect case-insensitive matching.
+   *
+   * @example
+   * ```typescript
+   * // Find users with name containing 'alice' (any case)
+   * const users = await collection.find({
+   *   name: { $ilike: '%alice%' }
+   * });
+   * // Matches: 'Alice Smith', 'ALICE', 'alice jones', 'AlIcE'
+   *
+   * // Case-insensitive email domain search
+   * const gmailUsers = await collection.find({
+   *   email: { $ilike: '%@gmail.com' }
+   * });
+   * // Matches: 'user@Gmail.com', 'USER@GMAIL.COM', 'user@gmail.com'
+   * ```
+   */
+  readonly $ilike?: string
+
+  /**
+   * Substring containment check (case-sensitive).
+   *
+   * @remarks
+   * The `$contains` operator is syntactic sugar for `$like: '%value%'`.
+   * It checks if the field value contains the specified substring anywhere
+   * within the string. The search is case-sensitive.
+   *
+   * This is a convenience operator that saves you from manually adding
+   * the `%` wildcards. Internally, the query translator wraps your value
+   * with `%` wildcards and uses SQL LIKE for the match.
+   *
+   * For case-insensitive containment checks, combine with `$ilike`:
+   * `{ field: { $ilike: '%value%' } }`
+   *
+   * @example
+   * ```typescript
+   * // Find documents where description contains 'important'
+   * const docs = await collection.find({
+   *   description: { $contains: 'important' }
+   * });
+   * // Equivalent to: { description: { $like: '%important%' } }
+   *
+   * // Find users with a specific domain in their email
+   * const users = await collection.find({
+   *   email: { $contains: '@example' }
+   * });
+   * // Matches: 'user@example.com', 'admin@example.org'
+   * // Does NOT match: 'user@Example.com' (case-sensitive)
+   *
+   * // Combine with other string operators
+   * const filtered = await collection.find({
+   *   title: { $contains: 'guide', $startsWith: 'TypeScript' }
+   * });
+   * ```
+   */
+  readonly $contains?: string
 
   /** String starts with the specified prefix */
   readonly $startsWith?: string

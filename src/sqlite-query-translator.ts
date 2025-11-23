@@ -74,6 +74,14 @@ import type { SchemaDefinition, SchemaField } from "./schema-types.js"
  *
  * const result7 = translator.translate({ name: { $like: '%Smith%' } });
  * // => { sql: "_name LIKE ?", params: ['%Smith%'] }
+ *
+ * // ✅ Case-insensitive pattern matching
+ * const result8 = translator.translate({ name: { $ilike: '%alice%' } });
+ * // => { sql: "_name LIKE ? COLLATE NOCASE", params: ['%alice%'] }
+ *
+ * // ✅ Substring containment (sugar for $like: '%value%')
+ * const result9 = translator.translate({ name: { $contains: 'admin' } });
+ * // => { sql: "_name LIKE ?", params: ['%admin%'] }
  * ```
  */
 export class SQLiteQueryTranslator<T extends Document>
@@ -638,6 +646,18 @@ export class SQLiteQueryTranslator<T extends Document>
       case "$like":
         params.push(this.toBindValue(value))
         return `${fieldSql} LIKE ?`
+
+      // Case-insensitive LIKE pattern matching using SQLite's COLLATE NOCASE
+      case "$ilike":
+        params.push(this.toBindValue(value))
+        return `${fieldSql} LIKE ? COLLATE NOCASE`
+
+      // Substring containment: sugar for $like: '%value%'
+      case "$contains": {
+        const pattern = `%${this.toBindValue(value)}%`
+        params.push(pattern)
+        return `${fieldSql} LIKE ?`
+      }
 
       case "$startsWith": {
         const pattern = `${this.toBindValue(value)}%`
