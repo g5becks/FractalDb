@@ -4,13 +4,13 @@ title: Implement Collection.insertOne Function
 status: To Do
 assignee: []
 created_date: '2025-12-28 06:39'
-updated_date: '2025-12-28 07:03'
+updated_date: '2025-12-28 16:36'
 labels:
   - phase-3
   - storage
   - collection
 dependencies:
-  - task-49
+  - task-79
 priority: high
 ---
 
@@ -31,4 +31,6 @@ Add insertOne write operation. Reference: FSHARP_PORT_DESIGN.md lines 1076-1078.
 - [ ] #7 Run 'dotnet build' - build succeeds
 
 - [ ] #8 All public types and functions have XML doc comments with <summary>, and public functions include <param>, <returns>, and <example> (see doc-2 for standards)
+
+- [ ] #9 Run 'task lint' - no errors or warnings
 <!-- AC:END -->

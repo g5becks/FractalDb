@@ -4,6 +4,7 @@ title: Create Test Assertions Module
 status: To Do
 assignee: []
 created_date: '2025-12-28 06:45'
+updated_date: '2025-12-28 16:37'
 labels:
   - phase-1
   - testing
@@ -27,4 +28,6 @@ Create custom FsUnit.Light assertions for FractalDb. Reference: FSHARP_PORT_DESI
 - [ ] #5 Add 'let shouldBeSome opt' and 'let shouldBeNone opt' assertions
 - [ ] #6 Add 'let shouldNotBeEmpty (s: string)' assertion
 - [ ] #7 Run 'dotnet build' on test project - build succeeds
+
+- [ ] #8 Run 'task lint' - no errors or warnings
 <!-- AC:END -->

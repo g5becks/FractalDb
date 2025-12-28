@@ -4,6 +4,7 @@ title: Add Integration Tests for Batch Operations
 status: To Do
 assignee: []
 created_date: '2025-12-28 06:45'
+updated_date: '2025-12-28 16:37'
 labels:
   - phase-4
   - testing
@@ -28,4 +29,6 @@ Create integration tests for insertMany, updateMany, deleteMany.
 - [ ] #5 Add test: updateMany updates all matching documents
 - [ ] #6 Add test: deleteMany removes all matching documents
 - [ ] #7 Run 'dotnet test' - all tests pass
+
+- [ ] #8 Run 'task lint' - no errors or warnings
 <!-- AC:END -->

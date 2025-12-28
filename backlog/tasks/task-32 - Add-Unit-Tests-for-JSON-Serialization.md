@@ -4,6 +4,7 @@ title: Add Unit Tests for JSON Serialization
 status: To Do
 assignee: []
 created_date: '2025-12-28 06:34'
+updated_date: '2025-12-28 16:37'
 labels:
   - phase-2
   - testing
@@ -27,4 +28,6 @@ Create unit tests for JSON serialization.
 - [ ] #4 Add test: camelCase property naming is applied (Name becomes 'name' in JSON)
 - [ ] #5 Add test: F# option types serialize correctly (Some as value, None as null)
 - [ ] #6 Run 'dotnet test' - all tests pass
+
+- [ ] #7 Run 'task lint' - no errors or warnings
 <!-- AC:END -->

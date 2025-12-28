@@ -4,6 +4,7 @@ title: Add Unit Tests for SqlTranslator
 status: To Do
 assignee: []
 created_date: '2025-12-28 06:37'
+updated_date: '2025-12-28 16:37'
 labels:
   - phase-2
   - testing
@@ -34,4 +35,6 @@ Create comprehensive unit tests for SQL translation. Reference: FSHARP_PORT_DESI
 - [ ] #11 Add test: Or combines with 'OR'
 - [ ] #12 Add test: Not wraps with 'NOT (...)'
 - [ ] #13 Run 'dotnet test' - all tests pass
+
+- [ ] #14 Run 'task lint' - no errors or warnings
 <!-- AC:END -->

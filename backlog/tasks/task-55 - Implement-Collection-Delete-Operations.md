@@ -4,7 +4,7 @@ title: Implement Collection Delete Operations
 status: To Do
 assignee: []
 created_date: '2025-12-28 06:40'
-updated_date: '2025-12-28 07:03'
+updated_date: '2025-12-28 16:36'
 labels:
   - phase-3
   - storage
@@ -30,4 +30,6 @@ Add deleteById, deleteOne, deleteMany operations. Reference: FSHARP_PORT_DESIGN.
 - [ ] #6 Run 'dotnet build' - build succeeds
 
 - [ ] #7 All public types and functions have XML doc comments with <summary>, and public functions include <param>, <returns>, and <example> (see doc-2 for standards)
+
+- [ ] #8 Run 'task lint' - no errors or warnings
 <!-- AC:END -->

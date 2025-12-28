@@ -4,7 +4,7 @@ title: Implement SqlTranslator - Comparison Operators
 status: To Do
 assignee: []
 created_date: '2025-12-28 06:35'
-updated_date: '2025-12-28 07:03'
+updated_date: '2025-12-28 16:35'
 labels:
   - phase-2
   - storage
@@ -32,4 +32,6 @@ Implement TranslateCompare for comparison operators. Reference: FSHARP_PORT_DESI
 - [ ] #8 Run 'dotnet build' - build succeeds
 
 - [ ] #9 All public types and functions have XML doc comments with <summary>, and public functions include <param>, <returns>, and <example> (see doc-2 for standards)
+
+- [ ] #10 Run 'task lint' - no errors or warnings
 <!-- AC:END -->

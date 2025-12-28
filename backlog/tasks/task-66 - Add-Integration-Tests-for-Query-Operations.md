@@ -4,6 +4,7 @@ title: Add Integration Tests for Query Operations
 status: To Do
 assignee: []
 created_date: '2025-12-28 06:43'
+updated_date: '2025-12-28 16:37'
 labels:
   - phase-3
   - testing
@@ -31,4 +32,6 @@ Create integration tests for query functionality.
 - [ ] #8 Add test: QueryOptions sort orders correctly
 - [ ] #9 Add test: QueryOptions limit restricts results
 - [ ] #10 Run 'dotnet test' - all tests pass
+
+- [ ] #11 Run 'task lint' - no errors or warnings
 <!-- AC:END -->

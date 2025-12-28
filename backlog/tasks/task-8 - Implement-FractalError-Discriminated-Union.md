@@ -4,7 +4,7 @@ title: Implement FractalError Discriminated Union
 status: To Do
 assignee: []
 created_date: '2025-12-28 06:29'
-updated_date: '2025-12-28 07:03'
+updated_date: '2025-12-28 16:34'
 labels:
   - phase-1
   - core
@@ -36,4 +36,6 @@ Create the FractalError DU in Core/Errors.fs with all error cases. Reference: FS
 - [ ] #12 Run 'dotnet build' - build succeeds
 
 - [ ] #13 All public types and functions have XML doc comments with <summary>, and public functions include <param>, <returns>, and <example> (see doc-2 for standards)
+
+- [ ] #14 Run 'task lint' - no errors or warnings
 <!-- AC:END -->

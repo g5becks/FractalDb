@@ -4,6 +4,7 @@ title: Add Integration Tests for CRUD Operations
 status: To Do
 assignee: []
 created_date: '2025-12-28 06:42'
+updated_date: '2025-12-28 16:37'
 labels:
   - phase-3
   - testing
@@ -31,4 +32,6 @@ Create integration tests for basic CRUD operations. Reference: FSHARP_PORT_DESIG
 - [ ] #8 Add test: updateById modifies document and updates timestamp
 - [ ] #9 Add test: deleteById removes document
 - [ ] #10 Run 'dotnet test' - all tests pass
+
+- [ ] #11 Run 'task lint' - no errors or warnings
 <!-- AC:END -->

@@ -4,6 +4,7 @@ title: Add Unit Tests for Query Module
 status: To Do
 assignee: []
 created_date: '2025-12-28 06:32'
+updated_date: '2025-12-28 16:37'
 labels:
   - phase-1
   - testing
@@ -30,4 +31,6 @@ Create unit tests for Query construction and composition. Reference: FSHARP_PORT
 - [ ] #7 Add test: Query.not' wraps query with Not
 - [ ] #8 Add test: String operators (like, contains, startsWith, endsWith) create correct FieldOp
 - [ ] #9 Run 'dotnet test' - all tests pass
+
+- [ ] #10 Run 'task lint' - no errors or warnings
 <!-- AC:END -->

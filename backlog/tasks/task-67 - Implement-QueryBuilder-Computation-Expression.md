@@ -4,7 +4,7 @@ title: Implement QueryBuilder Computation Expression
 status: To Do
 assignee: []
 created_date: '2025-12-28 06:43'
-updated_date: '2025-12-28 07:03'
+updated_date: '2025-12-28 16:37'
 labels:
   - phase-4
   - builders
@@ -32,4 +32,6 @@ Create QueryBuilder CE for type-safe query construction. Reference: FSHARP_PORT_
 - [ ] #9 Run 'dotnet build' - build succeeds
 
 - [ ] #10 All public types and functions have XML doc comments with <summary>, and public functions include <param>, <returns>, and <example> (see doc-2 for standards)
+
+- [ ] #11 Run 'task lint' - no errors or warnings
 <!-- AC:END -->

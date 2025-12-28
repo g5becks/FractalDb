@@ -4,7 +4,7 @@ title: Implement Query Module - Empty and Comparison Helpers
 status: To Do
 assignee: []
 created_date: '2025-12-28 06:31'
-updated_date: '2025-12-28 07:03'
+updated_date: '2025-12-28 16:34'
 labels:
   - phase-1
   - core
@@ -31,4 +31,6 @@ Add Query module with empty constructor and comparison helper functions. Referen
 - [ ] #7 Run 'dotnet build' - build succeeds
 
 - [ ] #8 All public types and functions have XML doc comments with <summary>, and public functions include <param>, <returns>, and <example> (see doc-2 for standards)
+
+- [ ] #9 Run 'task lint' - no errors or warnings
 <!-- AC:END -->

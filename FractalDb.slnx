@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Solution>
+    <Project Path="src/FractalDb.fsproj" />
+    <Project Path="tests/FractalDb.Tests.fsproj" />
+</Solution>

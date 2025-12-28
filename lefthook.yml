@@ -1,29 +1,46 @@
+# Lefthook configuration for FractalDb (F# project)
+# https://github.com/evilmartians/lefthook
+
 pre-commit:
-  parallel: true
+  parallel: false
   commands:
-    lint-fix:
-      glob: "*.{js,jsx,ts,tsx,json,jsonc,css}"
-      run: bun x ultracite fix {staged_files}
+    format:
+      glob: "*.{fs,fsx}"
+      run: dotnet fantomas {staged_files}
       stage_fixed: true
 
-    typecheck:
-      glob: "*.{ts,tsx}"
-      run: bun run typecheck
+    lint:
+      glob: "*.{fs,fsx}"
+      exclude: "**/obj/**"
+      run: dotnet fsharplint lint FractalDb.slnx
 
 pre-push:
   parallel: true
   commands:
-    typecheck:
-      run: bun run typecheck
+    build:
+      run: dotnet build FractalDb.slnx -c Release
 
-    lint:
-      run: bun run lint
-
-    # test:
-    #   run: bun test
-    # TODO: Uncomment when tests are implemented
+    test:
+      run: dotnet test FractalDb.slnx --no-build -c Release
 
 commit-msg:
   commands:
-    commitlint:
-      run: bunx commitlint --edit {1}
+    conventional-commit:
+      run: |
+        msg=$(cat {1})
+        # Conventional commit pattern: type(scope)?: description
+        pattern="^(feat|fix|docs|style|refactor|perf|test|build|ci|chore|revert)(\(.+\))?\!?: .{1,}"
+        if ! echo "$msg" | grep -qE "$pattern"; then
+          echo "❌ Commit message does not follow Conventional Commits format."
+          echo ""
+          echo "Expected: <type>[optional scope]: <description>"
+          echo ""
+          echo "Types: feat, fix, docs, style, refactor, perf, test, build, ci, chore, revert"
+          echo ""
+          echo "Examples:"
+          echo "  feat: add query builder computation expression"
+          echo "  fix(translator): handle empty IN clause"
+          echo "  docs: update README with usage examples"
+          echo ""
+          exit 1
+        fi

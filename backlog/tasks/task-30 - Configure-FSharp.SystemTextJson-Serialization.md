@@ -4,7 +4,7 @@ title: Configure FSharp.SystemTextJson Serialization
 status: To Do
 assignee: []
 created_date: '2025-12-28 06:34'
-updated_date: '2025-12-28 07:03'
+updated_date: '2025-12-28 16:35'
 labels:
   - phase-2
   - json
@@ -29,4 +29,6 @@ Set up JSON serialization with FSharp.SystemTextJson in Json/Serialization.fs. R
 - [ ] #6 Run 'dotnet build' - build succeeds
 
 - [ ] #7 All public types and functions have XML doc comments with <summary>, and public functions include <param>, <returns>, and <example> (see doc-2 for standards)
+
+- [ ] #8 Run 'task lint' - no errors or warnings
 <!-- AC:END -->

@@ -4,7 +4,7 @@ title: Implement QueryOptions Module Functions
 status: To Do
 assignee: []
 created_date: '2025-12-28 06:34'
-updated_date: '2025-12-28 07:03'
+updated_date: '2025-12-28 16:35'
 labels:
   - phase-1
   - core
@@ -32,4 +32,6 @@ Create QueryOptions module with helper functions. Reference: FSHARP_PORT_DESIGN.
 - [ ] #8 Run 'dotnet build' - build succeeds
 
 - [ ] #9 All public types and functions have XML doc comments with <summary>, and public functions include <param>, <returns>, and <example> (see doc-2 for standards)
+
+- [ ] #10 Run 'task lint' - no errors or warnings
 <!-- AC:END -->

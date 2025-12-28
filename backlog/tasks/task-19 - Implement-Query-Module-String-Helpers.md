@@ -4,7 +4,7 @@ title: Implement Query Module - String Helpers
 status: To Do
 assignee: []
 created_date: '2025-12-28 06:31'
-updated_date: '2025-12-28 07:03'
+updated_date: '2025-12-28 16:34'
 labels:
   - phase-1
   - core
@@ -30,4 +30,6 @@ Add string operation helper functions to Query module. Reference: FSHARP_PORT_DE
 - [ ] #6 Run 'dotnet build' - build succeeds
 
 - [ ] #7 All public types and functions have XML doc comments with <summary>, and public functions include <param>, <returns>, and <example> (see doc-2 for standards)
+
+- [ ] #8 Run 'task lint' - no errors or warnings
 <!-- AC:END -->

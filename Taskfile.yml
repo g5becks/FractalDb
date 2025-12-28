@@ -1,0 +1,124 @@
+# https://taskfile.dev
+version: '3'
+
+vars:
+  SOLUTION: FractalDb.slnx
+
+tasks:
+  # ============================================================================
+  # DEFAULT
+  # ============================================================================
+  default:
+    desc: Show available tasks
+    cmds:
+      - task --list
+
+  # ============================================================================
+  # FORMATTING
+  # ============================================================================
+  fmt:
+    desc: Format all F# code
+    cmds:
+      - dotnet fantomas .
+
+  fmt:check:
+    desc: Check formatting without making changes
+    cmds:
+      - dotnet fantomas --check .
+
+  # ============================================================================
+  # LINTING
+  # ============================================================================
+  lint:
+    desc: Run FSharpLint on all F# projects
+    cmds:
+      - dotnet fsharplint lint {{.SOLUTION}}
+
+  lint:fix:
+    desc: Run FSharpLint and attempt auto-fixes
+    cmds:
+      - echo "FSharpLint does not support auto-fix. Review warnings and fix manually."
+      - dotnet fsharplint lint {{.SOLUTION}}
+
+  # ============================================================================
+  # CHECKING / ANALYSIS
+  # ============================================================================
+  check:
+    desc: Run all checks (formatting + linting + build)
+    cmds:
+      - task: fmt:check
+      - task: lint
+      - task: build
+
+  check:strict:
+    desc: Build with warnings as errors
+    cmds:
+      - dotnet build {{.SOLUTION}} /p:TreatWarningsAsErrors=true
+
+  check:report:
+    desc: Generate analyzer report
+    cmds:
+      - dotnet build {{.SOLUTION}} /p:GenerateFullPaths=true /consoleloggerparameters:NoSummary
+
+  # ============================================================================
+  # TESTING
+  # ============================================================================
+  test:
+    desc: Run tests
+    cmds:
+      - dotnet test {{.SOLUTION}}
+
+  test:coverage:
+    desc: Run tests with code coverage
+    aliases: [test:cov]
+    cmds:
+      - dotnet test {{.SOLUTION}} --collect:"XPlat Code Coverage"
+
+  test:watch:
+    desc: Run tests in watch mode
+    cmds:
+      - dotnet watch test --project tests/FractalDb.Tests.fsproj
+
+  # ============================================================================
+  # BUILDING
+  # ============================================================================
+  build:
+    desc: Build solution (Release)
+    cmds:
+      - dotnet build {{.SOLUTION}} -c Release
+
+  build:debug:
+    desc: Build solution (Debug)
+    cmds:
+      - dotnet build {{.SOLUTION}} -c Debug
+
+  build:tickers:
+    desc: Build ticker seed data (placeholder - not yet implemented)
+    cmds:
+      - echo "Ticker seed data build not yet implemented in F# version"
+
+  clean:
+    desc: Clean build artifacts
+    cmds:
+      - dotnet clean {{.SOLUTION}}
+
+  restore:
+    desc: Restore NuGet packages
+    cmds:
+      - dotnet restore {{.SOLUTION}}
+
+  publish:
+    desc: Publish application
+    cmds:
+      - dotnet publish {{.SOLUTION}} -c Release -o ./publish
+
+
+  tools:restore:
+    desc: Restore all dotnet tools
+    cmds:
+      - dotnet tool restore
+
+  tools:install:all:
+    desc: Install all required dotnet tools
+    cmds:
+      - task: tools:restore

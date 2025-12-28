@@ -4,6 +4,7 @@ title: Add Integration Tests for Validation
 status: To Do
 assignee: []
 created_date: '2025-12-28 06:45'
+updated_date: '2025-12-28 16:37'
 labels:
   - phase-5
   - testing
@@ -27,4 +28,6 @@ Create integration tests for schema validation.
 - [ ] #4 Add test: updateOne with invalid result returns Validation error
 - [ ] #5 Add test: Collection.validate returns error for invalid data
 - [ ] #6 Run 'dotnet test' - all tests pass
+
+- [ ] #7 Run 'task lint' - no errors or warnings
 <!-- AC:END -->

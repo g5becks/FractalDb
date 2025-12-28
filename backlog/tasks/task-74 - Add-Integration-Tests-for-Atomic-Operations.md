@@ -4,6 +4,7 @@ title: Add Integration Tests for Atomic Operations
 status: To Do
 assignee: []
 created_date: '2025-12-28 06:45'
+updated_date: '2025-12-28 16:37'
 labels:
   - phase-4
   - testing
@@ -28,4 +29,6 @@ Create integration tests for findOneAnd* operations.
 - [ ] #5 Add test: findOneAndUpdate with ReturnDocument.After returns modified
 - [ ] #6 Add test: findOneAndReplace replaces document body
 - [ ] #7 Run 'dotnet test' - all tests pass
+
+- [ ] #8 Run 'task lint' - no errors or warnings
 <!-- AC:END -->

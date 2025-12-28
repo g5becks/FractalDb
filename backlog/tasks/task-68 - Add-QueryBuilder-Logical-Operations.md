@@ -4,7 +4,7 @@ title: Add QueryBuilder Logical Operations
 status: To Do
 assignee: []
 created_date: '2025-12-28 06:43'
-updated_date: '2025-12-28 07:03'
+updated_date: '2025-12-28 16:37'
 labels:
   - phase-4
   - builders
@@ -28,4 +28,6 @@ Add orElse, norElse, not' operations to QueryBuilder. Reference: FSHARP_PORT_DES
 - [ ] #5 Run 'dotnet build' - build succeeds
 
 - [ ] #6 All public types and functions have XML doc comments with <summary>, and public functions include <param>, <returns>, and <example> (see doc-2 for standards)
+
+- [ ] #7 Run 'task lint' - no errors or warnings
 <!-- AC:END -->

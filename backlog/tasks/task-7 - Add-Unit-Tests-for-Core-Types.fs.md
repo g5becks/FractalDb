@@ -4,12 +4,13 @@ title: Add Unit Tests for Core/Types.fs
 status: To Do
 assignee: []
 created_date: '2025-12-28 06:29'
+updated_date: '2025-12-28 16:37'
 labels:
   - phase-1
   - testing
   - unit
 dependencies:
-  - task-6
+  - task-77
 priority: high
 ---
 
@@ -31,4 +32,6 @@ Create unit tests for DocumentMeta, Document, IdGenerator, and Timestamp modules
 - [ ] #8 Add test: Document.update preserves Id and CreatedAt, updates UpdatedAt
 - [ ] #9 Add test: Document.map transforms Data correctly
 - [ ] #10 Run 'dotnet test' - all tests pass
+
+- [ ] #11 Run 'task lint' - no errors or warnings
 <!-- AC:END -->

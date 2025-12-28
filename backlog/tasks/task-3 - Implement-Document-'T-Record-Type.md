@@ -4,7 +4,7 @@ title: Implement Document<'T> Record Type
 status: To Do
 assignee: []
 created_date: '2025-12-28 06:26'
-updated_date: '2025-12-28 07:03'
+updated_date: '2025-12-28 16:33'
 labels:
   - phase-1
   - core
@@ -27,4 +27,6 @@ Create the generic Document<'T> record type in Core/Types.fs. This wraps user da
 - [ ] #3 Run 'dotnet build' - build succeeds with no errors
 
 - [ ] #4 All public types and functions have XML doc comments with <summary>, and public functions include <param>, <returns>, and <example> (see doc-2 for standards)
+
+- [ ] #5 Run 'task lint' - no errors or warnings
 <!-- AC:END -->

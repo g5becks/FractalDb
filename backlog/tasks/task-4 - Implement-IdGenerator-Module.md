@@ -4,7 +4,7 @@ title: Implement IdGenerator Module
 status: To Do
 assignee: []
 created_date: '2025-12-28 06:28'
-updated_date: '2025-12-28 07:03'
+updated_date: '2025-12-28 16:33'
 labels:
   - phase-1
   - core
@@ -29,4 +29,6 @@ Create the IdGenerator module in Core/Types.fs for generating UUID v7 IDs. Refer
 - [ ] #5 Run 'dotnet build' - build succeeds
 
 - [ ] #6 All public types and functions have XML doc comments with <summary>, and public functions include <param>, <returns>, and <example> (see doc-2 for standards)
+
+- [ ] #7 Run 'task lint' - no errors or warnings
 <!-- AC:END -->

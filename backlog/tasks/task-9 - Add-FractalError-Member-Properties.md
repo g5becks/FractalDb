@@ -4,7 +4,7 @@ title: Add FractalError Member Properties
 status: To Do
 assignee: []
 created_date: '2025-12-28 06:29'
-updated_date: '2025-12-28 07:03'
+updated_date: '2025-12-28 16:34'
 labels:
   - phase-1
   - core
@@ -29,4 +29,6 @@ Add Message and Category member properties to FractalError. Reference: FSHARP_PO
 - [ ] #5 Run 'dotnet build' - build succeeds
 
 - [ ] #6 All public types and functions have XML doc comments with <summary>, and public functions include <param>, <returns>, and <example> (see doc-2 for standards)
+
+- [ ] #7 Run 'task lint' - no errors or warnings
 <!-- AC:END -->

@@ -4,7 +4,7 @@ title: Implement OptionsBuilder Computation Expression
 status: To Do
 assignee: []
 created_date: '2025-12-28 06:44'
-updated_date: '2025-12-28 07:03'
+updated_date: '2025-12-28 16:37'
 labels:
   - phase-4
   - builders
@@ -33,4 +33,6 @@ Create OptionsBuilder CE for query options. Reference: FSHARP_PORT_DESIGN.md lin
 - [ ] #10 Run 'dotnet build' - build succeeds
 
 - [ ] #11 All public types and functions have XML doc comments with <summary>, and public functions include <param>, <returns>, and <example> (see doc-2 for standards)
+
+- [ ] #12 Run 'task lint' - no errors or warnings
 <!-- AC:END -->
