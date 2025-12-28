@@ -4,7 +4,7 @@ title: Implement TableBuilder - ensureTable Function
 status: To Do
 assignee: []
 created_date: '2025-12-28 06:37'
-updated_date: '2025-12-28 16:35'
+updated_date: '2025-12-28 16:57'
 labels:
   - phase-2
   - storage
@@ -17,7 +17,7 @@ priority: high
 ## Description
 
 <!-- SECTION:DESCRIPTION:BEGIN -->
-Add function to ensure table and indexes exist. Reference: FSHARP_PORT_DESIGN.md lines 1454.
+Add function to ensure table and indexes exist in src/TableBuilder.fs. Reference: FSHARP_PORT_DESIGN.md lines 1454.
 <!-- SECTION:DESCRIPTION:END -->
 
 ## Acceptance Criteria

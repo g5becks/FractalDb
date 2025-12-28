@@ -4,7 +4,7 @@ title: Implement Collection Utility Operations
 status: To Do
 assignee: []
 created_date: '2025-12-28 06:41'
-updated_date: '2025-12-28 16:36'
+updated_date: '2025-12-28 16:58'
 labels:
   - phase-3
   - storage
@@ -17,7 +17,7 @@ priority: high
 ## Description
 
 <!-- SECTION:DESCRIPTION:BEGIN -->
-Add drop and validate utility operations. Reference: FSHARP_PORT_DESIGN.md lines 1152-1157.
+Add drop and validate utility operations in src/Collection.fs. Reference: FSHARP_PORT_DESIGN.md lines 1152-1157.
 <!-- SECTION:DESCRIPTION:END -->
 
 ## Acceptance Criteria

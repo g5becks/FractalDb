@@ -4,7 +4,7 @@ title: Implement FractalDb.Close and IDisposable
 status: To Do
 assignee: []
 created_date: '2025-12-28 06:42'
-updated_date: '2025-12-28 16:36'
+updated_date: '2025-12-28 16:58'
 labels:
   - phase-3
   - storage
@@ -17,7 +17,7 @@ priority: high
 ## Description
 
 <!-- SECTION:DESCRIPTION:BEGIN -->
-Add cleanup to FractalDb. Reference: FSHARP_PORT_DESIGN.md lines 1493-1499.
+Add cleanup to FractalDb in src/Database.fs. Reference: FSHARP_PORT_DESIGN.md lines 1493-1499.
 <!-- SECTION:DESCRIPTION:END -->
 
 ## Acceptance Criteria

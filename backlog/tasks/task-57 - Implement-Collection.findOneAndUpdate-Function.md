@@ -4,7 +4,7 @@ title: Implement Collection.findOneAndUpdate Function
 status: To Do
 assignee: []
 created_date: '2025-12-28 06:40'
-updated_date: '2025-12-28 16:36'
+updated_date: '2025-12-28 16:58'
 labels:
   - phase-3
   - storage
@@ -17,7 +17,7 @@ priority: high
 ## Description
 
 <!-- SECTION:DESCRIPTION:BEGIN -->
-Add atomic findOneAndUpdate operation. Reference: FSHARP_PORT_DESIGN.md lines 1136-1141.
+Add atomic findOneAndUpdate operation in src/Collection.fs. Reference: FSHARP_PORT_DESIGN.md lines 1136-1141.
 <!-- SECTION:DESCRIPTION:END -->
 
 ## Acceptance Criteria

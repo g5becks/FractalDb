@@ -4,7 +4,7 @@ title: Implement Collection Type and Result Records
 status: To Do
 assignee: []
 created_date: '2025-12-28 06:38'
-updated_date: '2025-12-28 16:36'
+updated_date: '2025-12-28 16:57'
 labels:
   - phase-3
   - storage
@@ -17,24 +17,24 @@ priority: high
 ## Description
 
 <!-- SECTION:DESCRIPTION:BEGIN -->
-Create Collection<'T> and result types. Reference: FSHARP_PORT_DESIGN.md lines 1010-1194.
+Create Collection<'T> and result types in src/Collection.fs. Reference: FSHARP_PORT_DESIGN.md lines 1010-1194.
 <!-- SECTION:DESCRIPTION:END -->
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 Create file src/FractalDb/Storage/Collection.fs
-- [ ] #2 Add namespace FractalDb.Storage
-- [ ] #3 Add opens for System.Data, FractalDb.Core, FractalDb.Json
-- [ ] #4 Define Collection<'T> record: Name: string, Schema: SchemaDef<'T>, Connection: IDbConnection, IdGenerator: unit -> string, Translator: SqlTranslator<'T>, EnableCache: bool
-- [ ] #5 Define InsertManyResult<'T> record: Documents: Document<'T> list, InsertedCount: int
-- [ ] #6 Define UpdateResult record: MatchedCount: int, ModifiedCount: int
-- [ ] #7 Define DeleteResult record: DeletedCount: int
-- [ ] #8 Define ReturnDocument DU: Before | After
-- [ ] #9 Define FindOptions record: Sort: (string * SortDirection) list
-- [ ] #10 Define FindAndModifyOptions record: Sort, ReturnDocument, Upsert: bool
-- [ ] #11 Run 'dotnet build' - build succeeds
+- [ ] #1 Add namespace FractalDb.Storage
+- [ ] #2 Define Collection<'T> record: Name: string, Schema: SchemaDef<'T>, Connection: IDbConnection, IdGenerator: unit -> string, Translator: SqlTranslator<'T>, EnableCache: bool
+- [ ] #3 Define InsertManyResult<'T> record: Documents: Document<'T> list, InsertedCount: int
+- [ ] #4 Define UpdateResult record: MatchedCount: int, ModifiedCount: int
+- [ ] #5 Define DeleteResult record: DeletedCount: int
+- [ ] #6 Define ReturnDocument DU: Before | After
+- [ ] #7 Define FindOptions record: Sort: (string * SortDirection) list
+- [ ] #8 Define FindAndModifyOptions record: Sort, ReturnDocument, Upsert: bool
+- [ ] #9 Run 'dotnet build' - build succeeds
+- [ ] #10 All public types and functions have XML doc comments with <summary>, and public functions include <param>, <returns>, and <example> (see doc-2 for standards)
+- [ ] #11 Run 'task lint' - no errors or warnings
 
-- [ ] #12 All public types and functions have XML doc comments with <summary>, and public functions include <param>, <returns>, and <example> (see doc-2 for standards)
+- [ ] #12 Create file src/Collection.fs
 
-- [ ] #13 Run 'task lint' - no errors or warnings
+- [ ] #13 Add module declaration: module FractalDb.Collection
 <!-- AC:END -->

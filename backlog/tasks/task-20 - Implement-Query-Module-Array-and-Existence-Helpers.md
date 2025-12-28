@@ -4,7 +4,7 @@ title: Implement Query Module - Array and Existence Helpers
 status: To Do
 assignee: []
 created_date: '2025-12-28 06:31'
-updated_date: '2025-12-28 16:34'
+updated_date: '2025-12-28 16:55'
 labels:
   - phase-1
   - core
@@ -17,7 +17,7 @@ priority: high
 ## Description
 
 <!-- SECTION:DESCRIPTION:BEGIN -->
-Add array and existence helper functions to Query module. Reference: FSHARP_PORT_DESIGN.md lines 387-403.
+Add array and existence helper functions to Query module in src/Query.fs. Reference: FSHARP_PORT_DESIGN.md lines 387-403.
 <!-- SECTION:DESCRIPTION:END -->
 
 ## Acceptance Criteria

@@ -4,7 +4,7 @@ title: Implement Collection.findOneAndDelete Function
 status: To Do
 assignee: []
 created_date: '2025-12-28 06:40'
-updated_date: '2025-12-28 16:36'
+updated_date: '2025-12-28 16:58'
 labels:
   - phase-3
   - storage
@@ -17,7 +17,7 @@ priority: high
 ## Description
 
 <!-- SECTION:DESCRIPTION:BEGIN -->
-Add atomic findOneAndDelete operation. Reference: FSHARP_PORT_DESIGN.md lines 1127-1134.
+Add atomic findOneAndDelete operation in src/Collection.fs. Reference: FSHARP_PORT_DESIGN.md lines 1127-1134.
 <!-- SECTION:DESCRIPTION:END -->
 
 ## Acceptance Criteria

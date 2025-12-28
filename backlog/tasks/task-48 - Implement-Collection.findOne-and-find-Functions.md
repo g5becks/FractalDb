@@ -4,7 +4,7 @@ title: Implement Collection.findOne and find Functions
 status: To Do
 assignee: []
 created_date: '2025-12-28 06:38'
-updated_date: '2025-12-28 16:36'
+updated_date: '2025-12-28 16:57'
 labels:
   - phase-3
   - storage
@@ -17,7 +17,7 @@ priority: high
 ## Description
 
 <!-- SECTION:DESCRIPTION:BEGIN -->
-Add findOne and find read operations. Reference: FSHARP_PORT_DESIGN.md lines 1040-1052.
+Add findOne and find read operations in src/Collection.fs. Reference: FSHARP_PORT_DESIGN.md lines 1040-1052.
 <!-- SECTION:DESCRIPTION:END -->
 
 ## Acceptance Criteria

@@ -4,7 +4,7 @@ title: Implement TableBuilder - createIndexesSql Function
 status: To Do
 assignee: []
 created_date: '2025-12-28 06:37'
-updated_date: '2025-12-28 16:35'
+updated_date: '2025-12-28 16:57'
 labels:
   - phase-2
   - storage
@@ -17,7 +17,7 @@ priority: high
 ## Description
 
 <!-- SECTION:DESCRIPTION:BEGIN -->
-Add DDL generation for CREATE INDEX statements. Reference: FSHARP_PORT_DESIGN.md lines 1379-1397.
+Add DDL generation for CREATE INDEX statements in src/TableBuilder.fs. Reference: FSHARP_PORT_DESIGN.md lines 1379-1397.
 <!-- SECTION:DESCRIPTION:END -->
 
 ## Acceptance Criteria

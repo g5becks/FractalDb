@@ -4,7 +4,7 @@ title: Implement SqlTranslator - Query Translation Core
 status: To Do
 assignee: []
 created_date: '2025-12-28 06:35'
-updated_date: '2025-12-28 16:35'
+updated_date: '2025-12-28 16:56'
 labels:
   - phase-2
   - storage
@@ -17,7 +17,7 @@ priority: high
 ## Description
 
 <!-- SECTION:DESCRIPTION:BEGIN -->
-Implement TranslateQuery method for logical operators. Reference: FSHARP_PORT_DESIGN.md lines 1635-1665.
+Implement TranslateQuery method for logical operators in src/SqlTranslator.fs. Reference: FSHARP_PORT_DESIGN.md lines 1635-1665.
 <!-- SECTION:DESCRIPTION:END -->
 
 ## Acceptance Criteria

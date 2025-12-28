@@ -4,7 +4,7 @@ title: Add QueryOptions Search and Cursor Functions
 status: To Do
 assignee: []
 created_date: '2025-12-28 06:34'
-updated_date: '2025-12-28 16:35'
+updated_date: '2025-12-28 16:55'
 labels:
   - phase-1
   - core
@@ -17,7 +17,7 @@ priority: high
 ## Description
 
 <!-- SECTION:DESCRIPTION:BEGIN -->
-Add search and cursor pagination functions to QueryOptions module. Reference: FSHARP_PORT_DESIGN.md lines 796-806.
+Add search and cursor pagination functions to QueryOptions module in src/Options.fs. Reference: FSHARP_PORT_DESIGN.md lines 796-806.
 <!-- SECTION:DESCRIPTION:END -->
 
 ## Acceptance Criteria

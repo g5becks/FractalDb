@@ -4,7 +4,7 @@ title: Add FractalError Member Properties
 status: To Do
 assignee: []
 created_date: '2025-12-28 06:29'
-updated_date: '2025-12-28 16:34'
+updated_date: '2025-12-28 16:54'
 labels:
   - phase-1
   - core
@@ -17,7 +17,7 @@ priority: high
 ## Description
 
 <!-- SECTION:DESCRIPTION:BEGIN -->
-Add Message and Category member properties to FractalError. Reference: FSHARP_PORT_DESIGN.md lines 1847-1871.
+Add Message and Category member properties to FractalError in src/Errors.fs. Reference: FSHARP_PORT_DESIGN.md lines 1847-1871.
 <!-- SECTION:DESCRIPTION:END -->
 
 ## Acceptance Criteria

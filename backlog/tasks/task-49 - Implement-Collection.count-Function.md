@@ -4,7 +4,7 @@ title: Implement Collection.count Function
 status: To Do
 assignee: []
 created_date: '2025-12-28 06:39'
-updated_date: '2025-12-28 16:36'
+updated_date: '2025-12-28 16:57'
 labels:
   - phase-3
   - storage
@@ -17,7 +17,7 @@ priority: high
 ## Description
 
 <!-- SECTION:DESCRIPTION:BEGIN -->
-Add count read operation. Reference: FSHARP_PORT_DESIGN.md lines 1054-1059.
+Add count read operation in src/Collection.fs. Reference: FSHARP_PORT_DESIGN.md lines 1054-1059.
 <!-- SECTION:DESCRIPTION:END -->
 
 ## Acceptance Criteria

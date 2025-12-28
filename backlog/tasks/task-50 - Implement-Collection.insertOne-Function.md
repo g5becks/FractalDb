@@ -4,7 +4,7 @@ title: Implement Collection.insertOne Function
 status: To Do
 assignee: []
 created_date: '2025-12-28 06:39'
-updated_date: '2025-12-28 16:36'
+updated_date: '2025-12-28 16:57'
 labels:
   - phase-3
   - storage
@@ -17,7 +17,7 @@ priority: high
 ## Description
 
 <!-- SECTION:DESCRIPTION:BEGIN -->
-Add insertOne write operation. Reference: FSHARP_PORT_DESIGN.md lines 1076-1078.
+Add insertOne write operation in src/Collection.fs. Reference: FSHARP_PORT_DESIGN.md lines 1076-1078.
 <!-- SECTION:DESCRIPTION:END -->
 
 ## Acceptance Criteria

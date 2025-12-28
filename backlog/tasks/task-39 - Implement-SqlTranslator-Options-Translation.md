@@ -4,7 +4,7 @@ title: Implement SqlTranslator - Options Translation
 status: To Do
 assignee: []
 created_date: '2025-12-28 06:36'
-updated_date: '2025-12-28 16:35'
+updated_date: '2025-12-28 16:56'
 labels:
   - phase-2
   - storage
@@ -17,7 +17,7 @@ priority: high
 ## Description
 
 <!-- SECTION:DESCRIPTION:BEGIN -->
-Add TranslateOptions method for query options. Reference: FSHARP_PORT_DESIGN.md lines 1787-1822.
+Add TranslateOptions method for query options in src/SqlTranslator.fs. Reference: FSHARP_PORT_DESIGN.md lines 1787-1822.
 <!-- SECTION:DESCRIPTION:END -->
 
 ## Acceptance Criteria

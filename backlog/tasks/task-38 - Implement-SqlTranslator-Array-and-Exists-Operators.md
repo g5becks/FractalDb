@@ -4,7 +4,7 @@ title: Implement SqlTranslator - Array and Exists Operators
 status: To Do
 assignee: []
 created_date: '2025-12-28 06:36'
-updated_date: '2025-12-28 16:35'
+updated_date: '2025-12-28 16:56'
 labels:
   - phase-2
   - storage
@@ -17,7 +17,7 @@ priority: high
 ## Description
 
 <!-- SECTION:DESCRIPTION:BEGIN -->
-Implement TranslateArray and TranslateExist. Reference: FSHARP_PORT_DESIGN.md lines 1743-1784.
+Implement TranslateArray and TranslateExist in src/SqlTranslator.fs. Reference: FSHARP_PORT_DESIGN.md lines 1743-1784.
 <!-- SECTION:DESCRIPTION:END -->
 
 ## Acceptance Criteria

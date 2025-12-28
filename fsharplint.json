@@ -1,9 +1,10 @@
 {
     "ignoreFiles": [
-        "**/obj/**/*.fs",
-        "**/bin/**/*.fs",
-        "**/.fable/**/*.fs",
-        "**/node_modules/**/*.fs"
+        "obj/",
+        "bin/",
+        ".fable/",
+        "node_modules/",
+        "assemblyinfo.*"
     ],
     "global": {
         "numIndentationSpaces": 4
@@ -325,7 +326,7 @@
             "maxLinesInFile": 1000
         }
     },
-    "trailingNewLineInFile": { "enabled": true },
+    "trailingNewLineInFile": { "enabled": false },
     "noTabCharacters": { "enabled": true },
     "noPartialFunctions": {
         "enabled": false,

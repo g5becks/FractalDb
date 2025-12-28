@@ -36,3 +36,10 @@ report.[0-9]_.[0-9]_.[0-9]_.[0-9]_.json
 .fake
 
 archive/
+
+# .NET build artifacts
+bin/
+obj/
+*.dll
+*.pdb
+*.cache

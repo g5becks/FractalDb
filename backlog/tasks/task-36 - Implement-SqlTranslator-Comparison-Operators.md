@@ -4,7 +4,7 @@ title: Implement SqlTranslator - Comparison Operators
 status: To Do
 assignee: []
 created_date: '2025-12-28 06:35'
-updated_date: '2025-12-28 16:35'
+updated_date: '2025-12-28 16:56'
 labels:
   - phase-2
   - storage
@@ -17,7 +17,7 @@ priority: high
 ## Description
 
 <!-- SECTION:DESCRIPTION:BEGIN -->
-Implement TranslateCompare for comparison operators. Reference: FSHARP_PORT_DESIGN.md lines 1679-1722.
+Implement TranslateCompare for comparison operators in src/SqlTranslator.fs. Reference: FSHARP_PORT_DESIGN.md lines 1679-1722.
 <!-- SECTION:DESCRIPTION:END -->
 
 ## Acceptance Criteria
