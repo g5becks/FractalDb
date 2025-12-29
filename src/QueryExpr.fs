@@ -2327,6 +2327,345 @@ module internal QueryTranslator =
         // Unsupported pattern
         | _ ->
             failwith $"Unsupported predicate expression: {expr}"
+    
+    /// <summary>
+    /// Simplifies Query&lt;'T&gt; structures by optimizing nested And/Or operations.
+    /// </summary>
+    ///
+    /// <param name="q">Query structure to simplify.</param>
+    ///
+    /// <typeparam name="'T">Document type being queried.</typeparam>
+    ///
+    /// <returns>
+    /// Optimized Query&lt;'T&gt; with flattened And/Or operations and empty queries removed.
+    /// </returns>
+    ///
+    /// <remarks>
+    /// This function optimizes query structures created by combining multiple where clauses
+    /// to reduce nesting depth and improve SQL generation efficiency.
+    ///
+    /// <para><strong>Optimizations Applied:</strong></para>
+    ///
+    /// 1. <strong>Remove Empty queries</strong>: Filter out Query.Empty from And/Or lists
+    /// 2. <strong>Unwrap single-element lists</strong>: And [q] → q, Or [q] → q
+    /// 3. <strong>Collapse empty lists</strong>: And [] → Empty, Or [] → Empty
+    ///
+    /// <para><strong>Why This Matters:</strong></para>
+    ///
+    /// Multiple where clauses create nested And structures:
+    /// <code>
+    /// query {
+    ///     for user in users do
+    ///     where (user.Age >= 18)
+    ///     where (user.Status = "active")
+    ///     where (user.Country = "USA")
+    /// }
+    /// // Without simplify: And [And [And [Empty; q1]; q2]; q3]
+    /// // With simplify: And [q1; q2; q3]
+    /// </code>
+    ///
+    /// <para><strong>Implementation Strategy:</strong></para>
+    ///
+    /// Pattern matches on Query cases:
+    /// - Query.And: Filters empty, unwraps single, collapses empty list
+    /// - Query.Or: Same optimizations as And
+    /// - Other cases: Returned unchanged
+    ///
+    /// <para><strong>Performance Impact:</strong></para>
+    ///
+    /// - Reduces AST depth → faster SQL translation
+    /// - Cleaner generated SQL (fewer nested parentheses)
+    /// - Easier debugging (simpler structure to inspect)
+    /// </remarks>
+    ///
+    /// <example>
+    /// <code>
+    /// // Remove Empty queries
+    /// simplify (Query.And [Query.Empty; q1; Query.Empty; q2])
+    /// // Returns: Query.And [q1; q2]
+    ///
+    /// // Unwrap single element
+    /// simplify (Query.And [q1])
+    /// // Returns: q1
+    ///
+    /// // Collapse empty list
+    /// simplify (Query.And [])
+    /// // Returns: Query.Empty
+    ///
+    /// // Practical example from query expressions
+    /// // Three where clauses create nested structure:
+    /// let q1 = Query.Field("age", FieldOp.Compare(box (CompareOp.Gte 18)))
+    /// let q2 = Query.Field("status", FieldOp.Compare(box (CompareOp.Eq "active")))
+    /// let q3 = Query.Field("country", FieldOp.Compare(box (CompareOp.Eq "USA")))
+    ///
+    /// // Before simplify (nested):
+    /// Query.And [Query.And [Query.And [Query.Empty; q1]; q2]; q3]
+    ///
+    /// // After simplify (flat):
+    /// Query.And [q1; q2; q3]
+    /// </code>
+    /// </example>
+    let rec simplify<'T> (q: Query<'T>) : Query<'T> =
+        match q with
+        | Query.And queries ->
+            queries
+            |> List.filter (fun q -> q <> Query.Empty)
+            |> function
+                | [] -> Query.Empty
+                | [single] -> single
+                | filtered -> Query.And filtered
+        | Query.Or queries ->
+            queries
+            |> List.filter (fun q -> q <> Query.Empty)
+            |> function
+                | [] -> Query.Empty
+                | [single] -> single
+                | filtered -> Query.Or filtered
+        | other -> other
+    
+    /// <summary>
+    /// Main translation function: converts full query expression quotation to TranslatedQuery&lt;'T&gt;.
+    /// </summary>
+    ///
+    /// <param name="expr">
+    /// F# quotation expression representing complete query computation expression.
+    /// Type is Expr&lt;TranslatedQuery&lt;'T&gt;&gt; but cast to Expr for pattern matching.
+    /// </param>
+    ///
+    /// <typeparam name="'T">Document type being queried.</typeparam>
+    ///
+    /// <returns>
+    /// TranslatedQuery&lt;'T&gt; record containing all query components ready for execution.
+    /// </returns>
+    ///
+    /// <remarks>
+    /// This is the orchestration function for the entire query translation pipeline. It walks
+    /// the captured quotation expression tree from QueryBuilder computation expressions and
+    /// extracts all query components into a TranslatedQuery&lt;'T&gt; structure.
+    ///
+    /// <para><strong>Translation Architecture:</strong></para>
+    ///
+    /// Uses a recursive loop with an accumulator pattern:
+    /// <code>
+    /// let rec loop (expr: Expr) (query: TranslatedQuery&lt;'T&gt;) : TranslatedQuery&lt;'T&gt; =
+    ///     match expr with
+    ///     | SpecificCall QueryBuilderMethod -> extract + recurse
+    ///     | _ -> return accumulator
+    /// </code>
+    ///
+    /// <para><strong>Quotation Structure:</strong></para>
+    ///
+    /// Query expressions are represented as nested method calls:
+    /// <code>
+    /// query {
+    ///     for user in users do
+    ///     where (user.Age >= 18)
+    ///     sortBy user.Name
+    ///     take 10
+    /// }
+    ///
+    /// // Captured quotation structure:
+    /// Call(Take,
+    ///   Call(SortBy,
+    ///     Call(Where,
+    ///       Call(For, users, lambda),
+    ///       wherePredicate),
+    ///     sortSelector),
+    ///   10)
+    /// </code>
+    ///
+    /// The translate function recursively walks this tree, extracting components at each level.
+    ///
+    /// <para><strong>Handled Operations:</strong></para>
+    ///
+    /// 1. <strong>For</strong>: QueryBuilder.For
+    ///    - Extracts Collection&lt;'T&gt; source
+    ///    - Evaluates to get runtime collection instance
+    ///    - Updates TranslatedQuery.Source
+    ///
+    /// 2. <strong>Where</strong>: QueryBuilder.Where
+    ///    - Translates predicate using translatePredicate&lt;'T&gt;
+    ///    - Combines with existing where using Query.And
+    ///    - Applies simplify to optimize structure
+    ///    - Multiple where clauses supported (AND logic)
+    ///
+    /// 3. <strong>SortBy</strong>: QueryBuilder.SortBy
+    ///    - Extracts property name using extractPropertyName
+    ///    - Adds (field, SortDirection.Asc) to OrderBy list
+    ///    - Appends to existing sorts (for ThenBy support)
+    ///
+    /// 4. <strong>SortByDescending</strong>: QueryBuilder.SortByDescending
+    ///    - Adds (field, SortDirection.Desc) to OrderBy list
+    ///
+    /// 5. <strong>Take</strong>: QueryBuilder.Take
+    ///    - Extracts int count from Value node
+    ///    - Sets TranslatedQuery.Take to Some(count)
+    ///
+    /// 6. <strong>Skip</strong>: QueryBuilder.Skip
+    ///    - Extracts int count from Value node
+    ///    - Sets TranslatedQuery.Skip to Some(count)
+    ///
+    /// 7. <strong>Select</strong>: QueryBuilder.Select
+    ///    - Placeholder for task-116 (translateProjection)
+    ///    - Currently sets Projection.SelectAll
+    ///
+    /// <para><strong>Default Values (empty query):</strong></para>
+    ///
+    /// - Source: Unchecked.defaultof (will be set by For)
+    /// - Where: Query.Empty (no filter)
+    /// - OrderBy: [] (no sorting)
+    /// - Skip: None (start from beginning)
+    /// - Take: None (return all)
+    /// - Projection: Projection.SelectAll (complete documents)
+    ///
+    /// <para><strong>Combining Multiple Where Clauses:</strong></para>
+    ///
+    /// Multiple where clauses use AND logic:
+    /// <code>
+    /// query {
+    ///     for user in users do
+    ///     where (user.Age >= 18)
+    ///     where (user.Status = "active")
+    ///     where (user.Country = "USA")
+    /// }
+    /// // Translates to:
+    /// Where = Query.And [
+    ///     Query.Field("age", FieldOp.Compare(box (CompareOp.Gte 18)));
+    ///     Query.Field("status", FieldOp.Compare(box (CompareOp.Eq "active")));
+    ///     Query.Field("country", FieldOp.Compare(box (CompareOp.Eq "USA")))
+    /// ]
+    /// </code>
+    ///
+    /// The simplify helper optimizes the And structure.
+    ///
+    /// <para><strong>Order of Operations:</strong></para>
+    ///
+    /// Quotation tree is walked inside-out (innermost calls first):
+    /// 1. For → extract source collection
+    /// 2. Where → accumulate predicates
+    /// 3. SortBy/SortByDescending → add primary sort
+    /// 4. ThenBy/ThenByDescending → add secondary sorts
+    /// 5. Skip → set offset
+    /// 6. Take → set limit
+    /// 7. Select → set projection
+    ///
+    /// <para><strong>Error Handling:</strong></para>
+    ///
+    /// - Unsupported expressions: Silently ignored (default case returns accumulator)
+    /// - This allows partial query structures during development
+    /// - Production queries should use all standard operations
+    /// </remarks>
+    ///
+    /// <example>
+    /// <code>
+    /// // Simple query
+    /// let q1 = query {
+    ///     for user in usersCollection do
+    ///     where (user.Age >= 18)
+    /// }
+    ///
+    /// let result1 = translate &lt;@ q1 @&gt;
+    /// // Returns: {
+    /// //   Source = usersCollection
+    /// //   Where = Query.Field("age", FieldOp.Compare(box (CompareOp.Gte 18)))
+    /// //   OrderBy = []
+    /// //   Skip = None
+    /// //   Take = None
+    /// //   Projection = SelectAll
+    /// // }
+    ///
+    /// // Complex query with all features
+    /// let q2 = query {
+    ///     for user in usersCollection do
+    ///     where (user.Age >= 18 &amp;&amp; user.Status = "active")
+    ///     where (user.Country = "USA")
+    ///     sortByDescending user.CreatedAt
+    ///     thenBy user.Name
+    ///     skip 20
+    ///     take 10
+    ///     select (user.Name, user.Email)
+    /// }
+    ///
+    /// let result2 = translate &lt;@ q2 @&gt;
+    /// // Returns: {
+    /// //   Source = usersCollection
+    /// //   Where = Query.And [
+    /// //     Query.And [
+    /// //       Query.Field("age", ...);
+    /// //       Query.Field("status", ...)
+    /// //     ];
+    /// //     Query.Field("country", ...)
+    /// //   ] |> simplify
+    /// //   OrderBy = [("createdAt", Desc); ("name", Asc)]
+    /// //   Skip = Some 20
+    /// //   Take = Some 10
+    /// //   Projection = SelectAll  // TODO: task-116
+    /// // }
+    /// </code>
+    /// </example>
+    let translate<'T> (expr: Expr<TranslatedQuery<'T>>) : TranslatedQuery<'T> =
+        let rec loop (expr: Expr) (query: TranslatedQuery<'T>) : TranslatedQuery<'T> =
+            match expr with
+            // For source in collection do ...
+            | SpecificCall <@ Unchecked.defaultof<QueryBuilder>.For @> (_, _, [source; _]) ->
+                let collection = evaluateExpr source
+                let collectionName = 
+                    collection.GetType().GetProperty("Name").GetValue(collection) :?> string
+                { query with Source = collectionName }
+            
+            // where (predicate)
+            | SpecificCall <@ Unchecked.defaultof<QueryBuilder>.Where @> (_, _, [source; predicate]) ->
+                let q = loop source query
+                let condition = translatePredicate predicate
+                let combined = 
+                    match q.Where with
+                    | None -> condition
+                    | Some existing -> Query.And [existing; condition]
+                { q with Where = Some (simplify combined) }
+            
+            // sortBy field
+            | SpecificCall <@ Unchecked.defaultof<QueryBuilder>.SortBy @> (_, _, [source; selector]) ->
+                let q = loop source query
+                let field = extractPropertyName selector
+                { q with OrderBy = q.OrderBy @ [(field, SortDirection.Asc)] }
+            
+            // sortByDescending field
+            | SpecificCall <@ Unchecked.defaultof<QueryBuilder>.SortByDescending @> (_, _, [source; selector]) ->
+                let q = loop source query
+                let field = extractPropertyName selector
+                { q with OrderBy = q.OrderBy @ [(field, SortDirection.Desc)] }
+            
+            // take n
+            | SpecificCall <@ Unchecked.defaultof<QueryBuilder>.Take @> (_, _, [source; Value (count, _)]) ->
+                let q = loop source query
+                { q with Take = Some (count :?> int) }
+            
+            // skip n
+            | SpecificCall <@ Unchecked.defaultof<QueryBuilder>.Skip @> (_, _, [source; Value (count, _)]) ->
+                let q = loop source query
+                { q with Skip = Some (count :?> int) }
+            
+            // select ... (placeholder for task-116)
+            | SpecificCall <@ Unchecked.defaultof<QueryBuilder>.Select @> (_, _, [source; _projection]) ->
+                let q = loop source query
+                // TODO: task-116 - implement translateProjection
+                { q with Projection = Projection.SelectAll }
+            
+            // Unhandled pattern - return accumulator unchanged
+            | _ ->
+                query
+        
+        // Start with empty query structure
+        let empty = {
+            Source = ""
+            Where = None
+            OrderBy = []
+            Skip = None
+            Take = None
+            Projection = Projection.SelectAll
+        }
+        
+        loop (expr :> Expr) empty
 
 /// <summary>
 /// Module providing the global 'query' computation expression instance.

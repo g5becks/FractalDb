@@ -1,11 +1,11 @@
 ---
 id: task-115
 title: Implement QueryTranslator.translate main function
-status: To Do
+status: In Progress
 assignee:
   - '@assistant'
 created_date: '2025-12-29 06:11'
-updated_date: '2025-12-29 17:00'
+updated_date: '2025-12-29 17:22'
 labels:
   - query-expressions
   - translator
