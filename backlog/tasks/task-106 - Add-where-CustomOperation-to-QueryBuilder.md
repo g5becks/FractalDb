@@ -1,11 +1,11 @@
 ---
 id: task-106
 title: Add where CustomOperation to QueryBuilder
-status: To Do
+status: In Progress
 assignee:
   - '@assistant'
 created_date: '2025-12-29 06:08'
-updated_date: '2025-12-29 17:00'
+updated_date: '2025-12-29 17:09'
 labels:
   - query-expressions
   - builder

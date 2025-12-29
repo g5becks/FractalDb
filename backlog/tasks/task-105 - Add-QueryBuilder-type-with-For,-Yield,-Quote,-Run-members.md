@@ -1,11 +1,11 @@
 ---
 id: task-105
 title: 'Add QueryBuilder type with For, Yield, Quote, Run members'
-status: In Progress
+status: Done
 assignee:
   - '@assistant'
 created_date: '2025-12-29 06:08'
-updated_date: '2025-12-29 17:06'
+updated_date: '2025-12-29 17:07'
 labels:
   - query-expressions
   - builder
@@ -52,26 +52,5 @@ Add the QueryBuilder computation expression type with the required members for q
 ## Implementation Notes
 
 <!-- SECTION:NOTES:BEGIN -->
-## Implementation Summary
-
-Implemented QueryBuilder computation expression type with quotation-based query translation foundation.
-
-**Files Modified:**
-- `src/QueryExpr.fs` - Added QueryBuilder type and QueryBuilderInstance module (250+ lines)
-
-**Types and Members Implemented:**
-
-1. **QueryBuilder Type Class:**
-   - `For(source, body)` - Enables for..in..do syntax, returns Unchecked.defaultof
-   - `Yield(value)` - Enables yield/select syntax, returns Unchecked.defaultof
-   - `Quote(expr)` - Captures computation expression as Expr<T> quotation
-   - `Run(expr)` - Translates quotation to TranslatedQuery (stub throws NotImplementedException)
-
-2. **QueryBuilderInstance AutoOpen Module:**
-   - Global `query` instance for ergonomic usage
-   - Automatically opened when FractalDb.QueryExpr is opened
-
-**Key Design Decisions:**
-
-- **Quotation-Based Approach:** Members return Unchecked.defaultof since they're never executed. The Quote member captures the entire expression tree for runtime analysis.\n- **Deferred Implementation:** Run member is a stub that will be implemented in task-118 once QueryTranslator functions are available.\n- **Type Safety:** Using F# quotations provides compile-time type checking while enabling runtime query translation.\n\n**Documentation:**\n- Comprehensive XML doc comments (200+ lines)\n- Detailed explanation of quotation-based approach in type-level remarks\n- Examples showing query syntax patterns\n- Cross-references to related types and upcoming implementation tasks\n\n**Verification:**\n- Project builds successfully (0 warnings, 0 errors)\n- All existing tests pass (221/227, same 6 known failures in ArrayOperatorTests)\n- No regressions introduced\n\n**Enables:**\nThis foundation enables task-106+ (CustomOperation members: where, sortBy, take, skip, select) which will provide the actual query DSL syntax.
+Added QueryBuilder type with For, Yield, Quote, Run members. Created global query instance in AutoOpen module. All members return Unchecked.defaultof (quotation-based approach). Run member is placeholder for task-118. Added 250+ lines of comprehensive XML documentation. Build successful.
 <!-- SECTION:NOTES:END -->

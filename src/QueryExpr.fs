@@ -681,6 +681,156 @@ type QueryBuilder() =
     /// </example>
     member _.Run(expr: Microsoft.FSharp.Quotations.Expr<TranslatedQuery<'T>>) : TranslatedQuery<'T> =
         raise (System.NotImplementedException("QueryBuilder.Run will be implemented in task-118"))
+    
+    // ============================================================
+    // CUSTOM OPERATIONS
+    // ============================================================
+    
+    /// <summary>
+    /// Enables 'where (predicate)' filtering syntax in query expressions.
+    /// </summary>
+    ///
+    /// <param name="source">The source sequence (from the 'for..in' clause).</param>
+    /// <param name="predicate">
+    /// A boolean predicate function that filters documents.
+    /// The lambda expression (fun x -> x.Field op value) is analyzed in the quotation.
+    /// </param>
+    ///
+    /// <typeparam name="'T">The document type being filtered.</typeparam>
+    ///
+    /// <returns>
+    /// Unchecked.defaultof (never returns, only for type inference).
+    /// </returns>
+    ///
+    /// <remarks>
+    /// This member is NEVER EXECUTED. The predicate is captured in the quotation
+    /// and translated by QueryTranslator.translatePredicate (tasks 112-114).
+    ///
+    /// <para><strong>MaintainsVariableSpace = true:</strong></para>
+    ///
+    /// This attribute keeps the iteration variable (e.g., 'user') in scope after
+    /// the where clause, allowing subsequent operations to reference it:
+    /// <code>
+    /// query {
+    ///     for user in users do
+    ///     where (user.Age > 18)    // 'user' variable defined here
+    ///     sortBy user.Name         // 'user' still in scope
+    /// }
+    /// </code>
+    ///
+    /// <para><strong>ProjectionParameter:</strong></para>
+    ///
+    /// This attribute enables lambda syntax for the predicate. The compiler
+    /// captures the lambda as a quotation expression tree, which is then
+    /// analyzed to extract field names, operators, and values.
+    ///
+    /// <para><strong>Supported Predicate Syntax:</strong></para>
+    ///
+    /// **Comparison operators** (task-112):
+    /// - Equality: x.Field = value
+    /// - Inequality: x.Field &lt;&gt; value
+    /// - Greater than: x.Field &gt; value
+    /// - Greater or equal: x.Field &gt;= value
+    /// - Less than: x.Field &lt; value
+    /// - Less or equal: x.Field &lt;= value
+    ///
+    /// **Logical operators** (task-113):
+    /// - AND: predicate1 &amp;&amp; predicate2
+    /// - OR: predicate1 || predicate2
+    /// - NOT: not predicate
+    ///
+    /// **String methods** (task-114):
+    /// - Contains: x.Field.Contains("text")
+    /// - StartsWith: x.Field.StartsWith("prefix")
+    /// - EndsWith: x.Field.EndsWith("suffix")
+    ///
+    /// **Nested fields:**
+    /// - Dot notation: x.Address.City = "Seattle"
+    /// - Deep nesting: x.User.Profile.Email.Contains("@gmail.com")
+    ///
+    /// <para><strong>Multiple Where Clauses:</strong></para>
+    ///
+    /// Multiple where clauses are combined with AND logic by QueryTranslator:
+    /// <code>
+    /// query {
+    ///     for user in users do
+    ///     where (user.Age >= 18)
+    ///     where (user.Status = "active")
+    /// }
+    /// // Equivalent to: WHERE age >= 18 AND status = 'active'
+    /// </code>
+    ///
+    /// <para><strong>Translation Example:</strong></para>
+    ///
+    /// User writes:
+    /// <code>
+    /// where (user.Age >= 18 &amp;&amp; user.Email.Contains("@gmail.com"))
+    /// </code>
+    ///
+    /// Captured quotation (simplified):
+    /// <code>
+    /// Call(op_BooleanAnd,
+    ///   [Call(op_GreaterThanOrEqual, [PropertyGet(user, "Age"), Value(18)]);
+    ///    Call(PropertyGet(user, "Email"), "Contains", [Value("@gmail.com")])])
+    /// </code>
+    ///
+    /// Translated to:
+    /// <code>
+    /// Query.And [
+    ///     Query.Field("age", FieldOp.Compare(box (CompareOp.Gte 18)))
+    ///     Query.Field("email", FieldOp.String(StringOp.Contains "@gmail.com"))
+    /// ]
+    /// </code>
+    /// </remarks>
+    ///
+    /// <example>
+    /// <code>
+    /// // Simple comparison
+    /// query {
+    ///     for user in users do
+    ///     where (user.Age >= 18)
+    /// }
+    ///
+    /// // Logical operators
+    /// query {
+    ///     for user in users do
+    ///     where (user.Age >= 18 &amp;&amp; user.Age &lt;= 65)
+    /// }
+    ///
+    /// // String methods
+    /// query {
+    ///     for user in users do
+    ///     where (user.Email.Contains("@gmail.com"))
+    /// }
+    ///
+    /// // Nested fields
+    /// query {
+    ///     for user in users do
+    ///     where (user.Address.City = "Seattle")
+    /// }
+    ///
+    /// // Multiple where clauses (AND)
+    /// query {
+    ///     for product in products do
+    ///     where (product.Category = "electronics")
+    ///     where (product.Price &lt; 1000.0)
+    ///     where (product.InStock = true)
+    /// }
+    /// // Equivalent to: category = 'electronics' AND price < 1000 AND inStock = true
+    ///
+    /// // Complex nested logic
+    /// query {
+    ///     for user in users do
+    ///     where ((user.Age >= 18 &amp;&amp; user.Age &lt;= 65) || user.IsAdmin = true)
+    /// }
+    /// </code>
+    /// </example>
+    [<CustomOperation("where", MaintainsVariableSpace = true)>]
+    member _.Where(
+        source: TranslatedQuery<'T>,
+        [<ProjectionParameter>] predicate: 'T -> bool
+    ) : TranslatedQuery<'T> =
+        Unchecked.defaultof<_>
 
 /// <summary>
 /// Module providing the global 'query' computation expression instance.
