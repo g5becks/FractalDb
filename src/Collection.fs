@@ -1086,37 +1086,45 @@ module Collection =
         Task.FromResult(result)
 
     /// <summary>
-    /// Returns distinct values for a specified field, optionally filtered.
+    /// Returns distinct values for a specified field, optionally filtered by a query.
     /// </summary>
-    /// <param name="field">The field name to get distinct values from.</param>
-    /// <param name="filter">Optional query filter to apply before getting distinct values.</param>
+    /// <param name="field">The field path to extract distinct values from (e.g., "email", "address.city").</param>
+    /// <param name="filter">The query filter to apply before extracting distinct values.</param>
     /// <param name="collection">The collection to query.</param>
     /// <returns>
-    /// Task containing a list of distinct values as objects.
+    /// Task containing FractalResult with list of distinct values of type 'V.
     /// </returns>
     /// <remarks>
-    /// distinct extracts unique values from the specified field across all documents
-    /// (or filtered documents if a filter is provided).
+    /// distinct extracts unique values from a specified field across all matching documents.
+    /// Uses json_extract to access nested fields in the JSON body and SELECT DISTINCT
+    /// to return only unique values.
+    ///
+    /// Field paths:
+    /// - Top-level fields: "email", "name", "age"
+    /// - Nested fields: "address.city", "profile.settings.theme"
+    /// - Array elements: Not supported (use specific index like "tags[0]")
     ///
     /// Implementation:
-    /// - Uses SELECT DISTINCT json_extract(body, $.field)
-    /// - NULL values are excluded from results
-    /// - Values are returned as obj and may need type casting
+    /// - Translates filter query to SQL WHERE clause
+    /// - Uses json_extract(body, '$.{field}') to access field values
+    /// - SELECT DISTINCT ensures only unique values are returned
+    /// - Deserializes extracted JSON values to type 'V
     ///
     /// Performance:
     /// - O(n) time complexity (scans filtered documents)
-    /// - O(d) space complexity where d = number of distinct values
-    /// - No automatic sorting of results
-    /// - Consider indexes on the distinct field for better performance
+    /// - Result size depends on uniqueness of field values
+    /// - No built-in limit - returns all distinct values
+    /// - Uses indexes for WHERE clause when available
     ///
-    /// Type handling:
-    /// - Results are returned as obj list
-    /// - Caller must cast to appropriate type
-    /// - JSON types map to: string, int64, double, bool, null
+    /// Type constraints:
+    /// - 'V must be a type that can be deserialized from JSON
+    /// - Common types: string, int, bool, float, DateTime, etc.
+    /// - For complex objects, ensure proper JSON serialization
     ///
     /// Error handling:
-    /// - Returns empty list if no values found
-    /// - Throws exception on database errors or invalid field path
+    /// - Returns FractalResult.Ok with empty list if no documents match
+    /// - Returns FractalResult.Error on database errors
+    /// - Returns FractalResult.Error on deserialization failures
     ///
     /// Thread safety:
     /// - Safe for concurrent reads
@@ -1124,58 +1132,75 @@ module Collection =
     /// </remarks>
     /// <example>
     /// <code>
-    /// // Get all unique categories
-    /// let! categories =
+    /// // Get all unique email addresses
+    /// let! result = users |> Collection.distinct "email" Query.Empty
+    /// match result with
+    /// | Ok emails ->
+    ///     for email in emails do
+    ///         printfn $"Email: {email}"
+    /// | Error err ->
+    ///     printfn $"Error: {err}"
+    ///
+    /// // Get distinct cities for active users
+    /// let! result =
+    ///     users
+    ///     |> Collection.distinct "address.city" (Query.field "active" (Query.eq true))
+    /// match result with
+    /// | Ok cities ->
+    ///     printfn $"Found {cities.Length} unique cities"
+    /// | Error err ->
+    ///     printfn $"Error: {err}"
+    ///
+    /// // Get distinct product categories with explicit type annotation
+    /// let! result =
     ///     products
-    ///     |> Collection.distinct "category" None
-    /// for cat in categories do
-    ///     printfn $"Category: {cat :?> string}"
-    ///
-    /// // Get unique statuses for active users
-    /// let! statuses =
-    ///     users
-    ///     |> Collection.distinct "status"
-    ///         (Some (Query.field "active" (Query.eq true)))
-    ///
-    /// // Get distinct ages
-    /// let! ages =
-    ///     users
-    ///     |> Collection.distinct "age" None
-    /// let ageList = ages |> List.map (fun x -> x :?> int64)
+    ///     |> Collection.distinct&lt;Product, string&gt; "category" Query.Empty
+    /// match result with
+    /// | Ok categories ->
+    ///     for cat in categories do
+    ///         printfn $"Category: {cat}"
+    /// | Error err ->
+    ///     printfn $"Error: {err}"
     /// </code>
     /// </example>
-    let distinct (field: string) (filter: option<Query<'T>>) (collection: Collection<'T>) : Task<list<obj>> =
+    let distinct<'T, 'V> (field: string) (filter: Query<'T>) (collection: Collection<'T>) : Task<FractalResult<list<'V>>> =
+        tryDbOperationAsync (fun () ->
+            task {
+                let translated = collection.Translator.Translate(filter)
 
-        let whereClause =
-            match filter with
-            | None -> ""
-            | Some q ->
-                let translated = collection.Translator.Translate(q)
+                let whereClause =
+                    if translated.Sql = "" then
+                        ""
+                    else
+                        $"WHERE {translated.Sql}"
 
-                if translated.Sql = "" then
-                    ""
-                else
-                    $"WHERE {translated.Sql}"
+                let sql =
+                    $"SELECT DISTINCT json_extract(body, '$.{field}') as value 
+                      FROM {collection.Name} {whereClause}"
 
-        let sql =
-            $"SELECT DISTINCT json_extract(body, '$.{field}') as value 
-                FROM {collection.Name} {whereClause}
-                WHERE json_extract(body, '$.{field}') IS NOT NULL"
+                let params' =
+                    translated.Parameters |> List.map (fun (name, value) -> name, toSqlType value)
 
-        let params' =
-            match filter with
-            | None -> []
-            | Some q ->
-                let translated = collection.Translator.Translate(q)
-                translated.Parameters |> List.map (fun (name, value) -> name, toSqlType value)
+                let dbResult =
+                    collection.Connection
+                    |> Db.newCommand sql
+                    |> Db.setParams params'
+                    |> Db.query (fun rd -> rd.ReadString "value")
 
-        let dbResult =
-            collection.Connection
-            |> Db.newCommand sql
-            |> Db.setParams params'
-            |> Db.query (fun rd -> rd.GetValue(0))
+                // Deserialize each JSON value to type 'V, filtering out nulls
+                let values =
+                    dbResult
+                    |> List.choose (fun jsonValue ->
+                        if isNull jsonValue || jsonValue = "" then
+                            None
+                        else
+                            try
+                                Some(deserialize<'V> jsonValue)
+                            with
+                            | _ -> None)
 
-        Task.FromResult(dbResult)
+                return values
+            })
 
     // ═══════════════════════════════════════════════════════════════
     // WRITE OPERATIONS (Single Document)
