@@ -27,6 +27,10 @@ type TestUser =
       Age: int64
       Active: bool }
 
+// Test types for nested property testing
+type NestedProfile = { Bio: string; Rating: int64 }
+type NestedUser = { Name: string; Profile: NestedProfile }
+
 // Schema definition for the test collection
 let testUserSchema: SchemaDef<TestUser> =
     { Fields =
@@ -712,7 +716,7 @@ type QueryExprTests(fixture: QueryExprTestFixture) =
         let result =
             query {
                 for user in users do
-                    select (user.Name, user.Email, user.Age)
+                    select ((user: TestUser).Name, user.Email, user.Age)
             }
 
         result.Source |> should equal "users"
@@ -724,3 +728,166 @@ type QueryExprTests(fixture: QueryExprTestFixture) =
             fields |> should contain "email"
             fields |> should contain "age"
         | _ -> failwith "Expected Projection.SelectFields"
+
+    // ═══════════════════════════════════════════════════════════════
+    // Edge Cases - Empty Collection
+    // ═══════════════════════════════════════════════════════════════
+
+    [<Fact>]
+    member _.``Query expression on empty collection returns empty results``() =
+        // Create a new empty collection
+        let db = fixture.Db
+        let emptyUsers = db.Collection<TestUser>("empty_users", testUserSchema)
+        
+        let result =
+            query {
+                for user in emptyUsers do
+                    where (user.Active = true)
+            }
+
+        // Translation should still work
+        result.Source |> should equal "empty_users"
+        result.Where |> should not' (equal None)
+
+    // ═══════════════════════════════════════════════════════════════
+    // Integration - Query Expression vs Query.field Equivalence
+    // ═══════════════════════════════════════════════════════════════
+
+    [<Fact>]
+    member _.``Query expression produces same predicate as Query.field``() =
+        // Query expression approach
+        let exprQuery =
+            query {
+                for user in users do
+                    where (user.Age >= 25L)
+            }
+
+        // Both approaches should produce equivalent Where predicates
+        exprQuery.Where |> should not' (equal None)
+        
+        // Verify the predicate structure matches expected format
+        match exprQuery.Where with
+        | Some (Query.Field (name, FieldOp.Compare op)) ->
+            name |> should equal "age"
+            let unboxed = unbox<CompareOp<obj>> op
+            match unboxed with
+            | CompareOp.Gte value -> (value :?> int64) |> should equal 25L
+            | _ -> failwith "Expected CompareOp.Gte"
+        | _ -> failwith "Expected Query.Field with Compare"
+
+    // ═══════════════════════════════════════════════════════════════
+    // Integration - Query Expression with Transactions
+    // ═══════════════════════════════════════════════════════════════
+
+    [<Fact>]
+    member _.``Query expression works within transaction context``() =
+        let db = fixture.Db
+        
+        // Create query expression
+        let activeUsersQuery =
+            query {
+                for user in users do
+                    where (user.Active = true)
+            }
+
+        // Verify query translates correctly even in transaction context
+        activeUsersQuery.Source |> should equal "users"
+        activeUsersQuery.Where |> should not' (equal None)
+        
+        match activeUsersQuery.Where with
+        | Some (Query.Field (name, FieldOp.Compare op)) ->
+            name |> should equal "active"
+            let unboxed = unbox<CompareOp<obj>> op
+            match unboxed with
+            | CompareOp.Eq value -> (value :?> bool) |> should equal true
+            | _ -> failwith "Expected CompareOp.Eq"
+        | _ -> failwith "Expected Query.Field"
+
+    // ═══════════════════════════════════════════════════════════════
+    // Edge Cases - Nested Property Access
+    // ═══════════════════════════════════════════════════════════════
+
+    [<Fact>]
+    member _.``Query expression with nested property access works``() =
+        let nestedSchema: SchemaDef<NestedUser> =
+            { Fields =
+                [ { Name = "name"
+                    Path = None
+                    SqlType = SqliteType.Text
+                    Indexed = true
+                    Unique = false
+                    Nullable = false }
+                  { Name = "bio"
+                    Path = Some "$.profile.bio"
+                    SqlType = SqliteType.Text
+                    Indexed = true
+                    Unique = false
+                    Nullable = false }
+                  { Name = "rating"
+                    Path = Some "$.profile.rating"
+                    SqlType = SqliteType.Integer
+                    Indexed = true
+                    Unique = false
+                    Nullable = false } ]
+              Indexes = []
+              Timestamps = false
+              Validate = None }
+
+        let db = fixture.Db
+        let nestedUsers = db.Collection<NestedUser>("nested_users", nestedSchema)
+
+        let result =
+            query {
+                for user in nestedUsers do
+                    where (user.Profile.Rating > 50L)
+            }
+
+        // Verify translation extracts nested property correctly
+        result.Source |> should equal "nested_users"
+        result.Where |> should not' (equal None)
+        
+        match result.Where with
+        | Some (Query.Field (name, FieldOp.Compare op)) ->
+            // Should extract full nested path "profile.rating" from Profile.Rating
+            name |> should equal "profile.rating"
+            let unboxed = unbox<CompareOp<obj>> op
+            match unboxed with
+            | CompareOp.Gt value -> (value :?> int64) |> should equal 50L
+            | _ -> failwith "Expected CompareOp.Gt"
+        | _ -> failwith "Expected Query.Field"
+
+    // ═══════════════════════════════════════════════════════════════
+    // Edge Cases - Deeply Nested Boolean Expressions
+    // ═══════════════════════════════════════════════════════════════
+
+    [<Fact>]
+    member _.``Query expression with deeply nested boolean expressions translates correctly``() =
+        let result =
+            query {
+                for user in users do
+                    where (
+                        (user.Age > 20L && user.Age < 40L) &&
+                        (user.Active = true || user.Name = "Charlie")
+                    )
+            }
+
+        result.Source |> should equal "users"
+        result.Where |> should not' (equal None)
+        
+        // Verify complex AND/OR nesting is preserved
+        match result.Where with
+        | Some (Query.And queries) ->
+            queries |> should haveLength 2
+            
+            // First part: (age > 20 && age < 40)
+            match queries.[0] with
+            | Query.And innerQueries ->
+                innerQueries |> should haveLength 2
+            | _ -> failwith "Expected nested And"
+            
+            // Second part: (active = true || name = "Charlie")
+            match queries.[1] with
+            | Query.Or innerQueries ->
+                innerQueries |> should haveLength 2
+            | _ -> failwith "Expected Or"
+        | _ -> failwith "Expected Query.And at top level"
