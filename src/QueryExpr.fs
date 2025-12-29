@@ -2276,6 +2276,20 @@ module internal QueryTranslator =
         // Logical NOT: not expr
         | SpecificCall <@ not @> (_, _, [ inner ]) -> Query.Not(translatePredicate inner)
 
+        // F# compiler desugars && to: if cond1 then cond2 else false
+        | IfThenElse(cond, thenExpr, Value((:? bool as falseBool), _)) when not falseBool ->
+            Query.And [ translatePredicate cond; translatePredicate thenExpr ]
+
+        // F# compiler desugars || to: if cond1 then true else cond2
+        | IfThenElse(cond, Value((:? bool as trueBool), _), elseExpr) when trueBool ->
+            Query.Or [ translatePredicate cond; translatePredicate elseExpr ]
+
+        // F# compiler may desugar not as PropertyGet on bool property
+        // Handle direct boolean property access (e.g., user.Active)
+        | PropertyGet(Some instance, propInfo, []) when propInfo.PropertyType = typeof<bool> ->
+            let field = extractPropertyName expr
+            Query.Field(field, FieldOp.Compare(CompareOp.Eq(box true)))
+
         // String.Contains: field.Contains(substring)
         | Call(Some receiver, methodInfo, [ arg ]) when methodInfo.Name = "Contains" ->
             let field = extractPropertyName receiver
@@ -2747,7 +2761,9 @@ module internal QueryTranslator =
                         | Some prop -> prop.GetValue(collection) :?> string
                         | None ->
                             let propNames = allProps |> Array.map (fun p -> p.Name) |> String.concat ", "
-                            failwith $"Collection type '{collectionType.FullName}' does not have a Name property. Available: {propNames}"
+
+                            failwith
+                                $"Collection type '{collectionType.FullName}' does not have a Name property. Available: {propNames}"
                     else
                         nameProp.GetValue(collection) :?> string
 
