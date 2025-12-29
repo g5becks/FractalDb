@@ -1,11 +1,11 @@
 ---
 id: task-112
 title: Implement QueryTranslator.translatePredicate for comparison operators
-status: To Do
+status: In Progress
 assignee:
   - '@assistant'
 created_date: '2025-12-29 06:10'
-updated_date: '2025-12-29 17:00'
+updated_date: '2025-12-29 17:20'
 labels:
   - query-expressions
   - translator

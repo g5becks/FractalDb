@@ -4,6 +4,7 @@ open System
 open FractalDb.Operators
 open FSharp.Quotations
 open FSharp.Quotations.Patterns
+open FSharp.Quotations.DerivedPatterns
 
 /// <summary>
 /// Sort direction for query result ordering.
@@ -2041,6 +2042,261 @@ module internal QueryTranslator =
         // Unsupported pattern
         | _ ->
             raise (ArgumentException($"Cannot extract property name from expression: {expr}"))
+    
+    /// <summary>
+    /// Evaluates a quotation expression to extract its runtime value.
+    /// </summary>
+    ///
+    /// <param name="expr">
+    /// F# quotation expression to evaluate (e.g., Value(42), captured variables, computed expressions).
+    /// </param>
+    ///
+    /// <returns>
+    /// Boxed object representing the runtime value of the expression.
+    /// </returns>
+    ///
+    /// <remarks>
+    /// This helper function bridges F# compile-time quotations with runtime values needed
+    /// for SQL query generation.
+    ///
+    /// <para><strong>Use Case:</strong></para>
+    ///
+    /// In query expressions, the right-hand side of comparisons may be:
+    /// - Constants: where (user.Age > 18)
+    /// - Captured variables: where (user.Status = targetStatus)
+    /// - Computed expressions: where (user.Price &lt; maxPrice * discountRate)
+    ///
+    /// All these need to be evaluated to get actual runtime values for SQL parameters.
+    ///
+    /// <para><strong>Implementation:</strong></para>
+    ///
+    /// Uses Microsoft.FSharp.Linq.RuntimeHelpers.LeafExpressionConverter.EvaluateQuotation
+    /// to safely evaluate the expression tree and extract the runtime value.
+    ///
+    /// This handles:
+    /// - Value nodes: Direct constants
+    /// - Variable captures: Closure variables
+    /// - Complex expressions: Arithmetic, function calls, etc.
+    ///
+    /// <para><strong>Type Handling:</strong></para>
+    ///
+    /// Returns obj (boxed) because:
+    /// - SQL parameters are type-erased
+    /// - Query&lt;'T&gt; stores values as obj
+    /// - Caller can downcast if needed (e.g., :?> string)
+    ///
+    /// <para><strong>Performance:</strong></para>
+    ///
+    /// Evaluation happens once at query construction time, not per-row:
+    /// <code>
+    /// let maxAge = 65
+    /// query { for user in users do where (user.Age &lt;= maxAge) }
+    /// // maxAge evaluated once → SQL: WHERE data->>'age' &lt;= 65
+    /// // Not evaluated per row
+    /// </code>
+    /// </remarks>
+    ///
+    /// <example>
+    /// <code>
+    /// // Constants
+    /// evaluateExpr &lt;@ 42 @&gt;          // Returns: box 42
+    /// evaluateExpr &lt;@ "text" @&gt;      // Returns: box "text"
+    ///
+    /// // Captured variables
+    /// let age = 18
+    /// evaluateExpr &lt;@ age @&gt;        // Returns: box 18
+    ///
+    /// // Computed expressions
+    /// let max = 100
+    /// evaluateExpr &lt;@ max * 2 @&gt;   // Returns: box 200
+    ///
+    /// // In translatePredicate context
+    /// // where (user.Age > 18)
+    /// // Captured quotation: Call(op_GreaterThan, PropertyGet(user, Age), Value(18))
+    /// let field = extractPropertyName left   // "age"
+    /// let value = evaluateExpr right         // 18
+    /// // Result: Query.Field("age", FieldOp.Compare(CompareOp.Gt 18))
+    /// </code>
+    /// </example>
+    let private evaluateExpr (expr: Expr) : obj =
+        Microsoft.FSharp.Linq.RuntimeHelpers.LeafExpressionConverter.EvaluateQuotation expr
+    
+    /// <summary>
+    /// Translates F# quotation predicate expressions to Query&lt;'T&gt; AST.
+    /// </summary>
+    ///
+    /// <param name="expr">
+    /// F# quotation expression representing a boolean predicate (e.g., user.Age > 18).
+    /// </param>
+    ///
+    /// <typeparam name="'T">
+    /// Document type being queried (preserved for type safety).
+    /// </typeparam>
+    ///
+    /// <returns>
+    /// Query&lt;'T&gt; AST node representing the translated predicate.
+    /// </returns>
+    ///
+    /// <exception cref="System.Exception">
+    /// Thrown when expression contains unsupported patterns (e.g., method calls, complex logic).
+    /// </exception>
+    ///
+    /// <remarks>
+    /// This function is the core of query expression translation. It recursively walks the
+    /// quotation tree and converts F# operators and expressions into FractalDb's Query&lt;'T&gt; AST,
+    /// which is then converted to SQL by SqlTranslator.
+    ///
+    /// <para><strong>Translation Pipeline:</strong></para>
+    ///
+    /// 1. User writes: where (user.Age > 18)
+    /// 2. Captured quotation: Call(op_GreaterThan, PropertyGet(user, Age), Value(18))
+    /// 3. translatePredicate → Query.Field("age", FieldOp.Compare(CompareOp.Gt 18))
+    /// 4. SqlTranslator → SQL: WHERE data->>'age' > 18
+    ///
+    /// <para><strong>Currently Supported Patterns (Task 112):</strong></para>
+    ///
+    /// 1. <strong>Lambda wrappers</strong>: Lambda(x, body)
+    ///    - Strips outer lambda from 'where' clause
+    ///    - Recursively processes body
+    ///
+    /// 2. <strong>Equality</strong>: Property = Value
+    ///    - SpecificCall &lt;@ (=) @&gt;
+    ///    - Maps to: CompareOp.Eq
+    ///    - Example: user.Status = "active"
+    ///
+    /// 3. <strong>Inequality</strong>: Property &lt;> Value
+    ///    - SpecificCall &lt;@ (&lt;>) @&gt;
+    ///    - Maps to: CompareOp.Ne
+    ///    - Example: user.Id &lt;> excludedId
+    ///
+    /// 4. <strong>Greater Than</strong>: Property > Value
+    ///    - SpecificCall &lt;@ (>) @&gt;
+    ///    - Maps to: CompareOp.Gt
+    ///    - Example: user.Age > 18
+    ///
+    /// 5. <strong>Greater Than or Equal</strong>: Property >= Value
+    ///    - SpecificCall &lt;@ (>=) @&gt;
+    ///    - Maps to: CompareOp.Gte
+    ///    - Example: product.Price >= 100.0
+    ///
+    /// 6. <strong>Less Than</strong>: Property &lt; Value
+    ///    - SpecificCall &lt;@ (&lt;) @&gt;
+    ///    - Maps to: CompareOp.Lt
+    ///    - Example: user.Age &lt; 65
+    ///
+    /// 7. <strong>Less Than or Equal</strong>: Property &lt;= Value
+    ///    - SpecificCall &lt;@ (&lt;=) @&gt;
+    ///    - Maps to: CompareOp.Lte
+    ///    - Example: order.Total &lt;= budget
+    ///
+    /// <para><strong>Future Extensions:</strong></para>
+    ///
+    /// - Task 113: Logical operators (&&, ||, not)
+    /// - Task 114: String methods (Contains, StartsWith, EndsWith)
+    /// - Future: Array operations (Any, All, Size)
+    /// - Future: Null checks (IsNull, IsNotNull)
+    ///
+    /// <para><strong>Pattern Matching Strategy:</strong></para>
+    ///
+    /// Uses SpecificCall active pattern to match against specific operator quotations:
+    /// <code>
+    /// SpecificCall &lt;@ (>) @&gt; (_, _, [left; right])
+    /// // Matches: left > right
+    /// // Extracts: left expression, right expression
+    /// </code>
+    ///
+    /// Then:
+    /// 1. extractPropertyName left → field name (e.g., "age")
+    /// 2. evaluateExpr right → runtime value (e.g., 18)
+    /// 3. Map operator → CompareOp case (e.g., CompareOp.Gt)
+    /// 4. Build AST → Query.Field("age", FieldOp.Compare(box (CompareOp.Gt 18)))
+    ///
+    /// <para><strong>Value Boxing:</strong></para>
+    ///
+    /// Values are boxed because Query&lt;'T&gt; is type-erased - it doesn't know if the value
+    /// is int, string, float, etc. The box is preserved through SQL generation and becomes
+    /// a SQL parameter.
+    ///
+    /// <para><strong>Type Safety:</strong></para>
+    ///
+    /// The 'T type parameter is preserved through translation for downstream type safety,
+    /// even though the Query&lt;'T&gt; cases use obj for value storage.
+    /// </remarks>
+    ///
+    /// <example>
+    /// <code>
+    /// // Simple comparison
+    /// translatePredicate &lt;@ fun (user: User) -> user.Age > 18 @&gt;
+    /// // Returns: Query.Field("age", FieldOp.Compare(box (CompareOp.Gt 18)))
+    /// // SQL: WHERE data->>'age' > 18
+    ///
+    /// // Equality
+    /// translatePredicate &lt;@ fun (user: User) -> user.Status = "active" @&gt;
+    /// // Returns: Query.Field("status", FieldOp.Compare(box (CompareOp.Eq "active")))
+    /// // SQL: WHERE data->>'status' = 'active'
+    ///
+    /// // Inequality
+    /// translatePredicate &lt;@ fun (product: Product) -> product.Stock &lt;> 0 @&gt;
+    /// // Returns: Query.Field("stock", FieldOp.Compare(box (CompareOp.Ne 0)))
+    /// // SQL: WHERE data->>'stock' != 0
+    ///
+    /// // Less than or equal
+    /// translatePredicate &lt;@ fun (order: Order) -> order.Total &lt;= 1000.0 @&gt;
+    /// // Returns: Query.Field("total", FieldOp.Compare(box (CompareOp.Lte 1000.0)))
+    /// // SQL: WHERE data->>'total' &lt;= 1000.0
+    ///
+    /// // Nested property
+    /// translatePredicate &lt;@ fun (user: User) -> user.Address.City = "Seattle" @&gt;
+    /// // Returns: Query.Field("address.city", FieldOp.Compare(box (CompareOp.Eq "Seattle")))
+    /// // SQL: WHERE data->'address'->>'city' = 'Seattle'
+    /// </code>
+    /// </example>
+    let rec translatePredicate<'T> (expr: Expr) : Query<'T> =
+        match expr with
+        // Lambda wrapper: fun x -> body
+        // Strip lambda and process body
+        | Lambda (_, body) ->
+            translatePredicate body
+        
+        // Property = Value (Equality)
+        | SpecificCall <@ (=) @> (_, _, [left; right]) ->
+            let field = extractPropertyName left
+            let value = evaluateExpr right
+            Query.Field(field, FieldOp.Compare(box (CompareOp.Eq value)))
+        
+        // Property <> Value (Inequality)
+        | SpecificCall <@ (<>) @> (_, _, [left; right]) ->
+            let field = extractPropertyName left
+            let value = evaluateExpr right
+            Query.Field(field, FieldOp.Compare(box (CompareOp.Ne value)))
+        
+        // Property > Value (Greater Than)
+        | SpecificCall <@ (>) @> (_, _, [left; right]) ->
+            let field = extractPropertyName left
+            let value = evaluateExpr right
+            Query.Field(field, FieldOp.Compare(box (CompareOp.Gt value)))
+        
+        // Property >= Value (Greater Than or Equal)
+        | SpecificCall <@ (>=) @> (_, _, [left; right]) ->
+            let field = extractPropertyName left
+            let value = evaluateExpr right
+            Query.Field(field, FieldOp.Compare(box (CompareOp.Gte value)))
+        
+        // Property < Value (Less Than)
+        | SpecificCall <@ (<) @> (_, _, [left; right]) ->
+            let field = extractPropertyName left
+            let value = evaluateExpr right
+            Query.Field(field, FieldOp.Compare(box (CompareOp.Lt value)))
+        
+        // Property <= Value (Less Than or Equal)
+        | SpecificCall <@ (<=) @> (_, _, [left; right]) ->
+            let field = extractPropertyName left
+            let value = evaluateExpr right
+            Query.Field(field, FieldOp.Compare(box (CompareOp.Lte value)))
+        
+        // Unsupported pattern
+        | _ ->
+            failwith $"Unsupported predicate expression: {expr}"
 
 /// <summary>
 /// Module providing the global 'query' computation expression instance.
