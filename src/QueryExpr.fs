@@ -356,3 +356,395 @@ type TranslatedQuery<'T> =
         /// </remarks>
         Projection: Projection
     }
+
+/// <summary>
+/// Computation expression builder for LINQ-style queries using F# quotations.
+/// </summary>
+///
+/// <remarks>
+/// QueryBuilder provides a computation expression syntax for building type-safe queries
+/// that are translated at runtime from F# quotations into TranslatedQuery values.
+///
+/// <para><strong>How It Works:</strong></para>
+///
+/// Unlike typical computation expressions that execute their members, QueryBuilder uses
+/// F# quotations to capture the entire query structure as an abstract syntax tree (AST).
+/// The Quote member captures the expression, and the Run member translates it.
+///
+/// All builder members (For, Yield, Where, etc.) return Unchecked.defaultof and are
+/// NEVER EXECUTED. They exist only for type checking and AST structure. The actual
+/// query logic is extracted from the quotation during translation.
+///
+/// <para><strong>Query Translation Pipeline:</strong></para>
+///
+/// 1. **User writes query**: query { for user in users do where (user.Age > 18) }
+/// 2. **F# compiler captures quotation**: Quote member receives Expr&lt;TranslatedQuery&lt;'T&gt;&gt;
+/// 3. **Run calls QueryTranslator.translate**: Walks AST, extracts predicates/sorts/projections
+/// 4. **Translation produces TranslatedQuery**: Structured query object
+/// 5. **QueryExecutor.execute runs query**: Converts to SQL and executes against database
+/// 6. **Results returned**: seq&lt;'T&gt; or projected type
+///
+/// <para><strong>Supported Query Syntax:</strong></para>
+///
+/// - **for x in source do**: Specifies collection to query
+/// - **where (predicate)**: Filters documents (can be used multiple times, combined with AND)
+/// - **sortBy field**: Sort ascending by field
+/// - **sortByDescending field**: Sort descending by field  
+/// - **thenBy field**: Secondary sort ascending
+/// - **thenByDescending field**: Secondary sort descending
+/// - **skip n**: Skip first n results (pagination)
+/// - **take n**: Limit to n results (pagination)
+/// - **select expr**: Project results (all fields, specific fields, or single field)
+///
+/// <para><strong>Example Queries:</strong></para>
+///
+/// Simple filter:
+/// <code>
+/// query {
+///     for user in usersCollection do
+///     where (user.Age >= 18)
+/// }
+/// </code>
+///
+/// Complex query with sorting and pagination:
+/// <code>
+/// query {
+///     for product in productsCollection do
+///     where (product.Category = "electronics")
+///     where (product.Price &lt; 1000.0)
+///     sortBy product.Price
+///     thenBy product.Name
+///     skip 20
+///     take 10
+///     select (product.Name, product.Price)
+/// }
+/// </code>
+///
+/// Projection to single field:
+/// <code>
+/// query {
+///     for user in usersCollection do
+///     where (user.Subscribed = true)
+///     select user.Email
+/// }
+/// </code>
+///
+/// <para><strong>Implementation Status:</strong></para>
+///
+/// - task-105: For, Yield, Quote, Run members (foundation)
+/// - task-106: where CustomOperation
+/// - task-107: sortBy, sortByDescending CustomOperations
+/// - task-108: take, skip CustomOperations
+/// - task-109: select CustomOperation
+/// - task-110: count, exists, head, headOrDefault CustomOperations
+/// - task-111-116: QueryTranslator implementation
+/// - task-117: QueryExecutor implementation
+/// - task-118: Wire Run member to translator/executor
+/// </remarks>
+///
+/// <example>
+/// <code>
+/// // Basic usage with global 'query' instance
+/// let adults =
+///     query {
+///         for user in usersCollection do
+///         where (user.Age >= 18)
+///     }
+///
+/// // Execute query
+/// let! results = adults  // Returns Task&lt;seq&lt;User&gt;&gt;
+///
+/// // Complex query
+/// let topProducts =
+///     query {
+///         for product in productsCollection do
+///         where (product.InStock = true)
+///         where (product.Rating >= 4.0)
+///         sortByDescending product.Sales
+///         take 10
+///         select product.Name
+///     }
+/// </code>
+/// </example>
+type QueryBuilder() =
+    
+    /// <summary>
+    /// Enables 'for x in source do' syntax in query expressions.
+    /// </summary>
+    ///
+    /// <param name="source">The collection to query (Collection&lt;'T&gt; instance).</param>
+    /// <param name="body">
+    /// The body of the query expression (never executed, only analyzed in quotation).
+    /// </param>
+    ///
+    /// <typeparam name="'T">The document type being queried.</typeparam>
+    ///
+    /// <returns>
+    /// Unchecked.defaultof (never returns, only for type inference).
+    /// </returns>
+    ///
+    /// <remarks>
+    /// This member is NEVER EXECUTED. It exists only to enable the 'for..in..do' syntax
+    /// and provide type information to the F# compiler.
+    ///
+    /// The actual collection source is extracted from the quotation during translation
+    /// by QueryTranslator.translate. The quotation contains the collection instance,
+    /// which is evaluated at runtime to get the collection name and configuration.
+    ///
+    /// The body function parameter is also never called - instead, its quotation
+    /// representation is analyzed to extract query operations (where, sortBy, etc.).
+    /// </remarks>
+    ///
+    /// <example>
+    /// <code>
+    /// // The 'for user in usersCollection do' part uses this member
+    /// query {
+    ///     for user in usersCollection do
+    ///     where (user.Age >= 18)
+    /// }
+    ///
+    /// // Multiple queries on different collections
+    /// let userQuery = query { for user in usersCollection do where (user.Active = true) }
+    /// let productQuery = query { for product in productsCollection do where (product.InStock = true) }
+    /// </code>
+    /// </example>
+    member _.For(source: 'Collection, body: 'T -> TranslatedQuery<'T>) : TranslatedQuery<'T> =
+        Unchecked.defaultof<_>
+    
+    /// <summary>
+    /// Enables 'yield' and implicit select syntax in query expressions.
+    /// </summary>
+    ///
+    /// <param name="value">
+    /// The value to yield (never used, only for type inference).
+    /// </param>
+    ///
+    /// <typeparam name="'T">The document type being yielded.</typeparam>
+    ///
+    /// <returns>
+    /// Unchecked.defaultof (never returns, only for type inference).
+    /// </returns>
+    ///
+    /// <remarks>
+    /// This member is NEVER EXECUTED. It enables computation expression syntax
+    /// where a query without explicit transformations returns documents as-is.
+    ///
+    /// In practice, most queries use the 'select' CustomOperation instead of
+    /// relying on Yield, but Yield is required by the computation expression
+    /// specification for proper type inference.
+    ///
+    /// When no 'select' is specified, the query returns complete documents.
+    /// The Projection field in TranslatedQuery will be SelectAll.
+    /// </remarks>
+    ///
+    /// <example>
+    /// <code>
+    /// // Implicitly uses Yield (no explicit select)
+    /// query {
+    ///     for user in usersCollection do
+    ///     where (user.Age >= 18)
+    /// }
+    /// // Returns: seq&lt;User&gt; with all fields
+    ///
+    /// // Equivalent to:
+    /// query {
+    ///     for user in usersCollection do
+    ///     where (user.Age >= 18)
+    ///     select user  // Explicit but redundant
+    /// }
+    /// </code>
+    /// </example>
+    member _.Yield(value: 'T) : TranslatedQuery<'T> =
+        Unchecked.defaultof<_>
+    
+    /// <summary>
+    /// Captures the query expression as an F# quotation for analysis.
+    /// </summary>
+    ///
+    /// <param name="expr">
+    /// The quotation representing the entire query expression AST.
+    /// </param>
+    ///
+    /// <typeparam name="'T">The document type being queried.</typeparam>
+    ///
+    /// <returns>
+    /// The same quotation, unmodified (passed through to Run).
+    /// </returns>
+    ///
+    /// <remarks>
+    /// This is the KEY member that enables quotation-based query translation.
+    ///
+    /// When the F# compiler sees a computation expression with a Quote member,
+    /// it captures the entire expression as Expr&lt;TranslatedQuery&lt;'T&gt;&gt; instead
+    /// of executing the members. This quotation contains the full AST including:
+    /// - Collection source
+    /// - Where predicates
+    /// - Sort specifications
+    /// - Skip/Take values
+    /// - Select projections
+    ///
+    /// The quotation is then passed to Run, which calls QueryTranslator.translate
+    /// to walk the AST and extract query components into a TranslatedQuery record.
+    ///
+    /// Without Quote, computation expression members would execute normally
+    /// (returning Unchecked.defaultof, which would fail). Quote prevents execution
+    /// and enables compile-time AST capture with runtime analysis.
+    /// </remarks>
+    ///
+    /// <example>
+    /// <code>
+    /// // User writes this query
+    /// query {
+    ///     for user in usersCollection do
+    ///     where (user.Age >= 18)
+    ///     select user.Email
+    /// }
+    ///
+    /// // Quote captures it as (simplified):
+    /// Expr&lt;TranslatedQuery&lt;User&gt;&gt; containing:
+    ///   Call(For,
+    ///     [usersCollection;
+    ///      Lambda(user, Call(Where,
+    ///        [Lambda(user, Call(op_GreaterThanOrEqual, [user.Age; 18]));
+    ///         Call(Select, [Lambda(user, user.Email)])]))])
+    ///
+    /// // This quotation is passed to Run for translation
+    /// </code>
+    /// </example>
+    member _.Quote(expr: Microsoft.FSharp.Quotations.Expr<TranslatedQuery<'T>>) : Microsoft.FSharp.Quotations.Expr<TranslatedQuery<'T>> =
+        expr
+    
+    /// <summary>
+    /// Translates the captured quotation into a TranslatedQuery.
+    /// </summary>
+    ///
+    /// <param name="expr">
+    /// The quotation captured by Quote, containing the query AST.
+    /// </param>
+    ///
+    /// <typeparam name="'T">The document type being queried.</typeparam>
+    ///
+    /// <returns>
+    /// A TranslatedQuery record ready for execution.
+    /// </returns>
+    ///
+    /// <remarks>
+    /// This is the final step in the computation expression pipeline and the
+    /// entry point for query translation.
+    ///
+    /// <para><strong>Translation Process:</strong></para>
+    ///
+    /// 1. **Receive quotation from Quote**: Full AST of query expression
+    /// 2. **Call QueryTranslator.translate**: Walk AST and extract components
+    /// 3. **Build TranslatedQuery**: Structured query with Source, Where, OrderBy, etc.
+    /// 4. **Return TranslatedQuery**: Ready for QueryExecutor.execute
+    ///
+    /// <para><strong>Current Implementation (task-105):</strong></para>
+    ///
+    /// Returns Unchecked.defaultof as a placeholder. The actual implementation
+    /// will be added in task-118 after QueryTranslator and QueryExecutor are
+    /// implemented (tasks 111-117).
+    ///
+    /// <para><strong>Final Implementation (task-118):</strong></para>
+    ///
+    /// Will call QueryTranslator.translate to convert the quotation into a
+    /// TranslatedQuery, then return that query for execution.
+    ///
+    /// The result type will change from TranslatedQuery&lt;'T&gt; to Task&lt;seq&lt;'T&gt;&gt;
+    /// once QueryExecutor.execute is integrated.
+    /// </remarks>
+    ///
+    /// <example>
+    /// <code>
+    /// // User code (task-105, current):
+    /// let translatedQuery =
+    ///     query {
+    ///         for user in usersCollection do
+    ///         where (user.Age >= 18)
+    ///     }
+    /// // Returns: TranslatedQuery&lt;User&gt; (placeholder, not functional yet)
+    ///
+    /// // After task-118 (final):
+    /// let translatedQuery =
+    ///     query {
+    ///         for user in usersCollection do
+    ///         where (user.Age >= 18)
+    ///     }
+    /// // Returns: TranslatedQuery with:
+    /// //   Source = "users"
+    /// //   Where = Some (Query.Field("age", FieldOp.Compare(box (CompareOp.Gte 18))))
+    /// //   OrderBy = []
+    /// //   Skip = None
+    /// //   Take = None
+    /// //   Projection = SelectAll
+    /// </code>
+    /// </example>
+    member _.Run(expr: Microsoft.FSharp.Quotations.Expr<TranslatedQuery<'T>>) : TranslatedQuery<'T> =
+        raise (System.NotImplementedException("QueryBuilder.Run will be implemented in task-118"))
+
+/// <summary>
+/// Module providing the global 'query' computation expression instance.
+/// </summary>
+///
+/// <remarks>
+/// This module is marked with [&lt;AutoOpen&gt;] so the 'query' instance is automatically
+/// available whenever FractalDb.QueryExpr is opened.
+///
+/// Users can write:
+/// <code>
+/// open FractalDb.QueryExpr
+///
+/// let myQuery = query { for user in users do where (user.Age > 18) }
+/// </code>
+///
+/// Without needing to instantiate QueryBuilder() themselves.
+///
+/// The global instance approach is standard for F# computation expressions:
+/// - async { } uses global 'async' instance
+/// - seq { } uses global 'seq' instance  
+/// - task { } uses global 'task' instance
+/// - query { } uses this global 'query' instance
+/// </remarks>
+[<AutoOpen>]
+module QueryBuilderInstance =
+    /// <summary>
+    /// Global instance of QueryBuilder for use in query expressions.
+    /// </summary>
+    ///
+    /// <remarks>
+    /// This is the entry point for all LINQ-style queries in FractalDb.
+    ///
+    /// Usage:
+    /// <code>
+    /// query { for x in collection do ... }
+    /// </code>
+    ///
+    /// The 'query' keyword is bound to this instance. When you write a query
+    /// expression, the F# compiler translates it into method calls on this builder
+    /// instance, wrapped in quotations due to the Quote member.
+    /// </remarks>
+    ///
+    /// <example>
+    /// <code>
+    /// open FractalDb
+    /// open FractalDb.QueryExpr
+    ///
+    /// task {
+    ///     use! db = FractalDb.Open("data.db")
+    ///     let users = db.Collection&lt;User&gt;("users")
+    ///
+    ///     // Use global 'query' instance
+    ///     let translatedQuery =
+    ///         query {
+    ///             for user in users do
+    ///             where (user.Age >= 18)
+    ///             where (user.Active = true)
+    ///             sortBy user.Name
+    ///             take 10
+    ///         }
+    ///
+    ///     return translatedQuery
+    /// }
+    /// </code>
+    /// </example>
+    let query = QueryBuilder()

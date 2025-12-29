@@ -1,11 +1,11 @@
 ---
 id: task-105
 title: 'Add QueryBuilder type with For, Yield, Quote, Run members'
-status: To Do
+status: In Progress
 assignee:
   - '@assistant'
 created_date: '2025-12-29 06:08'
-updated_date: '2025-12-29 17:00'
+updated_date: '2025-12-29 17:06'
 labels:
   - query-expressions
   - builder
