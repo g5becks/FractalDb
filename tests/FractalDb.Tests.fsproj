@@ -1,4 +1,4 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
     <TargetFramework>net10.0</TargetFramework>
@@ -7,6 +7,17 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <Compile Include="Assertions.fs" />
+    <Compile Include="QueryTests.fs" />
+    <Compile Include="SerializationTests.fs" />
+    <Compile Include="SqlTranslatorTests.fs" />
+    <Compile Include="UniqueConstraintDebugTest.fs" />
+    <Compile Include="CrudTests.fs" />
+    <Compile Include="QueryExecutionTests.fs" />
+    <Compile Include="TransactionTests.fs" />
+    <Compile Include="BatchTests.fs" />
+    <Compile Include="AtomicTests.fs" />
+    <Compile Include="ValidationTests.fs" />
     <Compile Include="Tests.fs" />
     <Compile Include="Program.fs" />
   </ItemGroup>

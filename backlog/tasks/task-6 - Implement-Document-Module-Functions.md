@@ -1,10 +1,11 @@
 ---
 id: task-6
 title: Implement Document Module Functions
-status: To Do
-assignee: []
+status: Done
+assignee:
+  - '@claude'
 created_date: '2025-12-28 06:28'
-updated_date: '2025-12-28 16:53'
+updated_date: '2025-12-28 17:07'
 labels:
   - phase-1
   - core
@@ -22,14 +23,45 @@ Create the Document module with helper functions in src/Types.fs. Reference: FSH
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 Add 'create' function: takes data:'T, generates ID via IdGenerator.generate(), sets CreatedAt/UpdatedAt to Timestamp.now(), returns Document<'T>
-- [ ] #2 Add 'createWithId' function: takes id:string and data:'T, sets timestamps to now(), returns Document<'T>
-- [ ] #3 Add 'update' function: takes f:('T -> 'T) and doc:Document<'T>, returns new Document with f applied to Data and UpdatedAt set to now()
-- [ ] #4 Add 'map' function: takes f:('T -> 'U) and doc:Document<'T>, returns Document<'U> with same Id/timestamps but transformed Data
-- [ ] #5 Run 'dotnet build' - build succeeds
-- [ ] #6 All public types and functions have XML doc comments with <summary>, and public functions include <param>, <returns>, and <example> (see doc-2 for standards)
+- [x] #1 Add 'create' function: takes data:'T, generates ID via IdGenerator.generate(), sets CreatedAt/UpdatedAt to Timestamp.now(), returns Document<'T>
+- [x] #2 Add 'createWithId' function: takes id:string and data:'T, sets timestamps to now(), returns Document<'T>
+- [x] #3 Add 'update' function: takes f:('T -> 'T) and doc:Document<'T>, returns new Document with f applied to Data and UpdatedAt set to now()
+- [x] #4 Add 'map' function: takes f:('T -> 'U) and doc:Document<'T>, returns Document<'U> with same Id/timestamps but transformed Data
+- [x] #5 Run 'dotnet build' - build succeeds
+- [x] #6 All public types and functions have XML doc comments with <summary>, and public functions include <param>, <returns>, and <example> (see doc-2 for standards)
 
-- [ ] #7 Run 'task lint' - no errors or warnings
+- [x] #7 Run 'task lint' - no errors or warnings
 
-- [ ] #8 In src/Types.fs, add module Document
+- [x] #8 In src/Types.fs, add module Document
 <!-- AC:END -->
+
+## Implementation Plan
+
+<!-- SECTION:PLAN:BEGIN -->
+1. Add Document module to Types.fs after Timestamp
+2. Implement create() function
+3. Implement createWithId() function
+4. Implement update() function
+5. Implement map() function
+6. Add comprehensive XML documentation for all functions
+7. Build and verify
+8. Run linter and verify
+<!-- SECTION:PLAN:END -->
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+Successfully implemented Document module:
+
+- Added Document module to Types.fs
+- Implemented create() with auto-generated ID and timestamps
+- Implemented createWithId() for explicit ID specification
+- Implemented update() for transforming data while preserving ID/CreatedAt
+- Implemented map() for type transformations preserving all metadata
+- Comprehensive XML documentation for module and all functions
+- All functions include summary, param, returns, typeparam (where needed), remarks, and examples
+- Build passes with 0 errors and 0 warnings
+- Linter passes with 0 warnings
+
+The Document module provides essential functions for document lifecycle management in FractalDb.
+<!-- SECTION:NOTES:END -->

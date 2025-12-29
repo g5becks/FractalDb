@@ -1,10 +1,11 @@
 ---
 id: task-34
 title: Implement SqlTranslator Class - Field Resolution
-status: To Do
-assignee: []
+status: In Progress
+assignee:
+  - '@assistant'
 created_date: '2025-12-28 06:35'
-updated_date: '2025-12-28 16:56'
+updated_date: '2025-12-28 18:22'
 labels:
   - phase-2
   - storage
@@ -33,3 +34,20 @@ Create SqlTranslator class with field resolution logic in src/SqlTranslator.fs. 
 
 - [ ] #8 In src/SqlTranslator.fs, add 'type SqlTranslator<'T>(schema: SchemaDef<'T>, enableCache: bool)'
 <!-- AC:END -->
+
+## Implementation Plan
+
+<!-- SECTION:PLAN:BEGIN -->
+1. Read design spec lines 1606-1624 for SqlTranslator class structure
+2. Add SqlTranslator<'T> class constructor with schema and enableCache parameters
+3. Add private fieldMap built from schema.Fields
+4. Add private ResolveField method:
+   - Returns metadata fields (_id, createdAt, updatedAt) unchanged
+   - Returns indexed fields as _fieldName
+   - Returns non-indexed fields as jsonb_extract(body, '$.fieldName')
+5. Add public Translate method (stub returning TranslatorResult.empty)
+6. Add comprehensive XML documentation
+7. Run dotnet build to verify
+8. Run task lint to verify
+9. Mark all ACs complete
+<!-- SECTION:PLAN:END -->

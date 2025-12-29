@@ -1,4 +1,4 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Microsoft.NET.Sdk">
 
     <PropertyGroup>
         <TargetFramework>net10.0</TargetFramework>
@@ -6,7 +6,26 @@
     </PropertyGroup>
 
     <ItemGroup>
+        <Compile Include="Types.fs"/>
+        <Compile Include="Errors.fs"/>
+        <Compile Include="Operators.fs"/>
+        <Compile Include="Query.fs"/>
+        <Compile Include="Schema.fs"/>
+        <Compile Include="Options.fs"/>
+        <Compile Include="Serialization.fs"/>
+        <Compile Include="SqlTranslator.fs"/>
+        <Compile Include="TableBuilder.fs"/>
+        <Compile Include="Transaction.fs"/>
+        <Compile Include="Collection.fs"/>
+        <Compile Include="Database.fs"/>
+        <Compile Include="Builders.fs"/>
         <Compile Include="Library.fs"/>
+    </ItemGroup>
+
+    <ItemGroup>
+        <PackageReference Include="Donald" Version="10.*"/>
+        <PackageReference Include="FSharp.SystemTextJson" Version="1.*"/>
+        <PackageReference Include="Microsoft.Data.Sqlite" Version="9.*"/>
     </ItemGroup>
 
 </Project>
