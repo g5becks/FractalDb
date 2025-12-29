@@ -8,10 +8,12 @@
 
   <ItemGroup>
     <Compile Include="Assertions.fs" />
+    <Compile Include="TypesTests.fs" />
     <Compile Include="QueryTests.fs" />
     <Compile Include="SerializationTests.fs" />
     <Compile Include="SqlTranslatorTests.fs" />
     <Compile Include="UniqueConstraintDebugTest.fs" />
+    <Compile Include="BuilderTests.fs" />
     <Compile Include="CrudTests.fs" />
     <Compile Include="QueryExecutionTests.fs" />
     <Compile Include="TransactionTests.fs" />
