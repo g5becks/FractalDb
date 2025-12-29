@@ -14,19 +14,20 @@ module FractalDb.SqlTranslator
 /// let result = { Sql = "_name = @p0"; Parameters = [("@p0", box "Alice")] }
 /// </code>
 /// </example>
-type TranslatorResult = {
-    /// <summary>The SQL WHERE clause expression with parameter placeholders.</summary>
-    Sql: string
-    
-    /// <summary>List of parameter bindings as (name, value) tuples.</summary>
-    Parameters: list<(string * obj)>
-}
+type TranslatorResult =
+    {
+        /// <summary>The SQL WHERE clause expression with parameter placeholders.</summary>
+        Sql: string
+
+        /// <summary>List of parameter bindings as (name, value) tuples.</summary>
+        Parameters: list<(string * obj)>
+    }
 
 /// <summary>
 /// Helper functions for creating TranslatorResult values.
 /// </summary>
 module TranslatorResult =
-    
+
     /// <summary>
     /// Returns an empty TranslatorResult that matches all documents (SQL: "1=1").
     /// </summary>
@@ -41,9 +42,8 @@ module TranslatorResult =
     /// // result = { Sql = "1=1"; Parameters = [] }
     /// </code>
     /// </example>
-    let empty : TranslatorResult = 
-        { Sql = "1=1"; Parameters = [] }
-    
+    let empty: TranslatorResult = { Sql = "1=1"; Parameters = [] }
+
     /// <summary>
     /// Creates a TranslatorResult with the specified SQL and parameters.
     /// </summary>
@@ -60,8 +60,7 @@ module TranslatorResult =
     /// let result = TranslatorResult.create "_name = @p0" [("@p0", box "Alice")]
     /// </code>
     /// </example>
-    let create (sql: string) (params': list<(string * obj)>) : TranslatorResult =
-        { Sql = sql; Parameters = params' }
+    let create (sql: string) (params': list<(string * obj)>) : TranslatorResult = { Sql = sql; Parameters = params' }
 
 /// <summary>
 /// Translates FractalDb Query expressions to parameterized SQLite SQL.
@@ -80,16 +79,13 @@ module TranslatorResult =
 /// </code>
 /// </example>
 type SqlTranslator<'T>(schema: FractalDb.Schema.SchemaDef<'T>, enableCache: bool) =
-    
+
     /// <summary>Map of field names to their definitions for fast lookup.</summary>
-    let fieldMap =
-        schema.Fields
-        |> List.map (fun f -> f.Name, f)
-        |> Map.ofList
-    
+    let fieldMap = schema.Fields |> List.map (fun f -> f.Name, f) |> Map.ofList
+
     /// <summary>Counter for generating unique parameter names (@p0, @p1, etc.).</summary>
     let mutable paramCounter = 0
-    
+
     /// <summary>
     /// Generates the next unique parameter name and increments the counter.
     /// </summary>
@@ -101,7 +97,7 @@ type SqlTranslator<'T>(schema: FractalDb.Schema.SchemaDef<'T>, enableCache: bool
         let paramName = $"@p{paramCounter}"
         paramCounter <- paramCounter + 1
         paramName
-    
+
     /// <summary>
     /// Resolves a field name to its SQL column reference.
     /// </summary>
@@ -123,19 +119,21 @@ type SqlTranslator<'T>(schema: FractalDb.Schema.SchemaDef<'T>, enableCache: bool
     /// </remarks>
     member private this.ResolveField(fieldName: string) : string =
         match fieldName with
-        | "_id" | "createdAt" | "updatedAt" -> 
+        | "_id"
+        | "createdAt"
+        | "updatedAt" ->
             // Metadata fields are direct columns
             fieldName
         | name ->
             // Check if field is indexed in schema
             match Map.tryFind name fieldMap with
-            | Some field when field.Indexed -> 
+            | Some field when field.Indexed ->
                 // Indexed fields use generated columns
                 $"_{name}"
-            | _ -> 
+            | _ ->
                 // Non-indexed fields use jsonb_extract
                 $"jsonb_extract(body, '$.{name}')"
-    
+
     /// <summary>
     /// Translates a CompareOp to SQL with appropriate comparison operator.
     /// </summary>
@@ -169,33 +167,34 @@ type SqlTranslator<'T>(schema: FractalDb.Schema.SchemaDef<'T>, enableCache: bool
             match op with
             | FractalDb.Operators.CompareOp.Eq value ->
                 let paramName = this.NextParam()
-                TranslatorResult.create $"{fieldSql} = {paramName}" [(paramName, box value)]
+                TranslatorResult.create $"{fieldSql} = {paramName}" [ (paramName, box value) ]
             | FractalDb.Operators.CompareOp.Ne value ->
                 let paramName = this.NextParam()
-                TranslatorResult.create $"{fieldSql} != {paramName}" [(paramName, box value)]
+                TranslatorResult.create $"{fieldSql} != {paramName}" [ (paramName, box value) ]
             | FractalDb.Operators.CompareOp.Gt value ->
                 let paramName = this.NextParam()
-                TranslatorResult.create $"{fieldSql} > {paramName}" [(paramName, box value)]
+                TranslatorResult.create $"{fieldSql} > {paramName}" [ (paramName, box value) ]
             | FractalDb.Operators.CompareOp.Gte value ->
                 let paramName = this.NextParam()
-                TranslatorResult.create $"{fieldSql} >= {paramName}" [(paramName, box value)]
+                TranslatorResult.create $"{fieldSql} >= {paramName}" [ (paramName, box value) ]
             | FractalDb.Operators.CompareOp.Lt value ->
                 let paramName = this.NextParam()
-                TranslatorResult.create $"{fieldSql} < {paramName}" [(paramName, box value)]
+                TranslatorResult.create $"{fieldSql} < {paramName}" [ (paramName, box value) ]
             | FractalDb.Operators.CompareOp.Lte value ->
                 let paramName = this.NextParam()
-                TranslatorResult.create $"{fieldSql} <= {paramName}" [(paramName, box value)]
+                TranslatorResult.create $"{fieldSql} <= {paramName}" [ (paramName, box value) ]
             | FractalDb.Operators.CompareOp.In values ->
                 if List.isEmpty values then
                     // Empty IN list matches nothing
                     TranslatorResult.create "0=1" []
                 else
                     // Generate parameter for each value
-                    let paramPairs = 
-                        values 
-                        |> List.map (fun v -> 
+                    let paramPairs =
+                        values
+                        |> List.map (fun v ->
                             let paramName = this.NextParam()
                             (paramName, box v))
+
                     let paramNames = paramPairs |> List.map fst |> String.concat ", "
                     TranslatorResult.create $"{fieldSql} IN ({paramNames})" paramPairs
             | FractalDb.Operators.CompareOp.NotIn values ->
@@ -204,190 +203,199 @@ type SqlTranslator<'T>(schema: FractalDb.Schema.SchemaDef<'T>, enableCache: bool
                     TranslatorResult.create "1=1" []
                 else
                     // Generate parameter for each value
-                    let paramPairs = 
-                        values 
-                        |> List.map (fun v -> 
+                    let paramPairs =
+                        values
+                        |> List.map (fun v ->
                             let paramName = this.NextParam()
                             (paramName, box v))
+
                     let paramNames = paramPairs |> List.map fst |> String.concat ", "
                     TranslatorResult.create $"{fieldSql} NOT IN ({paramNames})" paramPairs
-        
+
         | :? FractalDb.Operators.CompareOp<string> as op ->
             match op with
             | FractalDb.Operators.CompareOp.Eq value ->
                 let paramName = this.NextParam()
-                TranslatorResult.create $"{fieldSql} = {paramName}" [(paramName, box value)]
+                TranslatorResult.create $"{fieldSql} = {paramName}" [ (paramName, box value) ]
             | FractalDb.Operators.CompareOp.Ne value ->
                 let paramName = this.NextParam()
-                TranslatorResult.create $"{fieldSql} != {paramName}" [(paramName, box value)]
+                TranslatorResult.create $"{fieldSql} != {paramName}" [ (paramName, box value) ]
             | FractalDb.Operators.CompareOp.Gt value ->
                 let paramName = this.NextParam()
-                TranslatorResult.create $"{fieldSql} > {paramName}" [(paramName, box value)]
+                TranslatorResult.create $"{fieldSql} > {paramName}" [ (paramName, box value) ]
             | FractalDb.Operators.CompareOp.Gte value ->
                 let paramName = this.NextParam()
-                TranslatorResult.create $"{fieldSql} >= {paramName}" [(paramName, box value)]
+                TranslatorResult.create $"{fieldSql} >= {paramName}" [ (paramName, box value) ]
             | FractalDb.Operators.CompareOp.Lt value ->
                 let paramName = this.NextParam()
-                TranslatorResult.create $"{fieldSql} < {paramName}" [(paramName, box value)]
+                TranslatorResult.create $"{fieldSql} < {paramName}" [ (paramName, box value) ]
             | FractalDb.Operators.CompareOp.Lte value ->
                 let paramName = this.NextParam()
-                TranslatorResult.create $"{fieldSql} <= {paramName}" [(paramName, box value)]
+                TranslatorResult.create $"{fieldSql} <= {paramName}" [ (paramName, box value) ]
             | FractalDb.Operators.CompareOp.In values ->
                 if List.isEmpty values then
                     TranslatorResult.create "0=1" []
                 else
-                    let paramPairs = 
-                        values 
-                        |> List.map (fun v -> 
+                    let paramPairs =
+                        values
+                        |> List.map (fun v ->
                             let paramName = this.NextParam()
                             (paramName, box v))
+
                     let paramNames = paramPairs |> List.map fst |> String.concat ", "
                     TranslatorResult.create $"{fieldSql} IN ({paramNames})" paramPairs
             | FractalDb.Operators.CompareOp.NotIn values ->
                 if List.isEmpty values then
                     TranslatorResult.create "1=1" []
                 else
-                    let paramPairs = 
-                        values 
-                        |> List.map (fun v -> 
+                    let paramPairs =
+                        values
+                        |> List.map (fun v ->
                             let paramName = this.NextParam()
                             (paramName, box v))
+
                     let paramNames = paramPairs |> List.map fst |> String.concat ", "
                     TranslatorResult.create $"{fieldSql} NOT IN ({paramNames})" paramPairs
-        
+
         | :? FractalDb.Operators.CompareOp<int64> as op ->
             match op with
             | FractalDb.Operators.CompareOp.Eq value ->
                 let paramName = this.NextParam()
-                TranslatorResult.create $"{fieldSql} = {paramName}" [(paramName, box value)]
+                TranslatorResult.create $"{fieldSql} = {paramName}" [ (paramName, box value) ]
             | FractalDb.Operators.CompareOp.Ne value ->
                 let paramName = this.NextParam()
-                TranslatorResult.create $"{fieldSql} != {paramName}" [(paramName, box value)]
+                TranslatorResult.create $"{fieldSql} != {paramName}" [ (paramName, box value) ]
             | FractalDb.Operators.CompareOp.Gt value ->
                 let paramName = this.NextParam()
-                TranslatorResult.create $"{fieldSql} > {paramName}" [(paramName, box value)]
+                TranslatorResult.create $"{fieldSql} > {paramName}" [ (paramName, box value) ]
             | FractalDb.Operators.CompareOp.Gte value ->
                 let paramName = this.NextParam()
-                TranslatorResult.create $"{fieldSql} >= {paramName}" [(paramName, box value)]
+                TranslatorResult.create $"{fieldSql} >= {paramName}" [ (paramName, box value) ]
             | FractalDb.Operators.CompareOp.Lt value ->
                 let paramName = this.NextParam()
-                TranslatorResult.create $"{fieldSql} < {paramName}" [(paramName, box value)]
+                TranslatorResult.create $"{fieldSql} < {paramName}" [ (paramName, box value) ]
             | FractalDb.Operators.CompareOp.Lte value ->
                 let paramName = this.NextParam()
-                TranslatorResult.create $"{fieldSql} <= {paramName}" [(paramName, box value)]
+                TranslatorResult.create $"{fieldSql} <= {paramName}" [ (paramName, box value) ]
             | FractalDb.Operators.CompareOp.In values ->
                 if List.isEmpty values then
                     TranslatorResult.create "0=1" []
                 else
-                    let paramPairs = 
-                        values 
-                        |> List.map (fun v -> 
+                    let paramPairs =
+                        values
+                        |> List.map (fun v ->
                             let paramName = this.NextParam()
                             (paramName, box v))
+
                     let paramNames = paramPairs |> List.map fst |> String.concat ", "
                     TranslatorResult.create $"{fieldSql} IN ({paramNames})" paramPairs
             | FractalDb.Operators.CompareOp.NotIn values ->
                 if List.isEmpty values then
                     TranslatorResult.create "1=1" []
                 else
-                    let paramPairs = 
-                        values 
-                        |> List.map (fun v -> 
+                    let paramPairs =
+                        values
+                        |> List.map (fun v ->
                             let paramName = this.NextParam()
                             (paramName, box v))
+
                     let paramNames = paramPairs |> List.map fst |> String.concat ", "
                     TranslatorResult.create $"{fieldSql} NOT IN ({paramNames})" paramPairs
-        
+
         | :? FractalDb.Operators.CompareOp<float> as op ->
             match op with
             | FractalDb.Operators.CompareOp.Eq value ->
                 let paramName = this.NextParam()
-                TranslatorResult.create $"{fieldSql} = {paramName}" [(paramName, box value)]
+                TranslatorResult.create $"{fieldSql} = {paramName}" [ (paramName, box value) ]
             | FractalDb.Operators.CompareOp.Ne value ->
                 let paramName = this.NextParam()
-                TranslatorResult.create $"{fieldSql} != {paramName}" [(paramName, box value)]
+                TranslatorResult.create $"{fieldSql} != {paramName}" [ (paramName, box value) ]
             | FractalDb.Operators.CompareOp.Gt value ->
                 let paramName = this.NextParam()
-                TranslatorResult.create $"{fieldSql} > {paramName}" [(paramName, box value)]
+                TranslatorResult.create $"{fieldSql} > {paramName}" [ (paramName, box value) ]
             | FractalDb.Operators.CompareOp.Gte value ->
                 let paramName = this.NextParam()
-                TranslatorResult.create $"{fieldSql} >= {paramName}" [(paramName, box value)]
+                TranslatorResult.create $"{fieldSql} >= {paramName}" [ (paramName, box value) ]
             | FractalDb.Operators.CompareOp.Lt value ->
                 let paramName = this.NextParam()
-                TranslatorResult.create $"{fieldSql} < {paramName}" [(paramName, box value)]
+                TranslatorResult.create $"{fieldSql} < {paramName}" [ (paramName, box value) ]
             | FractalDb.Operators.CompareOp.Lte value ->
                 let paramName = this.NextParam()
-                TranslatorResult.create $"{fieldSql} <= {paramName}" [(paramName, box value)]
+                TranslatorResult.create $"{fieldSql} <= {paramName}" [ (paramName, box value) ]
             | FractalDb.Operators.CompareOp.In values ->
                 if List.isEmpty values then
                     TranslatorResult.create "0=1" []
                 else
-                    let paramPairs = 
-                        values 
-                        |> List.map (fun v -> 
+                    let paramPairs =
+                        values
+                        |> List.map (fun v ->
                             let paramName = this.NextParam()
                             (paramName, box v))
+
                     let paramNames = paramPairs |> List.map fst |> String.concat ", "
                     TranslatorResult.create $"{fieldSql} IN ({paramNames})" paramPairs
             | FractalDb.Operators.CompareOp.NotIn values ->
                 if List.isEmpty values then
                     TranslatorResult.create "1=1" []
                 else
-                    let paramPairs = 
-                        values 
-                        |> List.map (fun v -> 
+                    let paramPairs =
+                        values
+                        |> List.map (fun v ->
                             let paramName = this.NextParam()
                             (paramName, box v))
+
                     let paramNames = paramPairs |> List.map fst |> String.concat ", "
                     TranslatorResult.create $"{fieldSql} NOT IN ({paramNames})" paramPairs
-        
+
         | :? FractalDb.Operators.CompareOp<bool> as op ->
             match op with
             | FractalDb.Operators.CompareOp.Eq value ->
                 let paramName = this.NextParam()
-                TranslatorResult.create $"{fieldSql} = {paramName}" [(paramName, box value)]
+                TranslatorResult.create $"{fieldSql} = {paramName}" [ (paramName, box value) ]
             | FractalDb.Operators.CompareOp.Ne value ->
                 let paramName = this.NextParam()
-                TranslatorResult.create $"{fieldSql} != {paramName}" [(paramName, box value)]
+                TranslatorResult.create $"{fieldSql} != {paramName}" [ (paramName, box value) ]
             | FractalDb.Operators.CompareOp.Gt value ->
                 let paramName = this.NextParam()
-                TranslatorResult.create $"{fieldSql} > {paramName}" [(paramName, box value)]
+                TranslatorResult.create $"{fieldSql} > {paramName}" [ (paramName, box value) ]
             | FractalDb.Operators.CompareOp.Gte value ->
                 let paramName = this.NextParam()
-                TranslatorResult.create $"{fieldSql} >= {paramName}" [(paramName, box value)]
+                TranslatorResult.create $"{fieldSql} >= {paramName}" [ (paramName, box value) ]
             | FractalDb.Operators.CompareOp.Lt value ->
                 let paramName = this.NextParam()
-                TranslatorResult.create $"{fieldSql} < {paramName}" [(paramName, box value)]
+                TranslatorResult.create $"{fieldSql} < {paramName}" [ (paramName, box value) ]
             | FractalDb.Operators.CompareOp.Lte value ->
                 let paramName = this.NextParam()
-                TranslatorResult.create $"{fieldSql} <= {paramName}" [(paramName, box value)]
+                TranslatorResult.create $"{fieldSql} <= {paramName}" [ (paramName, box value) ]
             | FractalDb.Operators.CompareOp.In values ->
                 if List.isEmpty values then
                     TranslatorResult.create "0=1" []
                 else
-                    let paramPairs = 
-                        values 
-                        |> List.map (fun v -> 
+                    let paramPairs =
+                        values
+                        |> List.map (fun v ->
                             let paramName = this.NextParam()
                             (paramName, box v))
+
                     let paramNames = paramPairs |> List.map fst |> String.concat ", "
                     TranslatorResult.create $"{fieldSql} IN ({paramNames})" paramPairs
             | FractalDb.Operators.CompareOp.NotIn values ->
                 if List.isEmpty values then
                     TranslatorResult.create "1=1" []
                 else
-                    let paramPairs = 
-                        values 
-                        |> List.map (fun v -> 
+                    let paramPairs =
+                        values
+                        |> List.map (fun v ->
                             let paramName = this.NextParam()
                             (paramName, box v))
+
                     let paramNames = paramPairs |> List.map fst |> String.concat ", "
                     TranslatorResult.create $"{fieldSql} NOT IN ({paramNames})" paramPairs
-        
+
         | _ ->
             // Unsupported type - return empty (will match nothing in practice)
             TranslatorResult.create "0=1" []
-    
+
     /// <summary>
     /// Translates a StringOp to SQL LIKE pattern matching expressions.
     /// </summary>
@@ -453,31 +461,31 @@ type SqlTranslator<'T>(schema: FractalDb.Schema.SchemaDef<'T>, enableCache: bool
         | FractalDb.Operators.StringOp.Like pattern ->
             // Direct LIKE with user-provided pattern
             let paramName = this.NextParam()
-            TranslatorResult.create $"{fieldSql} LIKE {paramName}" [(paramName, box pattern)]
-        
+            TranslatorResult.create $"{fieldSql} LIKE {paramName}" [ (paramName, box pattern) ]
+
         | FractalDb.Operators.StringOp.ILike pattern ->
             // Case-insensitive LIKE using COLLATE NOCASE
             let paramName = this.NextParam()
-            TranslatorResult.create $"{fieldSql} LIKE {paramName} COLLATE NOCASE" [(paramName, box pattern)]
-        
+            TranslatorResult.create $"{fieldSql} LIKE {paramName} COLLATE NOCASE" [ (paramName, box pattern) ]
+
         | FractalDb.Operators.StringOp.Contains substring ->
             // Wrap substring in % wildcards for contains matching
             let pattern = $"%%{substring}%%"
             let paramName = this.NextParam()
-            TranslatorResult.create $"{fieldSql} LIKE {paramName}" [(paramName, box pattern)]
-        
+            TranslatorResult.create $"{fieldSql} LIKE {paramName}" [ (paramName, box pattern) ]
+
         | FractalDb.Operators.StringOp.StartsWith prefix ->
             // Append % wildcard for prefix matching
             let pattern = $"{prefix}%%"
             let paramName = this.NextParam()
-            TranslatorResult.create $"{fieldSql} LIKE {paramName}" [(paramName, box pattern)]
-        
+            TranslatorResult.create $"{fieldSql} LIKE {paramName}" [ (paramName, box pattern) ]
+
         | FractalDb.Operators.StringOp.EndsWith suffix ->
             // Prepend % wildcard for suffix matching
             let pattern = $"%%{suffix}"
             let paramName = this.NextParam()
-            TranslatorResult.create $"{fieldSql} LIKE {paramName}" [(paramName, box pattern)]
-    
+            TranslatorResult.create $"{fieldSql} LIKE {paramName}" [ (paramName, box pattern) ]
+
     /// <summary>
     /// Translates an ArrayOp to SQL using JSON array functions.
     /// </summary>
@@ -528,6 +536,19 @@ type SqlTranslator<'T>(schema: FractalDb.Schema.SchemaDef<'T>, enableCache: bool
     /// </code>
     /// </example>
     member private this.TranslateArray(fieldSql: string, arrayOp: obj) : TranslatorResult =
+        // Helper to convert fieldSql to proper JSON function format
+        // For non-indexed fields, extract the path from jsonb_extract and use body column directly
+        let jsonFuncSql (funcName: string) =
+            if fieldSql.StartsWith("jsonb_extract(body, '$.") then
+                // Extract path from jsonb_extract(body, '$.path')
+                let startIdx = "jsonb_extract(body, '$.".Length
+                let endIdx = fieldSql.IndexOf("')", startIdx)
+                let path = fieldSql.Substring(startIdx, endIdx - startIdx)
+                $"{funcName}(body, '$.{path}')"
+            else
+                // Indexed field or metadata - use single-parameter form
+                $"{funcName}({fieldSql})"
+
         // Pattern match on the unboxed ArrayOp
         match arrayOp with
         | :? FractalDb.Operators.ArrayOp<string> as op ->
@@ -538,64 +559,97 @@ type SqlTranslator<'T>(schema: FractalDb.Schema.SchemaDef<'T>, enableCache: bool
                     TranslatorResult.create "1=1" []
                 else
                     // Generate EXISTS subquery for each value
-                    let subqueries = 
-                        values 
+                    let jsonEachSql = jsonFuncSql "json_each"
+
+                    let subqueries =
+                        values
                         |> List.map (fun value ->
                             let paramName = this.NextParam()
-                            let sql = $"EXISTS(SELECT 1 FROM json_each({fieldSql}) WHERE value = {paramName})"
+                            let sql = $"EXISTS(SELECT 1 FROM {jsonEachSql} WHERE value = {paramName})"
                             (sql, paramName, box value))
-                    
+
                     let sqlParts = subqueries |> List.map (fun (sql, _, _) -> sql)
-                    let params' = subqueries |> List.map (fun (_, paramName, value) -> (paramName, value))
-                    
+
+                    let params' =
+                        subqueries |> List.map (fun (_, paramName, value) -> (paramName, value))
+
                     let combinedSql = sqlParts |> String.concat " AND "
                     TranslatorResult.create combinedSql params'
-            
+
             | FractalDb.Operators.ArrayOp.Size length ->
                 let paramName = this.NextParam()
-                TranslatorResult.create $"json_array_length({fieldSql}) = {paramName}" [(paramName, box length)]
-            
+                let jsonArrayLengthSql = jsonFuncSql "json_array_length"
+                TranslatorResult.create $"{jsonArrayLengthSql} = {paramName}" [ (paramName, box length) ]
+
             | FractalDb.Operators.ArrayOp.ElemMatch _query ->
                 // Stub - complex array element queries not yet implemented
                 TranslatorResult.create "1=1" []
-            
-            | FractalDb.Operators.ArrayOp.Index (_index, _query) ->
+
+            | FractalDb.Operators.ArrayOp.Index(_index, _query) ->
                 // Stub - indexed element queries not yet implemented
                 TranslatorResult.create "1=1" []
-        
+
         | :? FractalDb.Operators.ArrayOp<int> as op ->
             match op with
             | FractalDb.Operators.ArrayOp.All values ->
                 if List.isEmpty values then
                     TranslatorResult.create "1=1" []
                 else
-                    let subqueries = 
-                        values 
+                    let jsonEachSql = jsonFuncSql "json_each"
+
+                    let subqueries =
+                        values
                         |> List.map (fun value ->
                             let paramName = this.NextParam()
-                            let sql = $"EXISTS(SELECT 1 FROM json_each({fieldSql}) WHERE value = {paramName})"
+                            let sql = $"EXISTS(SELECT 1 FROM {jsonEachSql} WHERE value = {paramName})"
                             (sql, paramName, box value))
-                    
+
                     let sqlParts = subqueries |> List.map (fun (sql, _, _) -> sql)
-                    let params' = subqueries |> List.map (fun (_, paramName, value) -> (paramName, value))
-                    
+
+                    let params' =
+                        subqueries |> List.map (fun (_, paramName, value) -> (paramName, value))
+
                     let combinedSql = sqlParts |> String.concat " AND "
                     TranslatorResult.create combinedSql params'
-            
+
             | FractalDb.Operators.ArrayOp.Size length ->
                 let paramName = this.NextParam()
-                TranslatorResult.create $"json_array_length({fieldSql}) = {paramName}" [(paramName, box length)]
-            
-            | FractalDb.Operators.ArrayOp.ElemMatch _query ->
-                TranslatorResult.create "1=1" []
-            
-            | FractalDb.Operators.ArrayOp.Index (_index, _query) ->
-                TranslatorResult.create "1=1" []
-        
+                let jsonArrayLengthSql = jsonFuncSql "json_array_length"
+                TranslatorResult.create $"{jsonArrayLengthSql} = {paramName}" [ (paramName, box length) ]
+
+            | FractalDb.Operators.ArrayOp.ElemMatch _query -> TranslatorResult.create "1=1" []
+
+            | FractalDb.Operators.ArrayOp.Index(_index, _query) -> TranslatorResult.create "1=1" []
+
         | _ ->
-            // Unsupported array type
-            TranslatorResult.create "1=1" []
-    
+            // Handle ArrayOp types where the element type doesn't matter (like Size)
+            // In F#, union cases have their own types (e.g., "Size" not "ArrayOp")
+            // Check if this is an ArrayOp union by looking at the DeclaringType or base type
+            let arrayOpType = arrayOp.GetType()
+
+            // For F# union cases, check if the FullName contains "ArrayOp"
+            if arrayOpType.FullName.Contains("ArrayOp") then
+                // Get the union case name using reflection
+                let unionCase =
+                    Microsoft.FSharp.Reflection.FSharpValue.GetUnionFields(arrayOp, arrayOpType)
+
+                let caseName = fst unionCase |> fun c -> c.Name
+                let fields = snd unionCase
+
+                match caseName with
+                | "Size" when fields.Length = 1 ->
+                    // Size case - extract the length value
+                    let length = fields.[0] :?> int
+                    let paramName = this.NextParam()
+                    let jsonArrayLengthSql = jsonFuncSql "json_array_length"
+                    TranslatorResult.create $"{jsonArrayLengthSql} = {paramName}" [ (paramName, box length) ]
+                | _ ->
+                    // Other unsupported cases
+                    TranslatorResult.create "1=1" []
+            else
+                // Unsupported array type
+                TranslatorResult.create "1=1" []
+
     /// <summary>
     /// Translates an ExistsOp to SQL using JSON type checking.
     /// </summary>
@@ -649,7 +703,7 @@ type SqlTranslator<'T>(schema: FractalDb.Schema.SchemaDef<'T>, enableCache: bool
             else
                 // Field doesn't exist: json_type returns SQL NULL
                 TranslatorResult.create $"json_type({fieldSql}) IS NULL" []
-    
+
     /// <summary>
     /// Translates a FieldOp to SQL by dispatching to the appropriate operator handler.
     /// </summary>
@@ -676,19 +730,19 @@ type SqlTranslator<'T>(schema: FractalDb.Schema.SchemaDef<'T>, enableCache: bool
         | FractalDb.Operators.FieldOp.Compare compareOp ->
             // Delegate to comparison operator handler
             this.TranslateCompare(fieldSql, compareOp)
-        
+
         | FractalDb.Operators.FieldOp.String stringOp ->
             // Delegate to string operator handler
             this.TranslateString(fieldSql, stringOp)
-        
+
         | FractalDb.Operators.FieldOp.Array arrayOp ->
             // Delegate to array operator handler
             this.TranslateArray(fieldSql, arrayOp)
-        
+
         | FractalDb.Operators.FieldOp.Exist existsOp ->
             // Delegate to existence operator handler
             this.TranslateExist(fieldSql, existsOp)
-    
+
     /// <summary>
     /// Recursively translates a Query expression to SQL.
     /// </summary>
@@ -726,64 +780,64 @@ type SqlTranslator<'T>(schema: FractalDb.Schema.SchemaDef<'T>, enableCache: bool
         | FractalDb.Operators.Query.Empty ->
             // Empty query matches all documents
             TranslatorResult.empty
-        
+
         | FractalDb.Operators.Query.Field(fieldName, op) ->
             // Resolve field to SQL column reference
             let fieldSql = this.ResolveField(fieldName)
             // Translate the field operator (stub for now)
             this.TranslateFieldOp(fieldSql, op)
-        
+
         | FractalDb.Operators.Query.And(queries) ->
             // Translate each sub-query
             let results = queries |> List.map this.TranslateQuery
-            
+
             // Collect SQL fragments and parameters
             let sqlParts = results |> List.map (fun r -> r.Sql)
             let allParams = results |> List.collect (fun r -> r.Parameters)
-            
+
             // Combine with AND operator
             let combinedSql = sqlParts |> String.concat " AND "
             let wrappedSql = $"({combinedSql})"
-            
+
             TranslatorResult.create wrappedSql allParams
-        
+
         | FractalDb.Operators.Query.Or(queries) ->
             // Translate each sub-query
             let results = queries |> List.map this.TranslateQuery
-            
+
             // Collect SQL fragments and parameters
             let sqlParts = results |> List.map (fun r -> r.Sql)
             let allParams = results |> List.collect (fun r -> r.Parameters)
-            
+
             // Combine with OR operator
             let combinedSql = sqlParts |> String.concat " OR "
             let wrappedSql = $"({combinedSql})"
-            
+
             TranslatorResult.create wrappedSql allParams
-        
+
         | FractalDb.Operators.Query.Nor(queries) ->
             // Translate each sub-query
             let results = queries |> List.map this.TranslateQuery
-            
+
             // Collect SQL fragments and parameters
             let sqlParts = results |> List.map (fun r -> r.Sql)
             let allParams = results |> List.collect (fun r -> r.Parameters)
-            
+
             // Combine with OR then wrap in NOT
             let combinedSql = sqlParts |> String.concat " OR "
             let wrappedSql = $"NOT ({combinedSql})"
-            
+
             TranslatorResult.create wrappedSql allParams
-        
+
         | FractalDb.Operators.Query.Not(innerQuery) ->
             // Translate the inner query
             let result = this.TranslateQuery(innerQuery)
-            
+
             // Wrap in NOT
             let wrappedSql = $"NOT ({result.Sql})"
-            
+
             TranslatorResult.create wrappedSql result.Parameters
-    
+
     /// <summary>
     /// Translates a Query expression to a parameterized SQL WHERE clause.
     /// </summary>
@@ -825,7 +879,7 @@ type SqlTranslator<'T>(schema: FractalDb.Schema.SchemaDef<'T>, enableCache: bool
     /// // result1.Parameters = [("@p0", box "Alice")]
     ///
     /// // Complex query with logical operators
-    /// let query2 = 
+    /// let query2 =
     ///     Query.and' [
     ///         Query.field "age" (Query.gt 18)
     ///         Query.field "status" (Query.eq "active")
@@ -844,10 +898,10 @@ type SqlTranslator<'T>(schema: FractalDb.Schema.SchemaDef<'T>, enableCache: bool
     member this.Translate(query: FractalDb.Operators.Query<'T>) : TranslatorResult =
         // Reset parameter counter for this translation
         paramCounter <- 0
-        
+
         // Delegate to TranslateQuery for recursive translation
         this.TranslateQuery(query)
-    
+
     /// <summary>
     /// Translates QueryOptions to SQL clauses (ORDER BY, LIMIT, OFFSET).
     /// </summary>
@@ -924,48 +978,49 @@ type SqlTranslator<'T>(schema: FractalDb.Schema.SchemaDef<'T>, enableCache: bool
     /// </example>
     member this.TranslateOptions(options: FractalDb.Options.QueryOptions<'T>) : string * list<(string * obj)> =
         let mutable optionParamCounter = 0
+
         let nextOptionParam () =
             let paramName = $"@opt{optionParamCounter}"
             optionParamCounter <- optionParamCounter + 1
             paramName
-        
+
         let mutable clauses = []
         let mutable parameters = []
-        
+
         // ORDER BY clause
         if not (List.isEmpty options.Sort) then
             let sortFields =
                 options.Sort
                 |> List.map (fun (fieldName, direction) ->
                     let fieldSql = this.ResolveField(fieldName)
+
                     let directionSql =
                         match direction with
                         | FractalDb.Options.SortDirection.Ascending -> "ASC"
                         | FractalDb.Options.SortDirection.Descending -> "DESC"
+
                     $"{fieldSql} {directionSql}")
-            
+
             let sortFieldsStr = String.concat ", " sortFields
             let orderByClause = $" ORDER BY {sortFieldsStr}"
-            clauses <- clauses @ [orderByClause]
-        
+            clauses <- clauses @ [ orderByClause ]
+
         // LIMIT clause
         match options.Limit with
         | Some limitValue ->
-            let paramName = nextOptionParam()
-            clauses <- clauses @ [$" LIMIT {paramName}"]
-            parameters <- parameters @ [(paramName, box limitValue)]
+            let paramName = nextOptionParam ()
+            clauses <- clauses @ [ $" LIMIT {paramName}" ]
+            parameters <- parameters @ [ (paramName, box limitValue) ]
         | None -> ()
-        
+
         // OFFSET clause (Skip)
         match options.Skip with
         | Some skipValue ->
-            let paramName = nextOptionParam()
-            clauses <- clauses @ [$" OFFSET {paramName}"]
-            parameters <- parameters @ [(paramName, box skipValue)]
+            let paramName = nextOptionParam ()
+            clauses <- clauses @ [ $" OFFSET {paramName}" ]
+            parameters <- parameters @ [ (paramName, box skipValue) ]
         | None -> ()
-        
+
         // Combine all clauses
         let combinedSql = String.concat "" clauses
         (combinedSql, parameters)
-
-

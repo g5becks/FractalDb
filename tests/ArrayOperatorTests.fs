@@ -614,11 +614,14 @@ let ``ArrayOp.All works with integer arrays`` () =
         let! _ = collection |> Collection.insertOne product3
 
         // Query for products with ratings containing both 5 and 4
+        // All three widgets have both 5 and 4 in their ratings:
+        // Widget A: [5; 4; 5; 4], Widget B: [3; 4; 5], Widget C: [5; 5; 4]
         let query = Query.Field("ratings", FieldOp.Array(box (ArrayOp.All [ 5; 4 ])))
         let! results = collection |> Collection.find query
 
-        results |> should haveLength 2
+        results |> should haveLength 3
         results |> List.map (fun doc -> doc.Data.Name) |> should contain "Widget A"
+        results |> List.map (fun doc -> doc.Data.Name) |> should contain "Widget B"
         results |> List.map (fun doc -> doc.Data.Name) |> should contain "Widget C"
     }
 
