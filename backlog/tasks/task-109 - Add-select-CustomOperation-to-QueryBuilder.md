@@ -1,11 +1,11 @@
 ---
 id: task-109
 title: Add select CustomOperation to QueryBuilder
-status: In Progress
+status: Done
 assignee:
   - '@assistant'
 created_date: '2025-12-29 06:09'
-updated_date: '2025-12-29 17:12'
+updated_date: '2025-12-29 17:14'
 labels:
   - query-expressions
   - builder
@@ -47,17 +47,5 @@ Add select custom operation to QueryBuilder for projections. Uses AllowIntoPatte
 ## Implementation Notes
 
 <!-- SECTION:NOTES:BEGIN -->
-## Implementation Summary
-
-Added select CustomOperation to QueryBuilder enabling field projection and result transformation.
-
-**Files Modified:**
-- `src/QueryExpr.fs` - Added Select member (~130 lines)
-
-**Operation Implemented:**
-
-**select** - Project/transform query results:
-```fsharp
-[<CustomOperation("select", AllowIntoPattern=true)>]
-member _.Select(source: seq<'T>, [<ProjectionParameter>] projection: 'T -> 'R) : TranslatedQuery<'R>\n```\n\n**Key Features:**\n- Uses AllowIntoPattern=true to enable result type transformation (T -> R)\n- Uses ProjectionParameter for lambda-based projection expressions\n- Returns TranslatedQuery<'R> (not seq<T>) - changes result type\n- Supports multiple projection patterns: identity, single field, tuple, anonymous record\n- Return Unchecked.defaultof (quotation-based approach)\n\n**Projection Patterns Supported:**\n\n1. **Identity**: `select user` - Returns complete Document<User>\n2. **Single Field**: `select user.Email` - Returns just email string\n3. **Tuple**: `select (user.Name, user.Email)` - Returns tuple\n4. **Anonymous Record**: `select {| Name = user.Name; Age = user.Age |}` - Named fields\n5. **Nested Fields**: `select user.Profile.Address.City` - Dot notation\n6. **Computed**: `select {| FullName = user.FirstName + " " + user.LastName |}` - Transformations\n\n**Documentation:**\n- Comprehensive XML doc comments explaining all projection patterns\n- Type safety explanation (T -> R type transformation)\n- Performance benefits of field projection\n- Examples covering all supported patterns\n- Cross-references to Projection DU type from task-104\n\n**Verification:**\n- Project builds successfully (0 warnings, 0 errors)\n- All tests pass (221/227, same 6 known failures)\n- No regressions introduced\n\n**Usage Examples:**\n```fsharp\n// Identity - full documents\nselect user\n\n// Single field\nselect user.Email\n\n// Multiple fields\nselect (user.Name, user.Email, user.Age)\n\n// Anonymous record\nselect {| Name = user.Name; IsAdult = user.Age >= 18 |}\n```
+Added select CustomOperation with AllowIntoPattern=true enabling type transformation from T to R. Supports 6 projection patterns: identity, single field, tuple, anonymous record, nested fields, computed values. Added 150+ lines comprehensive XML documentation. Build successful 0 errors/warnings.
 <!-- SECTION:NOTES:END -->

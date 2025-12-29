@@ -1,11 +1,11 @@
 ---
 id: task-110
 title: 'Add count, exists, head, headOrDefault CustomOperations'
-status: To Do
+status: In Progress
 assignee:
   - '@assistant'
 created_date: '2025-12-29 06:10'
-updated_date: '2025-12-29 17:00'
+updated_date: '2025-12-29 17:14'
 labels:
   - query-expressions
   - builder
