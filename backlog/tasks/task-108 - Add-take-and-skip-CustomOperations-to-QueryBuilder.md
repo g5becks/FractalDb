@@ -1,11 +1,11 @@
 ---
 id: task-108
 title: Add take and skip CustomOperations to QueryBuilder
-status: In Progress
+status: Done
 assignee:
   - '@assistant'
 created_date: '2025-12-29 06:09'
-updated_date: '2025-12-29 17:11'
+updated_date: '2025-12-29 17:12'
 labels:
   - query-expressions
   - builder
@@ -46,17 +46,5 @@ Add take and skip custom operations to QueryBuilder for pagination. These take i
 ## Implementation Notes
 
 <!-- SECTION:NOTES:BEGIN -->
-## Implementation Summary
-
-Added pagination CustomOperations (skip and take) to QueryBuilder enabling offset-based pagination.
-
-**Files Modified:**
-- `src/QueryExpr.fs` - Added Skip and Take members (~160 lines)
-
-**Operations Implemented:**
-
-1. **skip** - Skip first N documents (pagination offset):
-   ```fsharp
-   [<CustomOperation("skip", MaintainsVariableSpace=true)>]
-   member _.Skip(source: seq<'T>, count: int) : seq<'T>\n   ```\n\n2. **take** - Limit to N documents (pagination size):\n   ```fsharp\n   [<CustomOperation("take", MaintainsVariableSpace=true)>]\n   member _.Take(source: seq<'T>, count: int) : seq<'T>\n   ```\n\n**Key Features:**\n- Both use MaintainsVariableSpace=true to keep iteration variable in scope\n- Take int count directly (NOT ProjectionParameter - these are constants, not lambdas)\n- Support offset-based pagination pattern: skip ((page-1) * size); take size\n- Return Unchecked.defaultof (quotation-based approach)\n- Applied in correct order: WHERE -> ORDER BY -> SKIP -> TAKE\n\n**Documentation:**\n- Comprehensive XML doc comments for both operations\n- Examples covering pagination patterns, top-N queries, result limiting\n- Explanation of execution order and order dependency\n- Common use cases and pagination formula\n- Warnings about non-deterministic results without sorting\n\n**Verification:**\n- Project builds successfully (0 warnings, 0 errors)\n- All tests pass (221/227, same 6 known failures)\n- No regressions introduced\n\n**Usage Examples:**\n```fsharp\n// Page 2 with 10 items per page\nsortBy user.CreatedAt\nskip 10\ntake 10\n\n// Top 20 highest-rated products\nsortByDescending product.Rating\ntake 20\n\n// Skip first result\nskip 1\n```
+Added take and skip CustomOperations with MaintainsVariableSpace=true. Enables pagination syntax in query expressions. Added 150+ lines with comprehensive XML documentation. Build successful with 0 errors, 0 warnings.
 <!-- SECTION:NOTES:END -->

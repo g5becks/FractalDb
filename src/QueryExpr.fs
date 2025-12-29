@@ -1252,6 +1252,155 @@ type QueryBuilder() =
     [<CustomOperation("skip", MaintainsVariableSpace = true)>]
     member _.Skip(source: TranslatedQuery<'T>, count: int) : TranslatedQuery<'T> =
         Unchecked.defaultof<_>
+    
+    /// <summary>
+    /// Enables 'select projection' syntax for field projection and result transformation.
+    /// </summary>
+    ///
+    /// <param name="source">The source sequence from previous operations.</param>
+    /// <param name="projection">
+    /// Lambda expression defining what fields/values to project (e.g., fun x -> x.Email
+    /// or fun x -> (x.Name, x.Age)). Analyzed in quotation to determine projection type.
+    /// </param>
+    ///
+    /// <typeparam name="'T">The source document type being projected from.</typeparam>
+    /// <typeparam name="'R">The result type being projected to (may differ from 'T).</typeparam>
+    ///
+    /// <returns>
+    /// TranslatedQuery&lt;'R&gt; - Result type may differ from source type.
+    /// Returns Unchecked.defaultof (never executes, only for type inference).
+    /// </returns>
+    ///
+    /// <remarks>
+    /// This member is NEVER EXECUTED. The projection lambda is captured in the quotation
+    /// and translated by QueryTranslator.translateProjection to determine the projection
+    /// type (SelectAll, SelectFields, SelectSingle) and field names.
+    ///
+    /// <para><strong>AllowIntoPattern = true:</strong></para>
+    ///
+    /// This attribute enables type transformation from 'T to 'R. Without it, the query
+    /// expression would require all operations to maintain the same type parameter.
+    ///
+    /// With AllowIntoPattern, you can write:
+    /// <code>
+    /// query {
+    ///     for user in users do
+    ///     where (user.Age > 18)
+    ///     select user.Email  // Changes from TranslatedQuery&lt;User&gt; to TranslatedQuery&lt;string&gt;
+    /// }
+    /// </code>
+    ///
+    /// <para><strong>Projection Patterns Supported:</strong></para>
+    ///
+    /// 1. <strong>Identity</strong> - Select entire document:
+    /// <code>select user</code>
+    /// Maps to: Projection.SelectAll (returns complete Document&lt;User&gt;)
+    ///
+    /// 2. <strong>Single Field</strong> - Select one field:
+    /// <code>select user.Email</code>
+    /// Maps to: Projection.SelectSingle "email" (returns string)
+    ///
+    /// 3. <strong>Tuple</strong> - Select multiple fields as tuple:
+    /// <code>select (user.Name, user.Email, user.Age)</code>
+    /// Maps to: Projection.SelectFields ["name"; "email"; "age"] (returns tuple)
+    ///
+    /// 4. <strong>Anonymous Record</strong> - Select multiple fields with names:
+    /// <code>select {| Name = user.Name; Email = user.Email |}</code>
+    /// Maps to: Projection.SelectFields ["name"; "email"] (returns anonymous record)
+    ///
+    /// 5. <strong>Nested Fields</strong> - Project nested object fields:
+    /// <code>select user.Address.City</code>
+    /// Maps to: Projection.SelectSingle "address.city" (dot notation)
+    ///
+    /// 6. <strong>Computed Values</strong> - Transform/combine fields:
+    /// <code>select {| FullName = user.FirstName + " " + user.LastName |}</code>
+    /// Maps to: Projection.SelectFields ["firstName"; "lastName"] with client-side transform
+    ///
+    /// <para><strong>Performance Benefits:</strong></para>
+    ///
+    /// Field projection reduces:
+    /// - SQL SELECT clause size (only named fields queried)
+    /// - Network transfer size (less JSON data)
+    /// - Deserialization cost (fewer fields to parse)
+    /// - Memory usage (smaller result objects)
+    ///
+    /// Example: Selecting user.Email for 10,000 records sends only emails, not
+    /// complete user documents (name, address, phone, etc.).
+    ///
+    /// <para><strong>Type Safety:</strong></para>
+    ///
+    /// The F# type system ensures projection expressions are well-typed:
+    /// - Field names are checked at compile time
+    /// - Result type 'R is inferred from projection expression
+    /// - Type mismatches cause compile errors, not runtime errors
+    ///
+    /// <para><strong>Quotation Translation:</strong></para>
+    ///
+    /// The projection lambda is captured as a quotation expression tree:
+    /// - Identity: Lambda(x, Var(x)) → SelectAll
+    /// - Single field: Lambda(x, PropertyGet(x, "Email")) → SelectSingle "email"
+    /// - Tuple: Lambda(x, NewTuple([PropertyGet(...), ...])) → SelectFields [...]
+    /// - Anonymous record: Lambda(x, NewRecord(...)) → SelectFields [...]
+    ///
+    /// Field names are extracted and converted to camelCase for JSON compatibility.
+    /// </remarks>
+    ///
+    /// <example>
+    /// <code>
+    /// // Identity - complete documents
+    /// query {
+    ///     for user in users do
+    ///     where (user.Age > 18)
+    ///     select user
+    /// }
+    /// // Returns: Document&lt;User&gt; seq (all fields)
+    ///
+    /// // Single field - just emails
+    /// query {
+    ///     for user in users do
+    ///     where (user.IsActive = true)
+    ///     select user.Email
+    /// }
+    /// // Returns: string seq (only email field)
+    ///
+    /// // Tuple - multiple fields
+    /// query {
+    ///     for user in users do
+    ///     select (user.Name, user.Email, user.Age)
+    /// }
+    /// // Returns: (string * string * int) seq
+    ///
+    /// // Anonymous record - named fields
+    /// query {
+    ///     for user in users do
+    ///     where (user.Age >= 18)
+    ///     select {| Name = user.Name; IsAdult = true |}
+    /// }
+    /// // Returns: {| Name: string; IsAdult: bool |} seq
+    ///
+    /// // Nested fields - dot notation
+    /// query {
+    ///     for user in users do
+    ///     where (user.Address.Country = "USA")
+    ///     select user.Address.City
+    /// }
+    /// // Returns: string seq (city field from nested address)
+    ///
+    /// // Computed values - transformations
+    /// query {
+    ///     for user in users do
+    ///     select {| FullName = user.FirstName + " " + user.LastName; Age = user.Age |}
+    /// }
+    /// // Returns: {| FullName: string; Age: int |} seq
+    /// // Note: String concatenation done client-side after fetching firstName, lastName
+    /// </code>
+    /// </example>
+    [<CustomOperation("select", AllowIntoPattern = true)>]
+    member _.Select(
+        source: TranslatedQuery<'T>,
+        [<ProjectionParameter>] projection: 'T -> 'R
+    ) : TranslatedQuery<'R> =
+        Unchecked.defaultof<_>
 
 /// <summary>
 /// Module providing the global 'query' computation expression instance.
