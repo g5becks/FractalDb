@@ -2306,6 +2306,24 @@ module internal QueryTranslator =
         | SpecificCall <@ not @> (_, _, [inner]) ->
             Query.Not (translatePredicate inner)
         
+        // String.Contains: field.Contains(substring)
+        | Call (Some receiver, methodInfo, [arg]) when methodInfo.Name = "Contains" ->
+            let field = extractPropertyName receiver
+            let value = evaluateExpr arg :?> string
+            Query.Field(field, FieldOp.String(StringOp.Contains value))
+        
+        // String.StartsWith: field.StartsWith(prefix)
+        | Call (Some receiver, methodInfo, [arg]) when methodInfo.Name = "StartsWith" ->
+            let field = extractPropertyName receiver
+            let value = evaluateExpr arg :?> string
+            Query.Field(field, FieldOp.String(StringOp.StartsWith value))
+        
+        // String.EndsWith: field.EndsWith(suffix)
+        | Call (Some receiver, methodInfo, [arg]) when methodInfo.Name = "EndsWith" ->
+            let field = extractPropertyName receiver
+            let value = evaluateExpr arg :?> string
+            Query.Field(field, FieldOp.String(StringOp.EndsWith value))
+        
         // Unsupported pattern
         | _ ->
             failwith $"Unsupported predicate expression: {expr}"
