@@ -2294,6 +2294,18 @@ module internal QueryTranslator =
             let value = evaluateExpr right
             Query.Field(field, FieldOp.Compare(box (CompareOp.Lte value)))
         
+        // Logical AND: expr1 && expr2
+        | SpecificCall <@ (&&) @> (_, _, [left; right]) ->
+            Query.And [ translatePredicate left; translatePredicate right ]
+        
+        // Logical OR: expr1 || expr2
+        | SpecificCall <@ (||) @> (_, _, [left; right]) ->
+            Query.Or [ translatePredicate left; translatePredicate right ]
+        
+        // Logical NOT: not expr
+        | SpecificCall <@ not @> (_, _, [inner]) ->
+            Query.Not (translatePredicate inner)
+        
         // Unsupported pattern
         | _ ->
             failwith $"Unsupported predicate expression: {expr}"
