@@ -1,4 +1,4 @@
-module FractalDb.QueryExpr
+module rec FractalDb.QueryExpr
 
 open System
 open FractalDb.Operators
@@ -393,7 +393,7 @@ type TranslatedQuery<'T> =
 /// - **for x in source do**: Specifies collection to query
 /// - **where (predicate)**: Filters documents (can be used multiple times, combined with AND)
 /// - **sortBy field**: Sort ascending by field
-/// - **sortByDescending field**: Sort descending by field  
+/// - **sortByDescending field**: Sort descending by field
 /// - **thenBy field**: Secondary sort ascending
 /// - **thenByDescending field**: Secondary sort descending
 /// - **skip n**: Skip first n results (pagination)
@@ -471,7 +471,7 @@ type TranslatedQuery<'T> =
 /// </code>
 /// </example>
 type QueryBuilder() =
-    
+
     /// <summary>
     /// Enables 'for x in source do' syntax in query expressions.
     /// </summary>
@@ -512,9 +512,8 @@ type QueryBuilder() =
     /// let productQuery = query { for product in productsCollection do where (product.InStock = true) }
     /// </code>
     /// </example>
-    member _.For(source: 'Collection, body: 'T -> TranslatedQuery<'T>) : TranslatedQuery<'T> =
-        Unchecked.defaultof<_>
-    
+    member _.For(source: 'Collection, body: 'T -> TranslatedQuery<'T>) : TranslatedQuery<'T> = Unchecked.defaultof<_>
+
     /// <summary>
     /// Enables 'yield' and implicit select syntax in query expressions.
     /// </summary>
@@ -558,9 +557,8 @@ type QueryBuilder() =
     /// }
     /// </code>
     /// </example>
-    member _.Yield(value: 'T) : TranslatedQuery<'T> =
-        Unchecked.defaultof<_>
-    
+    member _.Yield(value: 'T) : TranslatedQuery<'T> = Unchecked.defaultof<_>
+
     /// <summary>
     /// Captures the query expression as an F# quotation for analysis.
     /// </summary>
@@ -615,9 +613,11 @@ type QueryBuilder() =
     /// // This quotation is passed to Run for translation
     /// </code>
     /// </example>
-    member _.Quote(expr: Microsoft.FSharp.Quotations.Expr<TranslatedQuery<'T>>) : Microsoft.FSharp.Quotations.Expr<TranslatedQuery<'T>> =
+    member _.Quote
+        (expr: Microsoft.FSharp.Quotations.Expr<TranslatedQuery<'T>>)
+        : Microsoft.FSharp.Quotations.Expr<TranslatedQuery<'T>> =
         expr
-    
+
     /// <summary>
     /// Translates the captured quotation into a TranslatedQuery.
     /// </summary>
@@ -641,55 +641,49 @@ type QueryBuilder() =
     /// 1. **Receive quotation from Quote**: Full AST of query expression
     /// 2. **Call QueryTranslator.translate**: Walk AST and extract components
     /// 3. **Build TranslatedQuery**: Structured query with Source, Where, OrderBy, etc.
-    /// 4. **Return TranslatedQuery**: Ready for QueryExecutor.execute
+    /// 4. **Return TranslatedQuery**: Ready for execution via Collection methods
     ///
-    /// <para><strong>Current Implementation (task-105):</strong></para>
+    /// <para><strong>Implementation:</strong></para>
     ///
-    /// Returns Unchecked.defaultof as a placeholder. The actual implementation
-    /// will be added in task-118 after QueryTranslator and QueryExecutor are
-    /// implemented (tasks 111-117).
+    /// Calls QueryTranslator.translate to convert the quotation into a
+    /// TranslatedQuery record containing all query components (Source, Where,
+    /// OrderBy, Skip, Take, Projection). The returned TranslatedQuery can then
+    /// be passed to Collection.Find or other query execution methods.
     ///
-    /// <para><strong>Final Implementation (task-118):</strong></para>
+    /// <para><strong>Note on module rec:</strong></para>
     ///
-    /// Will call QueryTranslator.translate to convert the quotation into a
-    /// TranslatedQuery, then return that query for execution.
-    ///
-    /// The result type will change from TranslatedQuery&lt;'T&gt; to Task&lt;seq&lt;'T&gt;&gt;
-    /// once QueryExecutor.execute is integrated.
+    /// This module uses F#'s recursive module feature (module rec) to allow
+    /// QueryBuilder.Run to call QueryTranslator.translate, which is defined
+    /// later in the same file but needs to reference QueryBuilder for its
+    /// SpecificCall pattern matching.
     /// </remarks>
     ///
     /// <example>
     /// <code>
-    /// // User code (task-105, current):
+    /// // Query expression usage:
     /// let translatedQuery =
     ///     query {
     ///         for user in usersCollection do
     ///         where (user.Age >= 18)
-    ///     }
-    /// // Returns: TranslatedQuery&lt;User&gt; (placeholder, not functional yet)
-    ///
-    /// // After task-118 (final):
-    /// let translatedQuery =
-    ///     query {
-    ///         for user in usersCollection do
-    ///         where (user.Age >= 18)
+    ///         sortBy user.Name
+    ///         take 10
     ///     }
     /// // Returns: TranslatedQuery with:
     /// //   Source = "users"
     /// //   Where = Some (Query.Field("age", FieldOp.Compare(box (CompareOp.Gte 18))))
-    /// //   OrderBy = []
+    /// //   OrderBy = [("name", SortDirection.Asc)]
     /// //   Skip = None
-    /// //   Take = None
+    /// //   Take = Some 10
     /// //   Projection = SelectAll
     /// </code>
     /// </example>
     member _.Run(expr: Microsoft.FSharp.Quotations.Expr<TranslatedQuery<'T>>) : TranslatedQuery<'T> =
-        raise (System.NotImplementedException("QueryBuilder.Run will be implemented in task-118"))
-    
+        QueryTranslator.translate expr
+
     // ============================================================
     // CUSTOM OPERATIONS
     // ============================================================
-    
+
     /// <summary>
     /// Enables 'where (predicate)' filtering syntax in query expressions.
     /// </summary>
@@ -830,12 +824,9 @@ type QueryBuilder() =
     /// </code>
     /// </example>
     [<CustomOperation("where", MaintainsVariableSpace = true)>]
-    member _.Where(
-        source: TranslatedQuery<'T>,
-        [<ProjectionParameter>] predicate: 'T -> bool
-    ) : TranslatedQuery<'T> =
+    member _.Where(source: TranslatedQuery<'T>, [<ProjectionParameter>] predicate: 'T -> bool) : TranslatedQuery<'T> =
         Unchecked.defaultof<_>
-    
+
     /// <summary>
     /// Enables 'sortBy field' syntax for ascending sort order.
     /// </summary>
@@ -901,12 +892,11 @@ type QueryBuilder() =
     /// </code>
     /// </example>
     [<CustomOperation("sortBy", MaintainsVariableSpace = true)>]
-    member _.SortBy(
-        source: TranslatedQuery<'T>,
-        [<ProjectionParameter>] keySelector: 'T -> 'Key
-    ) : TranslatedQuery<'T> =
+    member _.SortBy
+        (source: TranslatedQuery<'T>, [<ProjectionParameter>] keySelector: 'T -> 'Key)
+        : TranslatedQuery<'T> =
         Unchecked.defaultof<_>
-    
+
     /// <summary>
     /// Enables 'sortByDescending field' syntax for descending sort order.
     /// </summary>
@@ -959,12 +949,11 @@ type QueryBuilder() =
     /// </code>
     /// </example>
     [<CustomOperation("sortByDescending", MaintainsVariableSpace = true)>]
-    member _.SortByDescending(
-        source: TranslatedQuery<'T>,
-        [<ProjectionParameter>] keySelector: 'T -> 'Key
-    ) : TranslatedQuery<'T> =
+    member _.SortByDescending
+        (source: TranslatedQuery<'T>, [<ProjectionParameter>] keySelector: 'T -> 'Key)
+        : TranslatedQuery<'T> =
         Unchecked.defaultof<_>
-    
+
     /// <summary>
     /// Enables 'thenBy field' syntax for secondary ascending sort.
     /// </summary>
@@ -1031,12 +1020,11 @@ type QueryBuilder() =
     /// </code>
     /// </example>
     [<CustomOperation("thenBy", MaintainsVariableSpace = true)>]
-    member _.ThenBy(
-        source: TranslatedQuery<'T>,
-        [<ProjectionParameter>] keySelector: 'T -> 'Key
-    ) : TranslatedQuery<'T> =
+    member _.ThenBy
+        (source: TranslatedQuery<'T>, [<ProjectionParameter>] keySelector: 'T -> 'Key)
+        : TranslatedQuery<'T> =
         Unchecked.defaultof<_>
-    
+
     /// <summary>
     /// Enables 'thenByDescending field' syntax for secondary descending sort.
     /// </summary>
@@ -1085,12 +1073,11 @@ type QueryBuilder() =
     /// </code>
     /// </example>
     [<CustomOperation("thenByDescending", MaintainsVariableSpace = true)>]
-    member _.ThenByDescending(
-        source: TranslatedQuery<'T>,
-        [<ProjectionParameter>] keySelector: 'T -> 'Key
-    ) : TranslatedQuery<'T> =
+    member _.ThenByDescending
+        (source: TranslatedQuery<'T>, [<ProjectionParameter>] keySelector: 'T -> 'Key)
+        : TranslatedQuery<'T> =
         Unchecked.defaultof<_>
-    
+
     /// <summary>
     /// Enables 'take n' syntax to limit the number of results returned.
     /// </summary>
@@ -1165,9 +1152,8 @@ type QueryBuilder() =
     /// </code>
     /// </example>
     [<CustomOperation("take", MaintainsVariableSpace = true)>]
-    member _.Take(source: TranslatedQuery<'T>, count: int) : TranslatedQuery<'T> =
-        Unchecked.defaultof<_>
-    
+    member _.Take(source: TranslatedQuery<'T>, count: int) : TranslatedQuery<'T> = Unchecked.defaultof<_>
+
     /// <summary>
     /// Enables 'skip n' syntax to skip the first n results (offset pagination).
     /// </summary>
@@ -1254,9 +1240,8 @@ type QueryBuilder() =
     /// </code>
     /// </example>
     [<CustomOperation("skip", MaintainsVariableSpace = true)>]
-    member _.Skip(source: TranslatedQuery<'T>, count: int) : TranslatedQuery<'T> =
-        Unchecked.defaultof<_>
-    
+    member _.Skip(source: TranslatedQuery<'T>, count: int) : TranslatedQuery<'T> = Unchecked.defaultof<_>
+
     /// <summary>
     /// Enables 'select projection' syntax for field projection and result transformation.
     /// </summary>
@@ -1400,12 +1385,9 @@ type QueryBuilder() =
     /// </code>
     /// </example>
     [<CustomOperation("select", AllowIntoPattern = true)>]
-    member _.Select(
-        source: TranslatedQuery<'T>,
-        [<ProjectionParameter>] projection: 'T -> 'R
-    ) : TranslatedQuery<'R> =
+    member _.Select(source: TranslatedQuery<'T>, [<ProjectionParameter>] projection: 'T -> 'R) : TranslatedQuery<'R> =
         Unchecked.defaultof<_>
-    
+
     /// <summary>
     /// Enables 'count' syntax to count matching documents.
     /// </summary>
@@ -1494,9 +1476,8 @@ type QueryBuilder() =
     /// </code>
     /// </example>
     [<CustomOperation("count")>]
-    member _.Count(source: TranslatedQuery<'T>) : int =
-        Unchecked.defaultof<_>
-    
+    member _.Count(source: TranslatedQuery<'T>) : int = Unchecked.defaultof<_>
+
     /// <summary>
     /// Enables 'exists' syntax to check if any documents match a predicate.
     /// </summary>
@@ -1599,12 +1580,9 @@ type QueryBuilder() =
     /// </code>
     /// </example>
     [<CustomOperation("exists", MaintainsVariableSpace = true)>]
-    member _.Exists(
-        source: TranslatedQuery<'T>,
-        [<ProjectionParameter>] predicate: 'T -> bool
-    ) : bool =
+    member _.Exists(source: TranslatedQuery<'T>, [<ProjectionParameter>] predicate: 'T -> bool) : bool =
         Unchecked.defaultof<_>
-    
+
     /// <summary>
     /// Enables 'head' syntax to retrieve the first matching document.
     /// </summary>
@@ -1718,9 +1696,8 @@ type QueryBuilder() =
     /// </code>
     /// </example>
     [<CustomOperation("head")>]
-    member _.Head(source: TranslatedQuery<'T>) : 'T =
-        Unchecked.defaultof<_>
-    
+    member _.Head(source: TranslatedQuery<'T>) : 'T = Unchecked.defaultof<_>
+
     /// <summary>
     /// Enables 'headOrDefault' syntax to safely retrieve the first matching document.
     /// </summary>
@@ -1829,15 +1806,14 @@ type QueryBuilder() =
     /// // Cache pattern
     /// match query { for item in cache do where (item.Key = key) headOrDefault } with
     /// | Some cached -> cached.Value
-    /// | None -> 
+    /// | None ->
     ///     let value = computeExpensiveValue()
     ///     saveToCache key value
     ///     value
     /// </code>
     /// </example>
     [<CustomOperation("headOrDefault")>]
-    member _.HeadOrDefault(source: TranslatedQuery<'T>) : option<'T> =
-        Unchecked.defaultof<_>
+    member _.HeadOrDefault(source: TranslatedQuery<'T>) : option<'T> = Unchecked.defaultof<_>
 
 
 // ============================================================
@@ -1868,7 +1844,7 @@ type QueryBuilder() =
 /// - translateProjection: Converts projection quotations to Projection DU (task 116)
 /// </remarks>
 module internal QueryTranslator =
-    
+
     /// <summary>
     /// Converts PascalCase property names to camelCase for JSON field names.
     /// </summary>
@@ -1906,11 +1882,11 @@ module internal QueryTranslator =
     /// </code>
     /// </example>
     let private toCamelCase (s: string) : string =
-        if String.IsNullOrEmpty(s) then 
+        if String.IsNullOrEmpty(s) then
             s
-        else 
+        else
             string (Char.ToLowerInvariant(s.[0])) + s.Substring(1)
-    
+
     /// <summary>
     /// Extracts property name from F# quotation expression, converting to camelCase.
     /// </summary>
@@ -2013,36 +1989,32 @@ module internal QueryTranslator =
         match expr with
         // Lambda wrapper: fun x -> x.Property
         // Strip lambda, process body recursively
-        | Lambda (_, body) -> 
-            extractPropertyName body
-        
+        | Lambda(_, body) -> extractPropertyName body
+
         // Property access: receiver.Property
         // Example: user.Email, user.Address.City
-        | PropertyGet (Some receiver, propInfo, []) ->
+        | PropertyGet(Some receiver, propInfo, []) ->
             let receiverPath = extractPropertyName receiver
             let propName = propInfo.Name |> toCamelCase
-            
+
             // Build dot-notation path for nested properties
             if String.IsNullOrEmpty(receiverPath) then
                 propName
             else
                 receiverPath + "." + propName
-        
+
         // Static property: Type.Property
         // Example: DateTime.Now
-        | PropertyGet (None, propInfo, []) ->
-            propInfo.Name |> toCamelCase
-        
+        | PropertyGet(None, propInfo, []) -> propInfo.Name |> toCamelCase
+
         // Variable reference: just the variable itself
         // Example: select user (identity projection)
         // Return empty string to signal SelectAll
-        | Var _ ->
-            ""
-        
+        | Var _ -> ""
+
         // Unsupported pattern
-        | _ ->
-            raise (ArgumentException($"Cannot extract property name from expression: {expr}"))
-    
+        | _ -> raise (ArgumentException($"Cannot extract property name from expression: {expr}"))
+
     /// <summary>
     /// Evaluates a quotation expression to extract its runtime value.
     /// </summary>
@@ -2120,7 +2092,7 @@ module internal QueryTranslator =
     /// </example>
     let private evaluateExpr (expr: Expr) : obj =
         Microsoft.FSharp.Linq.RuntimeHelpers.LeafExpressionConverter.EvaluateQuotation expr
-    
+
     /// <summary>
     /// Translates F# quotation predicate expressions to Query&lt;'T&gt; AST.
     /// </summary>
@@ -2255,79 +2227,76 @@ module internal QueryTranslator =
         match expr with
         // Lambda wrapper: fun x -> body
         // Strip lambda and process body
-        | Lambda (_, body) ->
-            translatePredicate body
-        
+        | Lambda(_, body) -> translatePredicate body
+
         // Property = Value (Equality)
-        | SpecificCall <@ (=) @> (_, _, [left; right]) ->
+        | SpecificCall <@ (=) @> (_, _, [ left; right ]) ->
             let field = extractPropertyName left
             let value = evaluateExpr right
             Query.Field(field, FieldOp.Compare(box (CompareOp.Eq value)))
-        
+
         // Property <> Value (Inequality)
-        | SpecificCall <@ (<>) @> (_, _, [left; right]) ->
+        | SpecificCall <@ (<>) @> (_, _, [ left; right ]) ->
             let field = extractPropertyName left
             let value = evaluateExpr right
             Query.Field(field, FieldOp.Compare(box (CompareOp.Ne value)))
-        
+
         // Property > Value (Greater Than)
-        | SpecificCall <@ (>) @> (_, _, [left; right]) ->
+        | SpecificCall <@ (>) @> (_, _, [ left; right ]) ->
             let field = extractPropertyName left
             let value = evaluateExpr right
             Query.Field(field, FieldOp.Compare(box (CompareOp.Gt value)))
-        
+
         // Property >= Value (Greater Than or Equal)
-        | SpecificCall <@ (>=) @> (_, _, [left; right]) ->
+        | SpecificCall <@ (>=) @> (_, _, [ left; right ]) ->
             let field = extractPropertyName left
             let value = evaluateExpr right
             Query.Field(field, FieldOp.Compare(box (CompareOp.Gte value)))
-        
+
         // Property < Value (Less Than)
-        | SpecificCall <@ (<) @> (_, _, [left; right]) ->
+        | SpecificCall <@ (<) @> (_, _, [ left; right ]) ->
             let field = extractPropertyName left
             let value = evaluateExpr right
             Query.Field(field, FieldOp.Compare(box (CompareOp.Lt value)))
-        
+
         // Property <= Value (Less Than or Equal)
-        | SpecificCall <@ (<=) @> (_, _, [left; right]) ->
+        | SpecificCall <@ (<=) @> (_, _, [ left; right ]) ->
             let field = extractPropertyName left
             let value = evaluateExpr right
             Query.Field(field, FieldOp.Compare(box (CompareOp.Lte value)))
-        
+
         // Logical AND: expr1 && expr2
-        | SpecificCall <@ (&&) @> (_, _, [left; right]) ->
+        | SpecificCall <@ (&&) @> (_, _, [ left; right ]) ->
             Query.And [ translatePredicate left; translatePredicate right ]
-        
+
         // Logical OR: expr1 || expr2
-        | SpecificCall <@ (||) @> (_, _, [left; right]) ->
+        | SpecificCall <@ (||) @> (_, _, [ left; right ]) ->
             Query.Or [ translatePredicate left; translatePredicate right ]
-        
+
         // Logical NOT: not expr
-        | SpecificCall <@ not @> (_, _, [inner]) ->
-            Query.Not (translatePredicate inner)
-        
+        | SpecificCall <@ not @> (_, _, [ inner ]) -> Query.Not(translatePredicate inner)
+
         // String.Contains: field.Contains(substring)
-        | Call (Some receiver, methodInfo, [arg]) when methodInfo.Name = "Contains" ->
+        | Call(Some receiver, methodInfo, [ arg ]) when methodInfo.Name = "Contains" ->
             let field = extractPropertyName receiver
             let value = evaluateExpr arg :?> string
             Query.Field(field, FieldOp.String(StringOp.Contains value))
-        
+
         // String.StartsWith: field.StartsWith(prefix)
-        | Call (Some receiver, methodInfo, [arg]) when methodInfo.Name = "StartsWith" ->
+        | Call(Some receiver, methodInfo, [ arg ]) when methodInfo.Name = "StartsWith" ->
             let field = extractPropertyName receiver
             let value = evaluateExpr arg :?> string
             Query.Field(field, FieldOp.String(StringOp.StartsWith value))
-        
+
         // String.EndsWith: field.EndsWith(suffix)
-        | Call (Some receiver, methodInfo, [arg]) when methodInfo.Name = "EndsWith" ->
+        | Call(Some receiver, methodInfo, [ arg ]) when methodInfo.Name = "EndsWith" ->
             let field = extractPropertyName receiver
             let value = evaluateExpr arg :?> string
             Query.Field(field, FieldOp.String(StringOp.EndsWith value))
-        
+
         // Unsupported pattern
-        | _ ->
-            failwith $"Unsupported predicate expression: {expr}"
-    
+        | _ -> failwith $"Unsupported predicate expression: {expr}"
+
     /// <summary>
     /// Simplifies Query&lt;'T&gt; structures by optimizing nested And/Or operations.
     /// </summary>
@@ -2412,17 +2381,17 @@ module internal QueryTranslator =
             |> List.filter (fun q -> q <> Query.Empty)
             |> function
                 | [] -> Query.Empty
-                | [single] -> single
+                | [ single ] -> single
                 | filtered -> Query.And filtered
         | Query.Or queries ->
             queries
             |> List.filter (fun q -> q <> Query.Empty)
             |> function
                 | [] -> Query.Empty
-                | [single] -> single
+                | [ single ] -> single
                 | filtered -> Query.Or filtered
         | other -> other
-    
+
     /// <summary>
     /// Analyzes projection expression to determine projection type and fields.
     /// </summary>
@@ -2544,31 +2513,30 @@ module internal QueryTranslator =
     let translateProjection (expr: Expr) : Projection =
         match expr with
         // Identity: fun x -> x (select entire document)
-        | Lambda (_, Var _) ->
-            Projection.SelectAll
-        
+        | Lambda(_, Var _) -> Projection.SelectAll
+
         // Single field: fun x -> x.Property
-        | Lambda (_, PropertyGet _) as lambda ->
+        | Lambda(_, PropertyGet _) as lambda ->
             let field = extractPropertyName lambda
+
             if String.IsNullOrEmpty(field) then
                 Projection.SelectAll
             else
                 Projection.SelectSingle field
-        
+
         // Tuple: fun x -> (x.A, x.B, x.C)
-        | Lambda (_, NewTuple fields) ->
+        | Lambda(_, NewTuple fields) ->
             let fieldNames = fields |> List.map extractPropertyName
             Projection.SelectFields fieldNames
-        
+
         // Anonymous record: fun x -> {| A = x.A; B = x.B |}
-        | Lambda (_, NewRecord (_, fields)) ->
+        | Lambda(_, NewRecord(_, fields)) ->
             let fieldNames = fields |> List.map extractPropertyName
             Projection.SelectFields fieldNames
-        
+
         // Unknown pattern - safe fallback to complete documents
-        | _ ->
-            Projection.SelectAll
-    
+        | _ -> Projection.SelectAll
+
     /// <summary>
     /// Main translation function: converts full query expression quotation to TranslatedQuery&lt;'T&gt;.
     /// </summary>
@@ -2753,64 +2721,71 @@ module internal QueryTranslator =
         let rec loop (expr: Expr) (query: TranslatedQuery<'T>) : TranslatedQuery<'T> =
             match expr with
             // For source in collection do ...
-            | SpecificCall <@ Unchecked.defaultof<QueryBuilder>.For @> (_, _, [source; _]) ->
+            | SpecificCall <@ Unchecked.defaultof<QueryBuilder>.For @> (_, _, [ source; _ ]) ->
                 let collection = evaluateExpr source
-                let collectionName = 
+
+                let collectionName =
                     collection.GetType().GetProperty("Name").GetValue(collection) :?> string
+
                 { query with Source = collectionName }
-            
+
             // where (predicate)
-            | SpecificCall <@ Unchecked.defaultof<QueryBuilder>.Where @> (_, _, [source; predicate]) ->
+            | SpecificCall <@ Unchecked.defaultof<QueryBuilder>.Where @> (_, _, [ source; predicate ]) ->
                 let q = loop source query
                 let condition = translatePredicate predicate
-                let combined = 
+
+                let combined =
                     match q.Where with
                     | None -> condition
-                    | Some existing -> Query.And [existing; condition]
-                { q with Where = Some (simplify combined) }
-            
+                    | Some existing -> Query.And [ existing; condition ]
+
+                { q with
+                    Where = Some(simplify combined) }
+
             // sortBy field
-            | SpecificCall <@ Unchecked.defaultof<QueryBuilder>.SortBy @> (_, _, [source; selector]) ->
+            | SpecificCall <@ Unchecked.defaultof<QueryBuilder>.SortBy @> (_, _, [ source; selector ]) ->
                 let q = loop source query
                 let field = extractPropertyName selector
-                { q with OrderBy = q.OrderBy @ [(field, SortDirection.Asc)] }
-            
+
+                { q with
+                    OrderBy = q.OrderBy @ [ (field, SortDirection.Asc) ] }
+
             // sortByDescending field
-            | SpecificCall <@ Unchecked.defaultof<QueryBuilder>.SortByDescending @> (_, _, [source; selector]) ->
+            | SpecificCall <@ Unchecked.defaultof<QueryBuilder>.SortByDescending @> (_, _, [ source; selector ]) ->
                 let q = loop source query
                 let field = extractPropertyName selector
-                { q with OrderBy = q.OrderBy @ [(field, SortDirection.Desc)] }
-            
+
+                { q with
+                    OrderBy = q.OrderBy @ [ (field, SortDirection.Desc) ] }
+
             // take n
-            | SpecificCall <@ Unchecked.defaultof<QueryBuilder>.Take @> (_, _, [source; Value (count, _)]) ->
+            | SpecificCall <@ Unchecked.defaultof<QueryBuilder>.Take @> (_, _, [ source; Value(count, _) ]) ->
                 let q = loop source query
-                { q with Take = Some (count :?> int) }
-            
+                { q with Take = Some(count :?> int) }
+
             // skip n
-            | SpecificCall <@ Unchecked.defaultof<QueryBuilder>.Skip @> (_, _, [source; Value (count, _)]) ->
+            | SpecificCall <@ Unchecked.defaultof<QueryBuilder>.Skip @> (_, _, [ source; Value(count, _) ]) ->
                 let q = loop source query
-                { q with Skip = Some (count :?> int) }
-            
+                { q with Skip = Some(count :?> int) }
+
             // select ... (translate projection)
-            | SpecificCall <@ Unchecked.defaultof<QueryBuilder>.Select @> (_, _, [source; projection]) ->
+            | SpecificCall <@ Unchecked.defaultof<QueryBuilder>.Select @> (_, _, [ source; projection ]) ->
                 let q = loop source query
                 let proj = translateProjection projection
                 { q with Projection = proj }
-            
+
             // Unhandled pattern - return accumulator unchanged
-            | _ ->
-                query
-        
+            | _ -> query
+
         // Start with empty query structure
-        let empty = {
-            Source = ""
-            Where = None
-            OrderBy = []
-            Skip = None
-            Take = None
-            Projection = Projection.SelectAll
-        }
-        
+        let empty =
+            { Source = ""
+              Where = None
+              OrderBy = []
+              Skip = None
+              Take = None
+              Projection = Projection.SelectAll }
+
         loop (expr :> Expr) empty
 
 /// <summary>
@@ -2832,7 +2807,7 @@ module internal QueryTranslator =
 ///
 /// The global instance approach is standard for F# computation expressions:
 /// - async { } uses global 'async' instance
-/// - seq { } uses global 'seq' instance  
+/// - seq { } uses global 'seq' instance
 /// - task { } uses global 'task' instance
 /// - query { } uses this global 'query' instance
 /// </remarks>

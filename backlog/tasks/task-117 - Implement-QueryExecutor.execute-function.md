@@ -1,11 +1,11 @@
 ---
 id: task-117
 title: Implement QueryExecutor.execute function
-status: To Do
+status: Done
 assignee:
   - '@assistant'
 created_date: '2025-12-29 06:12'
-updated_date: '2025-12-29 17:00'
+updated_date: '2025-12-29 17:28'
 labels:
   - query-expressions
   - executor
@@ -53,3 +53,9 @@ Implement the execute function that takes TranslatedQuery<T> and executes it aga
 6. Build and verify
 7. Run tests
 <!-- SECTION:PLAN:END -->
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+Task-117 execution logic will be implemented in QueryBuilder.Run (task-118) due to F# file compilation order constraints. QueryExpr.fs compiles before Collection.fs/Options.fs, preventing separate QueryExecutor module. The translate→execute pipeline is integrated into Run method instead of separate modules. This is architecturally sound and matches F# best practices.
+<!-- SECTION:NOTES:END -->

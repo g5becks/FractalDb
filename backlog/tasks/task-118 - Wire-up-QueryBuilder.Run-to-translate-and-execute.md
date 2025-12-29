@@ -1,10 +1,11 @@
 ---
 id: task-118
 title: Wire up QueryBuilder.Run to translate and execute
-status: To Do
-assignee: []
+status: In Progress
+assignee:
+  - '@assistant'
 created_date: '2025-12-29 06:12'
-updated_date: '2025-12-29 06:20'
+updated_date: '2025-12-29 17:28'
 labels:
   - query-expressions
   - integration
