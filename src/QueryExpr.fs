@@ -2424,6 +2424,152 @@ module internal QueryTranslator =
         | other -> other
     
     /// <summary>
+    /// Analyzes projection expression to determine projection type and fields.
+    /// </summary>
+    ///
+    /// <param name="expr">
+    /// F# quotation expression from select clause representing the projection.
+    /// </param>
+    ///
+    /// <returns>
+    /// Projection discriminated union: SelectAll, SelectSingle, or SelectFields.
+    /// </returns>
+    ///
+    /// <remarks>
+    /// This function translates the select clause of query expressions to determine what
+    /// fields to return from the query. It analyzes the quotation pattern to distinguish
+    /// between:
+    /// - Identity projections: select user (return complete documents)
+    /// - Single field: select user.Email (return one field value)
+    /// - Multiple fields: select (user.Name, user.Email) or {| Name=...; Email=... |}
+    ///
+    /// <para><strong>Projection Types:</strong></para>
+    ///
+    /// 1. <strong>SelectAll</strong> - Return complete documents
+    ///    - Pattern: Lambda(_, Var(_))
+    ///    - Example: select user
+    ///    - SQL: SELECT * FROM ...
+    ///    - Result type: Document&lt;'T&gt; seq
+    ///
+    /// 2. <strong>SelectSingle field</strong> - Return single field value
+    ///    - Pattern: Lambda(_, PropertyGet(...))
+    ///    - Example: select user.Email
+    ///    - SQL: SELECT data->>'email' FROM ...
+    ///    - Result type: string seq (or appropriate field type)
+    ///    - Nested: select user.Profile.Email → "profile.email"
+    ///
+    /// 3. <strong>SelectFields list</strong> - Return multiple fields
+    ///    - Pattern: Lambda(_, NewTuple(...)) or Lambda(_, NewRecord(...))
+    ///    - Examples:
+    ///      - Tuple: select (user.Name, user.Email)
+    ///      - Anonymous record: select {| Name = user.Name; Email = user.Email |}
+    ///    - SQL: SELECT data->>'name', data->>'email' FROM ...
+    ///    - Result type: (string * string) seq or {| Name: string; Email: string |} seq
+    ///
+    /// <para><strong>Pattern Matching Strategy:</strong></para>
+    ///
+    /// Patterns are checked in specificity order:
+    /// 1. Var (identity) → SelectAll
+    /// 2. PropertyGet (single field) → SelectSingle
+    /// 3. NewTuple (tuple projection) → SelectFields
+    /// 4. NewRecord (anonymous record) → SelectFields
+    /// 5. Fallback (unknown pattern) → SelectAll (safe default)
+    ///
+    /// <para><strong>Field Name Extraction:</strong></para>
+    ///
+    /// Uses extractPropertyName for consistency:
+    /// - PascalCase properties → camelCase JSON fields
+    /// - Nested properties → dot notation (e.g., "address.city")
+    /// - Type-safe: compile-time property name validation
+    ///
+    /// <para><strong>Performance Impact:</strong></para>
+    ///
+    /// Field projection reduces:
+    /// - SQL SELECT clause size (only specified fields)
+    /// - Network transfer (less JSON data)
+    /// - Deserialization cost (fewer fields to parse)
+    /// - Memory usage (smaller result objects)
+    ///
+    /// Example: Selecting user.Email from 10,000 documents transfers only emails,
+    /// not complete user documents (name, address, phone, etc.).
+    ///
+    /// <para><strong>Type Safety:</strong></para>
+    ///
+    /// F# type inference ensures projection expressions are well-typed:
+    /// - Field names validated at compile time
+    /// - Result type matches projection expression
+    /// - Type mismatches cause compiler errors
+    ///
+    /// <para><strong>Fallback Behavior:</strong></para>
+    ///
+    /// Unknown or complex expressions default to SelectAll (return complete documents).
+    /// This is conservative: better to return more data than fail.
+    ///
+    /// Complex expressions not supported:
+    /// - Computed values: select (user.FirstName + " " + user.LastName)
+    /// - Method calls: select user.ToString()
+    /// - Conditionals: select (if user.IsActive then user.Email else "N/A")
+    ///
+    /// For these cases, query returns complete documents, then apply transformation
+    /// client-side after retrieval.
+    /// </remarks>
+    ///
+    /// <example>
+    /// <code>
+    /// // Identity projection - complete documents
+    /// translateProjection &lt;@ fun (user: User) -> user @&gt;
+    /// // Returns: Projection.SelectAll
+    ///
+    /// // Single field - unwrapped value
+    /// translateProjection &lt;@ fun (user: User) -> user.Email @&gt;
+    /// // Returns: Projection.SelectSingle "email"
+    ///
+    /// // Nested field - dot notation
+    /// translateProjection &lt;@ fun (user: User) -> user.Profile.Email @&gt;
+    /// // Returns: Projection.SelectSingle "profile.email"
+    ///
+    /// // Tuple projection - multiple fields
+    /// translateProjection &lt;@ fun (user: User) -> (user.Name, user.Email, user.Age) @&gt;
+    /// // Returns: Projection.SelectFields ["name"; "email"; "age"]
+    ///
+    /// // Anonymous record - named fields
+    /// translateProjection &lt;@ fun (user: User) -> {| Name = user.Name; Email = user.Email |} @&gt;
+    /// // Returns: Projection.SelectFields ["name"; "email"]
+    ///
+    /// // Complex expression - falls back to SelectAll
+    /// translateProjection &lt;@ fun (user: User) -> user.FirstName + " " + user.LastName @&gt;
+    /// // Returns: Projection.SelectAll (safe fallback)
+    /// </code>
+    /// </example>
+    let translateProjection (expr: Expr) : Projection =
+        match expr with
+        // Identity: fun x -> x (select entire document)
+        | Lambda (_, Var _) ->
+            Projection.SelectAll
+        
+        // Single field: fun x -> x.Property
+        | Lambda (_, PropertyGet _) as lambda ->
+            let field = extractPropertyName lambda
+            if String.IsNullOrEmpty(field) then
+                Projection.SelectAll
+            else
+                Projection.SelectSingle field
+        
+        // Tuple: fun x -> (x.A, x.B, x.C)
+        | Lambda (_, NewTuple fields) ->
+            let fieldNames = fields |> List.map extractPropertyName
+            Projection.SelectFields fieldNames
+        
+        // Anonymous record: fun x -> {| A = x.A; B = x.B |}
+        | Lambda (_, NewRecord (_, fields)) ->
+            let fieldNames = fields |> List.map extractPropertyName
+            Projection.SelectFields fieldNames
+        
+        // Unknown pattern - safe fallback to complete documents
+        | _ ->
+            Projection.SelectAll
+    
+    /// <summary>
     /// Main translation function: converts full query expression quotation to TranslatedQuery&lt;'T&gt;.
     /// </summary>
     ///
@@ -2645,11 +2791,11 @@ module internal QueryTranslator =
                 let q = loop source query
                 { q with Skip = Some (count :?> int) }
             
-            // select ... (placeholder for task-116)
-            | SpecificCall <@ Unchecked.defaultof<QueryBuilder>.Select @> (_, _, [source; _projection]) ->
+            // select ... (translate projection)
+            | SpecificCall <@ Unchecked.defaultof<QueryBuilder>.Select @> (_, _, [source; projection]) ->
                 let q = loop source query
-                // TODO: task-116 - implement translateProjection
-                { q with Projection = Projection.SelectAll }
+                let proj = translateProjection projection
+                { q with Projection = proj }
             
             // Unhandled pattern - return accumulator unchanged
             | _ ->
