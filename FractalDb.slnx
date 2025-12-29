@@ -3,3 +3,4 @@
     <Project Path="src/FractalDb.fsproj" />
     <Project Path="tests/FractalDb.Tests.fsproj" />
 </Solution>
+
