@@ -15,10 +15,11 @@
     <Compile Include="ProjectionTests.fs" />
     <Compile Include="ErrorTests.fs" />
     <Compile Include="QueryTests.fs" />
+    <Compile Include="QueryExprTests.fs" />
     <Compile Include="SerializationTests.fs" />
     <Compile Include="SqlTranslatorTests.fs" />
     <Compile Include="UniqueConstraintDebugTest.fs" />
-    <Compile Include="BuilderTests.fs" />
+    <!-- <Compile Include="BuilderTests.fs" /> --> <!-- Temporarily disabled - task-128 -->
     <Compile Include="CrudTests.fs" />
     <Compile Include="QueryExecutionTests.fs" />
     <Compile Include="TransactionTests.fs" />

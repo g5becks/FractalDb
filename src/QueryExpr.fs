@@ -2718,19 +2718,43 @@ module internal QueryTranslator =
     /// </code>
     /// </example>
     let translate<'T> (expr: Expr<TranslatedQuery<'T>>) : TranslatedQuery<'T> =
+        // Helper to check if a method belongs to QueryBuilder
+        let isQueryBuilderMethod (mi: System.Reflection.MethodInfo) (name: string) =
+            mi.Name = name && mi.DeclaringType.Name = "QueryBuilder"
+
         let rec loop (expr: Expr) (query: TranslatedQuery<'T>) : TranslatedQuery<'T> =
             match expr with
             // For source in collection do ...
-            | SpecificCall <@ Unchecked.defaultof<QueryBuilder>.For @> (_, _, [ source; _ ]) ->
+            | Call(Some _, mi, [ source; _ ]) when isQueryBuilderMethod mi "For" ->
                 let collection = evaluateExpr source
 
+                let collectionType = collection.GetType()
+                let nameProp = collectionType.GetProperty("Name")
+
                 let collectionName =
-                    collection.GetType().GetProperty("Name").GetValue(collection) :?> string
+                    if isNull nameProp then
+                        // Try to get Name from all properties including non-public
+                        let allProps =
+                            collectionType.GetProperties(
+                                System.Reflection.BindingFlags.Instance
+                                ||| System.Reflection.BindingFlags.Public
+                                ||| System.Reflection.BindingFlags.NonPublic
+                            )
+
+                        let nameField = allProps |> Array.tryFind (fun p -> p.Name = "Name")
+
+                        match nameField with
+                        | Some prop -> prop.GetValue(collection) :?> string
+                        | None ->
+                            let propNames = allProps |> Array.map (fun p -> p.Name) |> String.concat ", "
+                            failwith $"Collection type '{collectionType.FullName}' does not have a Name property. Available: {propNames}"
+                    else
+                        nameProp.GetValue(collection) :?> string
 
                 { query with Source = collectionName }
 
             // where (predicate)
-            | SpecificCall <@ Unchecked.defaultof<QueryBuilder>.Where @> (_, _, [ source; predicate ]) ->
+            | Call(Some _, mi, [ source; predicate ]) when isQueryBuilderMethod mi "Where" ->
                 let q = loop source query
                 let condition = translatePredicate predicate
 
@@ -2743,7 +2767,7 @@ module internal QueryTranslator =
                     Where = Some(simplify combined) }
 
             // sortBy field
-            | SpecificCall <@ Unchecked.defaultof<QueryBuilder>.SortBy @> (_, _, [ source; selector ]) ->
+            | Call(Some _, mi, [ source; selector ]) when isQueryBuilderMethod mi "SortBy" ->
                 let q = loop source query
                 let field = extractPropertyName selector
 
@@ -2751,7 +2775,7 @@ module internal QueryTranslator =
                     OrderBy = q.OrderBy @ [ (field, SortDirection.Asc) ] }
 
             // sortByDescending field
-            | SpecificCall <@ Unchecked.defaultof<QueryBuilder>.SortByDescending @> (_, _, [ source; selector ]) ->
+            | Call(Some _, mi, [ source; selector ]) when isQueryBuilderMethod mi "SortByDescending" ->
                 let q = loop source query
                 let field = extractPropertyName selector
 
@@ -2759,17 +2783,17 @@ module internal QueryTranslator =
                     OrderBy = q.OrderBy @ [ (field, SortDirection.Desc) ] }
 
             // take n
-            | SpecificCall <@ Unchecked.defaultof<QueryBuilder>.Take @> (_, _, [ source; Value(count, _) ]) ->
+            | Call(Some _, mi, [ source; Value(count, _) ]) when isQueryBuilderMethod mi "Take" ->
                 let q = loop source query
                 { q with Take = Some(count :?> int) }
 
             // skip n
-            | SpecificCall <@ Unchecked.defaultof<QueryBuilder>.Skip @> (_, _, [ source; Value(count, _) ]) ->
+            | Call(Some _, mi, [ source; Value(count, _) ]) when isQueryBuilderMethod mi "Skip" ->
                 let q = loop source query
                 { q with Skip = Some(count :?> int) }
 
             // select ... (translate projection)
-            | SpecificCall <@ Unchecked.defaultof<QueryBuilder>.Select @> (_, _, [ source; projection ]) ->
+            | Call(Some _, mi, [ source; projection ]) when isQueryBuilderMethod mi "Select" ->
                 let q = loop source query
                 let proj = translateProjection projection
                 { q with Projection = proj }
