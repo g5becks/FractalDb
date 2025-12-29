@@ -2798,6 +2798,22 @@ module internal QueryTranslator =
                 { q with
                     OrderBy = q.OrderBy @ [ (field, SortDirection.Desc) ] }
 
+            // thenBy field (secondary sort)
+            | Call(Some _, mi, [ source; selector ]) when isQueryBuilderMethod mi "ThenBy" ->
+                let q = loop source query
+                let field = extractPropertyName selector
+
+                { q with
+                    OrderBy = q.OrderBy @ [ (field, SortDirection.Asc) ] }
+
+            // thenByDescending field (secondary sort descending)
+            | Call(Some _, mi, [ source; selector ]) when isQueryBuilderMethod mi "ThenByDescending" ->
+                let q = loop source query
+                let field = extractPropertyName selector
+
+                { q with
+                    OrderBy = q.OrderBy @ [ (field, SortDirection.Desc) ] }
+
             // take n
             | Call(Some _, mi, [ source; Value(count, _) ]) when isQueryBuilderMethod mi "Take" ->
                 let q = loop source query

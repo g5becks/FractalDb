@@ -521,3 +521,132 @@ type QueryExprTests(fixture: QueryExprTestFixture) =
             | StringOp.EndsWith value -> value |> should equal ".com"
             | _ -> failwith "Expected StringOp.EndsWith"
         | _ -> failwith "Expected Query.Field with String operator"
+
+    // ═══════════════════════════════════════════════════════════════
+    // Sorting - sortBy
+    // ═══════════════════════════════════════════════════════════════
+
+    [<Fact>]
+    member _.``Query expression with sortBy translates to ascending OrderBy``() =
+        let result =
+            query {
+                for user in users do
+                    sortBy user.Name
+            }
+
+        result.Source |> should equal "users"
+        result.OrderBy |> should haveLength 1
+        result.OrderBy.[0] |> should equal ("name", SortDirection.Asc)
+
+    // ═══════════════════════════════════════════════════════════════
+    // Sorting - sortByDescending
+    // ═══════════════════════════════════════════════════════════════
+
+    [<Fact>]
+    member _.``Query expression with sortByDescending translates to descending OrderBy``() =
+        let result =
+            query {
+                for user in users do
+                    sortByDescending user.Age
+            }
+
+        result.Source |> should equal "users"
+        result.OrderBy |> should haveLength 1
+        result.OrderBy.[0] |> should equal ("age", SortDirection.Desc)
+
+    // ═══════════════════════════════════════════════════════════════
+    // Sorting - thenBy
+    // ═══════════════════════════════════════════════════════════════
+
+    [<Fact>]
+    member _.``Query expression with thenBy translates to secondary ascending sort``() =
+        let result =
+            query {
+                for user in users do
+                    sortBy user.Active
+                    thenBy user.Name
+            }
+
+        result.Source |> should equal "users"
+        result.OrderBy |> should haveLength 2
+        result.OrderBy.[0] |> should equal ("active", SortDirection.Asc)
+        result.OrderBy.[1] |> should equal ("name", SortDirection.Asc)
+
+    // ═══════════════════════════════════════════════════════════════
+    // Sorting - thenByDescending
+    // ═══════════════════════════════════════════════════════════════
+
+    [<Fact>]
+    member _.``Query expression with thenByDescending translates to secondary descending sort``() =
+        let result =
+            query {
+                for user in users do
+                    sortBy user.Active
+                    thenByDescending user.Age
+            }
+
+        result.Source |> should equal "users"
+        result.OrderBy |> should haveLength 2
+        result.OrderBy.[0] |> should equal ("active", SortDirection.Asc)
+        result.OrderBy.[1] |> should equal ("age", SortDirection.Desc)
+
+    // ═══════════════════════════════════════════════════════════════
+    // Pagination - take
+    // ═══════════════════════════════════════════════════════════════
+
+    [<Fact>]
+    member _.``Query expression with take limits results``() =
+        let result =
+            query {
+                for user in users do
+                    take 10
+            }
+
+        result.Source |> should equal "users"
+        result.Take |> should equal (Some 10)
+
+    // ═══════════════════════════════════════════════════════════════
+    // Pagination - skip
+    // ═══════════════════════════════════════════════════════════════
+
+    [<Fact>]
+    member _.``Query expression with skip offsets results``() =
+        let result =
+            query {
+                for user in users do
+                    skip 20
+            }
+
+        result.Source |> should equal "users"
+        result.Skip |> should equal (Some 20)
+
+    // ═══════════════════════════════════════════════════════════════
+    // Pagination - skip and take together
+    // ═══════════════════════════════════════════════════════════════
+
+    [<Fact>]
+    member _.``Query expression with skip and take together works correctly``() =
+        let result =
+            query {
+                for user in users do
+                    where (user.Active = true)
+                    sortBy user.Name
+                    skip 20
+                    take 10
+            }
+
+        result.Source |> should equal "users"
+        result.Skip |> should equal (Some 20)
+        result.Take |> should equal (Some 10)
+        result.OrderBy |> should haveLength 1
+        result.OrderBy.[0] |> should equal ("name", SortDirection.Asc)
+
+        match result.Where with
+        | Some(Query.Field(field, FieldOp.Compare op)) ->
+            field |> should equal "active"
+            let unboxed = unbox<CompareOp<obj>> op
+
+            match unboxed with
+            | CompareOp.Eq value -> (value :?> bool) |> should equal true
+            | _ -> failwith "Expected CompareOp.Eq"
+        | _ -> failwith "Expected Query.Field"
