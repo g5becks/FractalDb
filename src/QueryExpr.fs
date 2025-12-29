@@ -831,6 +831,261 @@ type QueryBuilder() =
         [<ProjectionParameter>] predicate: 'T -> bool
     ) : TranslatedQuery<'T> =
         Unchecked.defaultof<_>
+    
+    /// <summary>
+    /// Enables 'sortBy field' syntax for ascending sort order.
+    /// </summary>
+    ///
+    /// <param name="source">The source sequence from previous operations.</param>
+    /// <param name="keySelector">
+    /// Lambda expression selecting the field to sort by (e.g., fun x -> x.Name).
+    /// Analyzed in quotation to extract field name.
+    /// </param>
+    ///
+    /// <typeparam name="'T">The document type being sorted.</typeparam>
+    /// <typeparam name="'Key">The type of the sort key field.</typeparam>
+    ///
+    /// <returns>
+    /// Unchecked.defaultof (never returns, only for type inference).
+    /// </returns>
+    ///
+    /// <remarks>
+    /// This member is NEVER EXECUTED. The keySelector is captured in the quotation
+    /// and translated by QueryTranslator.extractPropertyName to get the field name,
+    /// which is added to the OrderBy list with SortDirection.Asc.
+    ///
+    /// <para><strong>Sort Precedence:</strong></para>
+    ///
+    /// sortBy establishes the primary sort order. Use thenBy/thenByDescending for
+    /// secondary sorts when primary sort values are equal.
+    ///
+    /// <para><strong>Sort Behavior:</strong></para>
+    /// - Text: Alphabetical (A-Z), case-sensitive
+    /// - Numbers: Numeric order (1, 2, 10, 20)
+    /// - Dates: Chronological (oldest to newest)
+    /// - NULL: Appears first (SQLite default)
+    ///
+    /// <para><strong>Field Name Extraction:</strong></para>
+    ///
+    /// The keySelector lambda (fun x -> x.Field) is captured as a quotation:
+    /// - Lambda(x, PropertyGet(x, "Field"))
+    /// - Extracted field name: "field" (camelCase)
+    /// - Added to OrderBy: [("field", SortDirection.Asc)]
+    /// </remarks>
+    ///
+    /// <example>
+    /// <code>
+    /// // Sort by name ascending
+    /// query {
+    ///     for user in users do
+    ///     sortBy user.Name
+    /// }
+    ///
+    /// // Sort with secondary field (use thenBy)
+    /// query {
+    ///     for user in users do
+    ///     sortBy user.LastName
+    ///     thenBy user.FirstName
+    /// }
+    /// // Sort order: LastName asc, then FirstName asc for ties
+    ///
+    /// // Sort nested field
+    /// query {
+    ///     for user in users do
+    ///     sortBy user.Address.City
+    /// }
+    /// </code>
+    /// </example>
+    [<CustomOperation("sortBy", MaintainsVariableSpace = true)>]
+    member _.SortBy(
+        source: TranslatedQuery<'T>,
+        [<ProjectionParameter>] keySelector: 'T -> 'Key
+    ) : TranslatedQuery<'T> =
+        Unchecked.defaultof<_>
+    
+    /// <summary>
+    /// Enables 'sortByDescending field' syntax for descending sort order.
+    /// </summary>
+    ///
+    /// <param name="source">The source sequence from previous operations.</param>
+    /// <param name="keySelector">
+    /// Lambda expression selecting the field to sort by (e.g., fun x -> x.CreatedAt).
+    /// Analyzed in quotation to extract field name.
+    /// </param>
+    ///
+    /// <typeparam name="'T">The document type being sorted.</typeparam>
+    /// <typeparam name="'Key">The type of the sort key field.</typeparam>
+    ///
+    /// <returns>
+    /// Unchecked.defaultof (never returns, only for type inference).
+    /// </returns>
+    ///
+    /// <remarks>
+    /// This member is NEVER EXECUTED. Same as sortBy but produces SortDirection.Desc.
+    ///
+    /// <para><strong>Sort Behavior:</strong></para>
+    /// - Text: Reverse alphabetical (Z-A)
+    /// - Numbers: Descending (20, 10, 2, 1)
+    /// - Dates: Reverse chronological (newest to oldest)
+    /// - NULL: Still appears first (SQLite default, regardless of direction)
+    ///
+    /// Common use cases:
+    /// - Recent items first: sortByDescending x.CreatedAt
+    /// - Highest scores: sortByDescending x.Score
+    /// - Most expensive: sortByDescending x.Price
+    /// </remarks>
+    ///
+    /// <example>
+    /// <code>
+    /// // Recent posts first
+    /// query {
+    ///     for post in posts do
+    ///     sortByDescending post.CreatedAt
+    ///     take 10
+    /// }
+    ///
+    /// // Highest rated products
+    /// query {
+    ///     for product in products do
+    ///     where (product.InStock = true)
+    ///     sortByDescending product.Rating
+    ///     thenBy product.Price
+    /// }
+    /// // Order: Rating desc, then Price asc for ties
+    /// </code>
+    /// </example>
+    [<CustomOperation("sortByDescending", MaintainsVariableSpace = true)>]
+    member _.SortByDescending(
+        source: TranslatedQuery<'T>,
+        [<ProjectionParameter>] keySelector: 'T -> 'Key
+    ) : TranslatedQuery<'T> =
+        Unchecked.defaultof<_>
+    
+    /// <summary>
+    /// Enables 'thenBy field' syntax for secondary ascending sort.
+    /// </summary>
+    ///
+    /// <param name="source">The source sequence with existing sort order.</param>
+    /// <param name="keySelector">
+    /// Lambda expression selecting the secondary sort field.
+    /// </param>
+    ///
+    /// <typeparam name="'T">The document type being sorted.</typeparam>
+    /// <typeparam name="'Key">The type of the sort key field.</typeparam>
+    ///
+    /// <returns>
+    /// Unchecked.defaultof (never returns, only for type inference).
+    /// </returns>
+    ///
+    /// <remarks>
+    /// This member is NEVER EXECUTED. Adds a secondary sort field to break ties
+    /// in the primary sort.
+    ///
+    /// <para><strong>Multi-Level Sorting:</strong></para>
+    ///
+    /// Sort order is determined by the sequence of sort operations:
+    /// 1. sortBy/sortByDescending: Primary sort
+    /// 2. thenBy/thenByDescending: Secondary sort (for ties)
+    /// 3. Additional thenBy/thenByDescending: Tertiary sort, etc.
+    ///
+    /// <para><strong>SQL Translation:</strong></para>
+    ///
+    /// <code>
+    /// sortBy user.LastName
+    /// thenBy user.FirstName
+    /// thenByDescending user.Age
+    /// </code>
+    ///
+    /// Translates to:
+    /// <code>
+    /// ORDER BY lastName ASC, firstName ASC, age DESC
+    /// </code>
+    ///
+    /// <para><strong>Important:</strong></para>
+    ///
+    /// Must follow a sortBy or sortByDescending. Cannot be the first sort operation.
+    /// </remarks>
+    ///
+    /// <example>
+    /// <code>
+    /// // Sort by last name, then first name for ties
+    /// query {
+    ///     for user in users do
+    ///     sortBy user.LastName
+    ///     thenBy user.FirstName
+    /// }
+    ///
+    /// // Complex multi-level sort
+    /// query {
+    ///     for product in products do
+    ///     sortBy product.Category
+    ///     thenByDescending product.Rating
+    ///     thenBy product.Price
+    ///     thenBy product.Name
+    /// }
+    /// // Order: Category asc, Rating desc, Price asc, Name asc
+    /// </code>
+    /// </example>
+    [<CustomOperation("thenBy", MaintainsVariableSpace = true)>]
+    member _.ThenBy(
+        source: TranslatedQuery<'T>,
+        [<ProjectionParameter>] keySelector: 'T -> 'Key
+    ) : TranslatedQuery<'T> =
+        Unchecked.defaultof<_>
+    
+    /// <summary>
+    /// Enables 'thenByDescending field' syntax for secondary descending sort.
+    /// </summary>
+    ///
+    /// <param name="source">The source sequence with existing sort order.</param>
+    /// <param name="keySelector">
+    /// Lambda expression selecting the secondary sort field.
+    /// </param>
+    ///
+    /// <typeparam name="'T">The document type being sorted.</typeparam>
+    /// <typeparam name="'Key">The type of the sort key field.</typeparam>
+    ///
+    /// <returns>
+    /// Unchecked.defaultof (never returns, only for type inference).
+    /// </returns>
+    ///
+    /// <remarks>
+    /// This member is NEVER EXECUTED. Same as thenBy but produces descending order
+    /// for the secondary sort field.
+    ///
+    /// Common use case: Primary sort ascending, but ties broken by most recent:
+    /// <code>
+    /// sortBy user.Status          // "active", "inactive", "pending"
+    /// thenByDescending user.LastLogin  // Most recent first within each status
+    /// </code>
+    ///
+    /// Must follow a sortBy or sortByDescending operation.
+    /// </remarks>
+    ///
+    /// <example>
+    /// <code>
+    /// // Products by category, highest rated first within category
+    /// query {
+    ///     for product in products do
+    ///     sortBy product.Category
+    ///     thenByDescending product.Rating
+    /// }
+    ///
+    /// // Users by department, most recent hires first
+    /// query {
+    ///     for user in users do
+    ///     sortBy user.Department
+    ///     thenByDescending user.HireDate
+    ///     thenBy user.LastName
+    /// }
+    /// </code>
+    /// </example>
+    [<CustomOperation("thenByDescending", MaintainsVariableSpace = true)>]
+    member _.ThenByDescending(
+        source: TranslatedQuery<'T>,
+        [<ProjectionParameter>] keySelector: 'T -> 'Key
+    ) : TranslatedQuery<'T> =
+        Unchecked.defaultof<_>
 
 /// <summary>
 /// Module providing the global 'query' computation expression instance.

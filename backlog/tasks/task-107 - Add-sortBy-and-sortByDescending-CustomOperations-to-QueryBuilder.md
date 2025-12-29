@@ -1,11 +1,11 @@
 ---
 id: task-107
 title: Add sortBy and sortByDescending CustomOperations to QueryBuilder
-status: To Do
+status: In Progress
 assignee:
   - '@assistant'
 created_date: '2025-12-29 06:08'
-updated_date: '2025-12-29 17:00'
+updated_date: '2025-12-29 17:10'
 labels:
   - query-expressions
   - builder
