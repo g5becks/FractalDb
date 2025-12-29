@@ -1,11 +1,11 @@
 ---
 id: task-111
 title: Implement QueryTranslator.extractPropertyName helper
-status: To Do
+status: In Progress
 assignee:
   - '@assistant'
 created_date: '2025-12-29 06:10'
-updated_date: '2025-12-29 17:00'
+updated_date: '2025-12-29 17:18'
 labels:
   - query-expressions
   - translator

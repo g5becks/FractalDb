@@ -1,6 +1,9 @@
 module FractalDb.QueryExpr
 
+open System
 open FractalDb.Operators
+open FSharp.Quotations
+open FSharp.Quotations.Patterns
 
 /// <summary>
 /// Sort direction for query result ordering.
@@ -1834,6 +1837,210 @@ type QueryBuilder() =
     [<CustomOperation("headOrDefault")>]
     member _.HeadOrDefault(source: TranslatedQuery<'T>) : option<'T> =
         Unchecked.defaultof<_>
+
+
+// ============================================================
+// QUOTATION TRANSLATOR
+// ============================================================
+
+/// <summary>
+/// Internal module for translating F# quotation expressions to Query&lt;'T&gt; filters.
+/// </summary>
+///
+/// <remarks>
+/// This module analyzes captured quotation expressions from query computation expressions
+/// and translates them to FractalDb's Query&lt;'T&gt; AST, which is then converted to SQL.
+///
+/// <para><strong>Translation Pipeline:</strong></para>
+///
+/// 1. User writes: query { for user in users do where (user.Age > 18) }
+/// 2. QueryBuilder captures quotation: Lambda(user, Call(>, PropertyGet(user, Age), Value(18)))
+/// 3. QueryTranslator.translatePredicate → Query.Field("age", FieldOp.Compare(CompareOp.Gt 18))
+/// 4. SqlTranslator → SQL: WHERE data->>'age' > 18
+///
+/// <para><strong>Key Functions:</strong></para>
+///
+/// - extractPropertyName: Extracts field names from PropertyGet quotations
+/// - toCamelCase: Converts PascalCase property names to camelCase JSON field names
+/// - translatePredicate: Converts predicate quotations to Query&lt;'T&gt; filters (tasks 112-114)
+/// - translate: Main translation function orchestrating the full conversion (task 115)
+/// - translateProjection: Converts projection quotations to Projection DU (task 116)
+/// </remarks>
+module internal QueryTranslator =
+    
+    /// <summary>
+    /// Converts PascalCase property names to camelCase for JSON field names.
+    /// </summary>
+    ///
+    /// <param name="s">The PascalCase string to convert.</param>
+    ///
+    /// <returns>
+    /// The camelCase version of the input string.
+    /// </returns>
+    ///
+    /// <remarks>
+    /// JSON serialization in FractalDb uses camelCase field names by convention.
+    /// F# property names use PascalCase by convention.
+    ///
+    /// This function bridges the gap:
+    /// - "CreatedAt" → "createdAt"
+    /// - "FirstName" → "firstName"
+    /// - "ID" → "iD" (keeps remaining capitals)
+    ///
+    /// <para><strong>Edge Cases:</strong></para>
+    ///
+    /// - Empty string: Returns empty string
+    /// - Single char: Lowercases it ("A" → "a")
+    /// - Already camelCase: Returns unchanged ("email" → "email")
+    /// - All caps: Only lowercases first char ("URL" → "uRL")
+    /// </remarks>
+    ///
+    /// <example>
+    /// <code>
+    /// toCamelCase "CreatedAt"    // "createdAt"
+    /// toCamelCase "FirstName"    // "firstName"
+    /// toCamelCase "Age"          // "age"
+    /// toCamelCase "email"        // "email" (unchanged)
+    /// toCamelCase ""             // ""
+    /// </code>
+    /// </example>
+    let private toCamelCase (s: string) : string =
+        if String.IsNullOrEmpty(s) then 
+            s
+        else 
+            string (Char.ToLowerInvariant(s.[0])) + s.Substring(1)
+    
+    /// <summary>
+    /// Extracts property name from F# quotation expression, converting to camelCase.
+    /// </summary>
+    ///
+    /// <param name="expr">
+    /// F# quotation expression representing property access (e.g., user.Email, user.Address.City).
+    /// </param>
+    ///
+    /// <returns>
+    /// String representing the property path in camelCase with dot notation for nested fields.
+    /// Returns empty string for identity (Var) references.
+    /// </returns>
+    ///
+    /// <exception cref="System.ArgumentException">
+    /// Thrown when expression is not a valid property access pattern.
+    /// </exception>
+    ///
+    /// <remarks>
+    /// This function recursively analyzes quotation expressions to extract property names
+    /// from various patterns supported by F# query expressions.
+    ///
+    /// <para><strong>Supported Patterns:</strong></para>
+    ///
+    /// 1. <strong>Lambda wrapping</strong>: Lambda(x, body)
+    ///    - Strips outer lambda, processes body
+    ///    - Example: fun user -> user.Email → processes user.Email
+    ///
+    /// 2. <strong>PropertyGet with receiver</strong>: PropertyGet(Some receiver, propInfo, [])
+    ///    - Extracts property chain with dot notation
+    ///    - Example: user.Address.City → "address.city"
+    ///    - Recursively processes receiver for nested properties
+    ///
+    /// 3. <strong>Static PropertyGet</strong>: PropertyGet(None, propInfo, [])
+    ///    - Extracts static property names
+    ///    - Example: DateTime.Now → "now"
+    ///
+    /// 4. <strong>Var reference</strong>: Var(varInfo)
+    ///    - Identity projection (select entire object)
+    ///    - Returns empty string to signal SelectAll
+    ///    - Example: select user → ""
+    ///
+    /// <para><strong>Property Name Conversion:</strong></para>
+    ///
+    /// All property names are converted from PascalCase (F# convention) to camelCase
+    /// (JSON convention) using the toCamelCase helper function.
+    ///
+    /// - User.CreatedAt → "createdAt"
+    /// - User.FirstName → "firstName"
+    /// - User.Address.City → "address.city"
+    ///
+    /// <para><strong>Nested Property Handling:</strong></para>
+    ///
+    /// Nested properties use dot notation:
+    /// <code>
+    /// user.Address.City
+    /// // Quotation: PropertyGet(PropertyGet(Var(user), Address), City)
+    /// // Result: "address.city"
+    /// // SQL: data->'address'->>'city'
+    /// </code>
+    ///
+    /// The recursion processes inside-out:
+    /// 1. Outer PropertyGet(_, City) → "city"
+    /// 2. Recursive call on receiver PropertyGet(_, Address) → "address"
+    /// 3. Combine: "address.city"
+    ///
+    /// <para><strong>Error Handling:</strong></para>
+    ///
+    /// Throws ArgumentException for unsupported expression patterns:
+    /// - Method calls: user.ToString()
+    /// - Computed values: user.Age + 10
+    /// - Complex expressions: if user.IsActive then user.Email else ""
+    ///
+    /// Only simple property access chains are supported.
+    /// </remarks>
+    ///
+    /// <example>
+    /// <code>
+    /// // Simple property
+    /// extractPropertyName &lt;@ fun (u: User) -> u.Email @&gt;
+    /// // Returns: "email"
+    ///
+    /// // Nested property
+    /// extractPropertyName &lt;@ fun (u: User) -> u.Address.City @&gt;
+    /// // Returns: "address.city"
+    ///
+    /// // Identity
+    /// extractPropertyName &lt;@ fun (u: User) -> u @&gt;
+    /// // Returns: ""
+    ///
+    /// // From query expression (captured quotation)
+    /// query {
+    ///     for user in users do
+    ///     where (user.Email = "test@example.com")
+    ///     // Captured: Lambda(user, Call(=, PropertyGet(user, Email), Value("test@example.com")))
+    ///     // extractPropertyName on left operand → "email"
+    /// }
+    /// </code>
+    /// </example>
+    let rec extractPropertyName (expr: Expr) : string =
+        match expr with
+        // Lambda wrapper: fun x -> x.Property
+        // Strip lambda, process body recursively
+        | Lambda (_, body) -> 
+            extractPropertyName body
+        
+        // Property access: receiver.Property
+        // Example: user.Email, user.Address.City
+        | PropertyGet (Some receiver, propInfo, []) ->
+            let receiverPath = extractPropertyName receiver
+            let propName = propInfo.Name |> toCamelCase
+            
+            // Build dot-notation path for nested properties
+            if String.IsNullOrEmpty(receiverPath) then
+                propName
+            else
+                receiverPath + "." + propName
+        
+        // Static property: Type.Property
+        // Example: DateTime.Now
+        | PropertyGet (None, propInfo, []) ->
+            propInfo.Name |> toCamelCase
+        
+        // Variable reference: just the variable itself
+        // Example: select user (identity projection)
+        // Return empty string to signal SelectAll
+        | Var _ ->
+            ""
+        
+        // Unsupported pattern
+        | _ ->
+            raise (ArgumentException($"Cannot extract property name from expression: {expr}"))
 
 /// <summary>
 /// Module providing the global 'query' computation expression instance.
