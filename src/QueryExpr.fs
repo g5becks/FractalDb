@@ -1086,6 +1086,172 @@ type QueryBuilder() =
         [<ProjectionParameter>] keySelector: 'T -> 'Key
     ) : TranslatedQuery<'T> =
         Unchecked.defaultof<_>
+    
+    /// <summary>
+    /// Enables 'take n' syntax to limit the number of results returned.
+    /// </summary>
+    ///
+    /// <param name="source">The source sequence from previous operations.</param>
+    /// <param name="count">Maximum number of results to return.</param>
+    ///
+    /// <typeparam name="'T">The document type.</typeparam>
+    ///
+    /// <returns>
+    /// Unchecked.defaultof (never returns, only for type inference).
+    /// </returns>
+    ///
+    /// <remarks>
+    /// This member is NEVER EXECUTED. The count value is extracted from the quotation
+    /// and stored in TranslatedQuery.Take.
+    ///
+    /// <para><strong>Execution Order:</strong></para>
+    ///
+    /// Take is applied AFTER:
+    /// - Filtering (where)
+    /// - Sorting (sortBy/sortByDescending)
+    /// - Skipping (skip)
+    ///
+    /// So: WHERE ... ORDER BY ... OFFSET skip LIMIT take
+    ///
+    /// <para><strong>Pagination Pattern:</strong></para>
+    ///
+    /// Combine skip and take for offset-based pagination:
+    /// <code>
+    /// let pageSize = 20
+    /// let pageNumber = 3
+    /// skip (pageNumber * pageSize)  // Skip 60 items (pages 1-3)
+    /// take pageSize                  // Return 20 items (page 4)
+    /// </code>
+    ///
+    /// <para><strong>Performance:</strong></para>
+    ///
+    /// Always use take to limit result sets. Without it, queries may return
+    /// thousands of documents, consuming excessive memory and bandwidth.
+    ///
+    /// Typical values:
+    /// - UI pagination: 10-100
+    /// - API responses: 50-200
+    /// - "Find one": 1
+    /// </remarks>
+    ///
+    /// <example>
+    /// <code>
+    /// // Top 10 results
+    /// query {
+    ///     for user in users do
+    ///     sortByDescending user.Score
+    ///     take 10
+    /// }
+    ///
+    /// // Pagination: page 3, 20 items per page
+    /// query {
+    ///     for product in products do
+    ///     where (product.Category = "electronics")
+    ///     sortBy product.Price
+    ///     skip 40
+    ///     take 20
+    /// }
+    ///
+    /// // Find first matching result
+    /// query {
+    ///     for user in users do
+    ///     where (user.Email = "alice@example.com")
+    ///     take 1
+    /// }
+    /// </code>
+    /// </example>
+    [<CustomOperation("take", MaintainsVariableSpace = true)>]
+    member _.Take(source: TranslatedQuery<'T>, count: int) : TranslatedQuery<'T> =
+        Unchecked.defaultof<_>
+    
+    /// <summary>
+    /// Enables 'skip n' syntax to skip the first n results (offset pagination).
+    /// </summary>
+    ///
+    /// <param name="source">The source sequence from previous operations.</param>
+    /// <param name="count">Number of results to skip.</param>
+    ///
+    /// <typeparam name="'T">The document type.</typeparam>
+    ///
+    /// <returns>
+    /// Unchecked.defaultof (never returns, only for type inference).
+    /// </returns>
+    ///
+    /// <remarks>
+    /// This member is NEVER EXECUTED. The count value is extracted from the quotation
+    /// and stored in TranslatedQuery.Skip.
+    ///
+    /// <para><strong>Execution Order:</strong></para>
+    ///
+    /// Skip is applied AFTER filtering and sorting, BEFORE take:
+    /// WHERE ... ORDER BY ... OFFSET skip LIMIT take
+    ///
+    /// <para><strong>Pagination Calculation:</strong></para>
+    ///
+    /// To get page N (1-indexed) with page size P:
+    /// <code>
+    /// skip ((N - 1) * P)
+    /// take P
+    /// </code>
+    ///
+    /// Examples:
+    /// - Page 1: skip 0, take 20
+    /// - Page 2: skip 20, take 20
+    /// - Page 3: skip 40, take 20
+    ///
+    /// <para><strong>Performance Warning:</strong></para>
+    ///
+    /// Skip uses OFFSET in SQL, which scans through the first N rows even though
+    /// they're discarded. This is O(n) - slow for large offsets.
+    ///
+    /// For large offsets (N > 1000):
+    /// - Consider cursor-based pagination instead
+    /// - Or use "where (id > lastSeenId)" keyset pagination
+    ///
+    /// <para><strong>Page Drift Issue:</strong></para>
+    ///
+    /// If data changes between requests (inserts/deletes), offset pagination
+    /// may skip items or show duplicates. Cursor pagination avoids this.
+    /// </remarks>
+    ///
+    /// <example>
+    /// <code>
+    /// // Page 1: First 20 results
+    /// query {
+    ///     for user in users do
+    ///     sortBy user.Name
+    ///     take 20
+    /// }
+    ///
+    /// // Page 2: Results 21-40
+    /// query {
+    ///     for user in users do
+    ///     sortBy user.Name
+    ///     skip 20
+    ///     take 20
+    /// }
+    ///
+    /// // Page 3: Results 41-60
+    /// query {
+    ///     for user in users do
+    ///     sortBy user.Name
+    ///     skip 40
+    ///     take 20
+    /// }
+    ///
+    /// // Skip first 100, get next 50
+    /// query {
+    ///     for product in products do
+    ///     where (product.InStock = true)
+    ///     sortByDescending product.CreatedAt
+    ///     skip 100
+    ///     take 50
+    /// }
+    /// </code>
+    /// </example>
+    [<CustomOperation("skip", MaintainsVariableSpace = true)>]
+    member _.Skip(source: TranslatedQuery<'T>, count: int) : TranslatedQuery<'T> =
+        Unchecked.defaultof<_>
 
 /// <summary>
 /// Module providing the global 'query' computation expression instance.

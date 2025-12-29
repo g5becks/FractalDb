@@ -1,11 +1,11 @@
 ---
 id: task-108
 title: Add take and skip CustomOperations to QueryBuilder
-status: To Do
+status: In Progress
 assignee:
   - '@assistant'
 created_date: '2025-12-29 06:09'
-updated_date: '2025-12-29 17:00'
+updated_date: '2025-12-29 17:11'
 labels:
   - query-expressions
   - builder
