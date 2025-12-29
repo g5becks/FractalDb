@@ -4,6 +4,7 @@ module FractalDb.Tests.QueryExprTests
 // fsharplint:disable FL0072
 
 open System
+open System.Threading.Tasks
 open Xunit
 open FsUnit.Xunit
 open FractalDb.Types
@@ -63,6 +64,26 @@ let testUserSchema: SchemaDef<TestUser> =
 type QueryExprTestFixture() =
     let db = FractalDb.InMemory()
     let users = db.Collection<TestUser>("users", testUserSchema)
+
+    // Seed test data for aggregation tests
+    do
+        let testUsers =
+            [ { Name = "Alice"
+                Email = "alice@test.com"
+                Age = 25L
+                Active = true }
+              { Name = "Bob"
+                Email = "bob@test.com"
+                Age = 30L
+                Active = true }
+              { Name = "Charlie"
+                Email = "charlie@test.com"
+                Age = 35L
+                Active = false } ]
+
+        testUsers
+        |> List.iter (fun user ->
+            users |> Collection.insertOne user |> Async.AwaitTask |> Async.RunSynchronously |> ignore)
 
     member _.Db = db
     member _.Users = users
@@ -650,3 +671,56 @@ type QueryExprTests(fixture: QueryExprTestFixture) =
             | CompareOp.Eq value -> (value :?> bool) |> should equal true
             | _ -> failwith "Expected CompareOp.Eq"
         | _ -> failwith "Expected Query.Field"
+
+    // ═══════════════════════════════════════════════════════════════
+    // Projections - select entire entity
+    // ═══════════════════════════════════════════════════════════════
+
+    [<Fact>]
+    member _.``Query expression with select entire entity translates to SelectAll``() =
+        let result =
+            query {
+                for user in users do
+                    where (user.Age >= 18L)
+                    select user
+            }
+
+        result.Source |> should equal "users"
+        result.Projection |> should equal Projection.SelectAll
+
+    // ═══════════════════════════════════════════════════════════════
+    // Projections - select single field
+    // ═══════════════════════════════════════════════════════════════
+
+    [<Fact>]
+    member _.``Query expression with select single field translates to SelectSingle``() =
+        let result =
+            query {
+                for user in users do
+                    select user.Email
+            }
+
+        result.Source |> should equal "users"
+        result.Projection |> should equal (Projection.SelectSingle "email")
+
+    // ═══════════════════════════════════════════════════════════════
+    // Projections - select tuple (multiple fields)
+    // ═══════════════════════════════════════════════════════════════
+
+    [<Fact>]
+    member _.``Query expression with select tuple translates to SelectFields``() =
+        let result =
+            query {
+                for user in users do
+                    select (user.Name, user.Email, user.Age)
+            }
+
+        result.Source |> should equal "users"
+        
+        match result.Projection with
+        | Projection.SelectFields fields ->
+            fields |> should haveLength 3
+            fields |> should contain "name"
+            fields |> should contain "email"
+            fields |> should contain "age"
+        | _ -> failwith "Expected Projection.SelectFields"
