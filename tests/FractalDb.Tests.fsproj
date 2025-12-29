@@ -9,6 +9,7 @@
   <ItemGroup>
     <Compile Include="Assertions.fs" />
     <Compile Include="TypesTests.fs" />
+    <Compile Include="IndexTests.fs" />
     <Compile Include="QueryTests.fs" />
     <Compile Include="SerializationTests.fs" />
     <Compile Include="SqlTranslatorTests.fs" />
