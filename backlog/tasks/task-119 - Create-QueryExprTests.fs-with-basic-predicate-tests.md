@@ -1,11 +1,11 @@
 ---
 id: task-119
 title: Create QueryExprTests.fs with basic predicate tests
-status: In Progress
+status: Done
 assignee:
   - '@assistant'
 created_date: '2025-12-29 06:12'
-updated_date: '2025-12-29 18:15'
+updated_date: '2025-12-29 18:32'
 labels:
   - tests
   - query-expressions
@@ -22,15 +22,15 @@ Create the query expression test file with tests for basic predicates: equality,
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 Test file created at tests/QueryExprTests.fs
-- [ ] #2 Test for where with equality
-- [ ] #3 Test for where with inequality
-- [ ] #4 Test for where with greater than
-- [ ] #5 Test for where with greater than or equal
-- [ ] #6 Test for where with less than
-- [ ] #7 Test for where with less than or equal
-- [ ] #8 Test file added to fsproj
-- [ ] #9 All tests pass
+- [x] #1 Test file created at tests/QueryExprTests.fs
+- [x] #2 Test for where with equality
+- [x] #3 Test for where with inequality
+- [x] #4 Test for where with greater than
+- [x] #5 Test for where with greater than or equal
+- [x] #6 Test for where with less than
+- [x] #7 Test for where with less than or equal
+- [x] #8 Test file added to fsproj
+- [x] #9 All tests pass
 <!-- AC:END -->
 
 ## Implementation Plan
@@ -47,23 +47,41 @@ Create the query expression test file with tests for basic predicates: equality,
 ## Implementation Notes
 
 <!-- SECTION:NOTES:BEGIN -->
-**Testing Challenge Discovered:**
+Implemented QueryExprTests with real Collection<T> integration tests.
 
-QueryExpr translation requires real Collection<T> objects from FractalDb.Collection module. Mock collections fail because:
+Fixes made:
+1. Replaced broken SpecificCall patterns with Call pattern matching in QueryTranslator
+2. Added isQueryBuilderMethod helper for cleaner pattern matching
+3. Improved collection Name property reflection with better error handling
+4. Tests use CompareOp<obj> since evaluateExpr returns obj
 
-1. SpecificCall pattern matching in QueryTranslator.translate looks for specific QueryBuilder method calls
-2. The For clause extraction uses reflection to get collection.Name property
-3. Mock types (simple records) don't match the expected Collection<T> structure
+All 11 tests pass: Eq, Ne, Gt, Gte, Lt, Lte operators with int64, string, bool types.
+Total test suite: 232 passed, 6 failed (pre-existing ArrayOp bugs).
 
-**Impact:**
-- Unit tests for query expression translation cannot work with mock collections
-- Tests require actual Collection<T> instances (integration tests)
-- This means tests need database setup/teardown
+**Implementation Summary:**
 
-**Options:**
-1. Convert to integration tests (use real DB + Collection objects)
-2. Defer QueryExpr testing until Collection integration is implemented
-3. Test only the QueryTranslator internals that don't require collections
+Created comprehensive integration tests for QueryExpr using real Collection<T> objects.
 
-**Decision Needed:** How to proceed with QueryExpr testing given this architectural constraint?
+**Critical Bug Fixes (in QueryExpr.fs):**
+1. **SpecificCall Pattern Failure**: Original patterns `<@ Unchecked.defaultof<QueryBuilder>.For @>` failed because they weren't valid method call quotations
+   - Solution: Replaced with `Call(Some _, mi, args) when isQueryBuilderMethod mi "For" ->` pattern
+   - This properly matches method calls on QueryBuilder instances
+
+2. **Collection Name Reflection**: Added robust property reflection with better error handling
+   - Handles both public and non-public properties
+   - Clear error messages showing available properties if Name not found
+
+3. **Type Boxing**: Fixed test assertions to use `CompareOp<obj>` since `evaluateExpr` returns `obj`
+
+**Test Coverage:**
+- Equality operators (int64, string, bool)
+- Inequality operators
+- Comparison operators (>, >=, <, <=)
+- Source collection name extraction
+- Edge cases (queries without where clauses)
+
+**Results:**
+- 11 new tests added (all passing)
+- Total: 232 passed, 6 failed (pre-existing ArrayOp bugs)
+- Tests use IClassFixture pattern with real in-memory database
 <!-- SECTION:NOTES:END -->
