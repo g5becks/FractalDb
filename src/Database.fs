@@ -79,23 +79,68 @@ open FractalDb.Transaction
 /// let! db3 = FractalDb.Open("data3.db", cachedOptions)
 /// </code>
 /// </example>
-type DbOptions = {
-    /// <summary>
-    /// Function to generate unique document IDs.
-    /// </summary>
-    IdGenerator: unit -> string
-    
-    /// <summary>
-    /// Whether to cache translated SQL queries for performance.
-    /// </summary>
-    EnableCache: bool
-}
+type DbOptions =
+    {
+        /// <summary>
+        /// Function to generate unique document IDs.
+        /// </summary>
+        IdGenerator: unit -> string
+
+        /// <summary>
+        /// Whether to cache translated SQL queries for performance.
+        /// </summary>
+        EnableCache: bool
+
+        /// <summary>
+        /// Command behavior for database operations (default: SequentialAccess).
+        /// </summary>
+        /// <remarks>
+        /// Controls how IDataReader accesses columns during query execution.
+        /// Donald uses this setting for optimal performance with different access patterns.
+        ///
+        /// Options:
+        /// - SequentialAccess: Columns must be read in order (best performance, lowest memory)
+        /// - Default: Columns can be read in any order (more flexibility, slightly higher memory)
+        ///
+        /// SequentialAccess (recommended default):
+        /// - Best performance for typical use cases
+        /// - Lowest memory usage
+        /// - Forward-only column access
+        /// - Columns must be read in SELECT order
+        /// - Ideal for generated SQL queries
+        ///
+        /// Default mode:
+        /// - Allows random column access
+        /// - Slightly higher memory usage
+        /// - Use when column order doesn't match read order
+        /// - Needed for some complex queries or custom SQL
+        ///
+        /// For FractalDb operations, SequentialAccess is optimal because:
+        /// - All queries are generated with consistent column order
+        /// - Memory efficiency is important for large result sets
+        /// - Performance benefit with no flexibility loss
+        /// </remarks>
+        /// <example>
+        /// <code>
+        /// // Use default (SequentialAccess - recommended)
+        /// let db = FractalDb.Open("data.db")
+        ///
+        /// // Use Default mode for custom scenarios
+        /// let options = {
+        ///     DbOptions.defaults with
+        ///         CommandBehavior = CommandBehavior.Default
+        /// }
+        /// let db2 = FractalDb.Open("data.db", options)
+        /// </code>
+        /// </example>
+        CommandBehavior: CommandBehavior
+    }
 
 /// <summary>
 /// Module for DbOptions default values and utilities.
 /// </summary>
 module DbOptions =
-    
+
     /// <summary>
     /// Default database options with standard settings.
     /// </summary>
@@ -103,19 +148,57 @@ module DbOptions =
     /// Default configuration:
     /// - IdGenerator: IdGenerator.generate (UUID v7 / ULID)
     /// - EnableCache: false (no query caching)
+    /// - CommandBehavior: SequentialAccess (best performance)
     ///
     /// These defaults are suitable for most applications:
     /// - UUID v7 IDs are time-sortable and globally unique
     /// - No caching keeps memory usage predictable
+    /// - SequentialAccess provides optimal performance for generated queries
     ///
     /// Consider overriding:
     /// - IdGenerator: if you need custom ID format
     /// - EnableCache: if you have high-throughput repeated queries
+    /// - CommandBehavior: if you need random column access (rare)
     /// </remarks>
-    let defaults = {
-        IdGenerator = IdGenerator.generate
-        EnableCache = false
-    }
+    let defaults =
+        { IdGenerator = IdGenerator.generate
+          EnableCache = false
+          CommandBehavior = CommandBehavior.SequentialAccess }
+
+    /// <summary>
+    /// Sets the CommandBehavior for database operations.
+    /// </summary>
+    /// <param name="behavior">The CommandBehavior to use for database operations.</param>
+    /// <param name="opts">The DbOptions to modify.</param>
+    /// <returns>A new DbOptions with the specified CommandBehavior.</returns>
+    /// <remarks>
+    /// Configures how IDataReader accesses columns during query execution.
+    ///
+    /// Use cases:
+    /// - SequentialAccess (default): Best performance for typical operations
+    /// - Default: When you need random column access (rare)
+    ///
+    /// SequentialAccess is recommended for FractalDb because:
+    /// - All queries use consistent column order
+    /// - Provides best performance with no practical limitations
+    /// - Lower memory footprint for large result sets
+    /// </remarks>
+    /// <example>
+    /// <code>
+    /// // Configure for SequentialAccess (default, recommended)
+    /// let opts1 = DbOptions.defaults
+    ///
+    /// // Configure for Default mode (random column access)
+    /// let opts2 =
+    ///     DbOptions.defaults
+    ///     |> DbOptions.withCommandBehavior CommandBehavior.Default
+    ///
+    /// // Use with FractalDb.Open
+    /// let db = FractalDb.Open("data.db", opts2)
+    /// </code>
+    /// </example>
+    let withCommandBehavior (behavior: CommandBehavior) (opts: DbOptions) : DbOptions =
+        { opts with CommandBehavior = behavior }
 
 /// <summary>
 /// Main database class for FractalDb operations.
@@ -189,8 +272,8 @@ module DbOptions =
 /// )
 /// </code>
 /// </example>
-type FractalDb private (connection: SqliteConnection, options: DbOptions) =
-    
+type FractalDb private (connection: SqliteConnection, options: DbOptions, ownsConnection: bool) =
+
     /// <summary>
     /// Thread-safe cache of collection instances.
     /// </summary>
@@ -200,7 +283,7 @@ type FractalDb private (connection: SqliteConnection, options: DbOptions) =
     /// Values are boxed (obj) to store different generic types.
     /// </remarks>
     let collections = ConcurrentDictionary<string, obj>()
-    
+
     /// <summary>
     /// Track whether the database has been disposed.
     /// </summary>
@@ -209,25 +292,158 @@ type FractalDb private (connection: SqliteConnection, options: DbOptions) =
     /// Set to true by Close() or Dispose().
     /// </remarks>
     let mutable disposed = false
-    
+
     /// <summary>
-    /// Gets the underlying database connection.
+    /// Gets the underlying database connection for advanced scenarios and Donald interop.
     /// </summary>
     /// <remarks>
-    /// Exposes the SqliteConnection for advanced scenarios:
-    /// - Direct SQL execution
-    /// - Connection configuration
-    /// - Transaction management
-    ///
-    /// Warning: Direct connection use bypasses FractalDb's:
-    /// - Collection caching
-    /// - Schema management
-    /// - Type safety
-    ///
-    /// Use with caution and prefer Collection operations.
+    /// <para>
+    /// Exposes the IDbConnection to enable:
+    /// - Direct SQL execution using Donald
+    /// - Custom database operations
+    /// - Connection configuration (PRAGMAs, etc.)
+    /// - Advanced transaction management
+    /// - Integration with other ADO.NET libraries
+    /// </para>
+    /// <para>
+    /// <strong>Donald Integration</strong>
+    /// </para>
+    /// <para>
+    /// The Connection property allows seamless integration with Donald for custom SQL operations
+    /// while using FractalDb for document management. This is useful when you need:
+    /// - Raw SQL queries not supported by FractalDb's query API
+    /// - Custom database functions or aggregations
+    /// - Schema migrations or database maintenance
+    /// - Performance-critical queries with hand-tuned SQL
+    /// - Integration with existing Donald-based code
+    /// </para>
+    /// <para>
+    /// <strong>Important Considerations</strong>
+    /// </para>
+    /// <para>
+    /// Direct connection use bypasses FractalDb's safety features:
+    /// - Collection caching - Direct SQL won't update cached collections
+    /// - Schema management - Manual schema changes may break FractalDb expectations
+    /// - Type safety - SQL is string-based, errors caught at runtime
+    /// - Validation - FractalDb validators won't run on direct SQL operations
+    /// </para>
+    /// <para>
+    /// <strong>Best Practices</strong>
+    /// </para>
+    /// <list type="bullet">
+    /// <item>Prefer FractalDb's Collection API for document operations</item>
+    /// <item>Use Connection only for operations not supported by FractalDb</item>
+    /// <item>Be aware that direct SQL may affect FractalDb-managed data</item>
+    /// <item>Test thoroughly when mixing FractalDb and Donald operations</item>
+    /// <item>Consider using FromConnection if you need extensive Donald usage</item>
+    /// </list>
+    /// <para>
+    /// <strong>Thread Safety</strong>
+    /// </para>
+    /// <para>
+    /// SQLite connections serialize access automatically. Multiple threads can safely
+    /// use the Connection property, but operations will be serialized by SQLite.
+    /// </para>
     /// </remarks>
-    member _.Connection : IDbConnection = connection :> IDbConnection
-    
+    /// <example>
+    /// <code>
+    /// open Donald
+    ///
+    /// // Example 1: Custom query with Donald
+    /// use db = FractalDb.Open("app.db")
+    /// let conn = db.Connection
+    ///
+    /// // Execute custom Donald query
+    /// let! userCount =
+    ///     Db.scalar conn "SELECT COUNT(*) FROM users WHERE active = @active"
+    ///         [ "active", SqlType.Boolean true ]
+    ///         (fun rd -> rd.ReadInt32 0)
+    ///
+    /// printfn "Active users: %d" userCount
+    ///
+    /// // Example 2: Mix FractalDb document ops with Donald SQL
+    /// use db = FractalDb.Open("data.db")
+    /// let! users = db.Collection&lt;User&gt;("users", userSchema)
+    ///
+    /// // Insert document via FractalDb (validated, type-safe)
+    /// let! newUser = users.InsertOne({ Name = "Alice"; Email = "alice@example.com" })
+    ///
+    /// // Query with custom SQL via Donald (flexible, powerful)
+    /// let! topUsers =
+    ///     Db.query db.Connection
+    ///         """
+    ///         SELECT json_extract(_data, '$.name') as name,
+    ///                COUNT(*) as post_count
+    ///         FROM posts
+    ///         GROUP BY json_extract(_data, '$.userId')
+    ///         ORDER BY post_count DESC
+    ///         LIMIT 10
+    ///         """
+    ///         []
+    ///         (fun rd -> {| Name = rd.ReadString "name"; PostCount = rd.ReadInt32 "post_count" |})
+    ///
+    /// // Example 3: Database configuration with Donald
+    /// use db = FractalDb.Open("app.db")
+    ///
+    /// // Enable SQLite optimizations
+    /// do! Db.exec db.Connection "PRAGMA journal_mode=WAL" []
+    /// do! Db.exec db.Connection "PRAGMA synchronous=NORMAL" []
+    /// do! Db.exec db.Connection "PRAGMA cache_size=-64000" []  // 64MB cache
+    ///
+    /// // Now use FractalDb normally
+    /// let! collection = db.Collection&lt;Document&gt;("docs", schema)
+    /// let! docs = collection.Find(Query.Empty)
+    ///
+    /// // Example 4: Custom aggregation with Donald
+    /// use db = FractalDb.Open("analytics.db")
+    /// let! events = db.Collection&lt;Event&gt;("events", eventSchema)
+    ///
+    /// // Insert events via FractalDb
+    /// do! events.InsertMany(eventList)
+    ///
+    /// // Analyze with custom SQL
+    /// let! stats =
+    ///     Db.querySingle db.Connection
+    ///         """
+    ///         SELECT
+    ///             COUNT(*) as total,
+    ///             AVG(json_extract(_data, '$.duration')) as avg_duration,
+    ///             MAX(json_extract(_data, '$.timestamp')) as last_event
+    ///         FROM events
+    ///         WHERE json_extract(_data, '$.type') = @eventType
+    ///         """
+    ///         [ "eventType", SqlType.String "page_view" ]
+    ///         (fun rd ->
+    ///             {| Total = rd.ReadInt32 "total"
+    ///                AvgDuration = rd.ReadDouble "avg_duration"
+    ///                LastEvent = rd.ReadString "last_event" |})
+    ///
+    /// // Example 5: Schema migration with Donald
+    /// use db = FractalDb.Open("app.db")
+    ///
+    /// // Add custom metadata table
+    /// do! Db.exec db.Connection
+    ///         """
+    ///         CREATE TABLE IF NOT EXISTS migrations (
+    ///             id INTEGER PRIMARY KEY,
+    ///             name TEXT NOT NULL,
+    ///             applied_at TEXT NOT NULL
+    ///         )
+    ///         """
+    ///         []
+    ///
+    /// // Record migration
+    /// do! Db.exec db.Connection
+    ///         "INSERT INTO migrations (name, applied_at) VALUES (@name, @timestamp)"
+    ///         [ "name", SqlType.String "add_users_table"
+    ///           "timestamp", SqlType.String (DateTime.UtcNow.ToString("O")) ]
+    ///
+    /// // Continue with FractalDb operations
+    /// let! users = db.Collection&lt;User&gt;("users", userSchema)
+    /// </code>
+    /// </example>
+    member _.Connection: IDbConnection = connection :> IDbConnection
+
     /// <summary>
     /// Gets the database options.
     /// </summary>
@@ -236,7 +452,45 @@ type FractalDb private (connection: SqliteConnection, options: DbOptions) =
     /// Useful for inspecting configuration or creating derived instances.
     /// </remarks>
     member _.Options = options
-    
+
+    /// <summary>
+    /// Gets whether this FractalDb instance owns and manages the database connection.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Indicates whether FractalDb will dispose the connection when Close() or Dispose() is called.
+    /// </para>
+    /// <para>
+    /// - true: FractalDb created the connection (via Open or InMemory) and will dispose it
+    /// - false: Connection was provided externally (via FromConnection) and won't be disposed
+    /// </para>
+    /// <para>
+    /// When using FromConnection with an external connection, the caller retains ownership
+    /// and is responsible for disposing the connection after the FractalDb instance is closed.
+    /// This allows multiple FractalDb instances or custom Donald operations to share a connection.
+    /// </para>
+    /// </remarks>
+    /// <example>
+    /// <code>
+    /// // FractalDb owns connection - will dispose on Close
+    /// use db1 = FractalDb.Open("data.db")
+    /// printfn "Owns connection: %b" db1.OwnsConnection  // true
+    ///
+    /// // FractalDb owns connection - will dispose on Close
+    /// use db2 = FractalDb.InMemory()
+    /// printfn "Owns connection: %b" db2.OwnsConnection  // true
+    ///
+    /// // External connection - caller owns it
+    /// use conn = new SqliteConnection("Data Source=data.db")
+    /// conn.Open()
+    /// use db3 = FractalDb.FromConnection(conn)
+    /// printfn "Owns connection: %b" db3.OwnsConnection  // false
+    /// // db3.Close() won't dispose conn - caller must do it
+    /// conn.Close()
+    /// </code>
+    /// </example>
+    member _.OwnsConnection = ownsConnection
+
     /// <summary>
     /// Gets whether the database has been disposed.
     /// </summary>
@@ -245,11 +499,11 @@ type FractalDb private (connection: SqliteConnection, options: DbOptions) =
     /// Operations on disposed database will throw ObjectDisposedException.
     /// </remarks>
     member _.IsDisposed = disposed
-    
+
     // ═══════════════════════════════════════════════════════════════
     // FACTORY METHODS
     // ═══════════════════════════════════════════════════════════════
-    
+
     /// <summary>
     /// Opens a SQLite database from a file path.
     /// </summary>
@@ -332,8 +586,8 @@ type FractalDb private (connection: SqliteConnection, options: DbOptions) =
         let connectionString = $"Data Source={path}"
         let conn = new SqliteConnection(connectionString)
         conn.Open()
-        new FractalDb(conn, opts)
-    
+        new FractalDb(conn, opts, true)
+
     /// <summary>
     /// Creates an in-memory SQLite database.
     /// </summary>
@@ -399,7 +653,7 @@ type FractalDb private (connection: SqliteConnection, options: DbOptions) =
     /// // Temporary data processing
     /// use tempDb = FractalDb.InMemory()
     /// let! staging = tempDb.Collection&lt;Record&gt;("staging", schema)
-    /// 
+    ///
     /// // Load and process data in memory
     /// let! batch = staging |&gt; Collection.insertMany records
     /// let! processed = staging |&gt; Collection.find (Query.field "status" (Query.eq "valid"))
@@ -416,11 +670,134 @@ type FractalDb private (connection: SqliteConnection, options: DbOptions) =
     /// </example>
     static member InMemory(?options: DbOptions) : FractalDb =
         FractalDb.Open(":memory:", ?options = options)
-    
+
+    /// <summary>
+    /// Creates a FractalDb instance from an existing database connection.
+    /// </summary>
+    /// <param name="connection">The ADO.NET database connection to use.</param>
+    /// <param name="options">Optional database configuration options.</param>
+    /// <returns>
+    /// FractalDb instance that uses the provided connection without owning it.
+    /// </returns>
+    /// <remarks>
+    /// <para>
+    /// FromConnection allows FractalDb to work with externally-managed connections.
+    /// This is useful for:
+    /// - Sharing a connection across multiple FractalDb instances
+    /// - Using FractalDb alongside custom Donald operations
+    /// - Advanced connection lifecycle management
+    /// - Integration with existing database infrastructure
+    /// - Testing scenarios with mock connections
+    /// </para>
+    /// <para>
+    /// <strong>Important: Connection Ownership</strong>
+    /// </para>
+    /// <para>
+    /// FractalDb created via FromConnection does NOT own the connection:
+    /// - Close() and Dispose() will NOT close or dispose the connection
+    /// - Caller retains full responsibility for connection lifecycle
+    /// - Connection must remain open while FractalDb is in use
+    /// - Caller must close/dispose connection after FractalDb is disposed
+    /// </para>
+    /// <para>
+    /// <strong>Connection Requirements</strong>
+    /// </para>
+    /// <para>
+    /// The provided connection must:
+    /// - Be a valid IDbConnection implementation (typically SqliteConnection)
+    /// - Already be opened (call connection.Open() before passing)
+    /// - Support SQLite database operations
+    /// - Remain open for the lifetime of FractalDb usage
+    /// </para>
+    /// <para>
+    /// <strong>Thread Safety</strong>
+    /// </para>
+    /// <para>
+    /// Same threading considerations as Open/InMemory:
+    /// - SQLite connection serializes access automatically
+    /// - Multiple threads can share FractalDb instance safely
+    /// - Single writer at a time (SQLite limitation)
+    /// - Multiple concurrent readers supported
+    /// </para>
+    /// <para>
+    /// <strong>Donald Compatibility</strong>
+    /// </para>
+    /// <para>
+    /// This method follows Donald's philosophy of accepting IDbConnection,
+    /// making FractalDb compatible with any ADO.NET provider and allowing
+    /// seamless integration with Donald's database operations.
+    /// </para>
+    /// </remarks>
+    /// <example>
+    /// <code>
+    /// open System.Data
+    /// open Microsoft.Data.Sqlite
+    /// open Donald
+    ///
+    /// // Example 1: Share connection across multiple databases
+    /// use conn = new SqliteConnection("Data Source=app.db")
+    /// conn.Open()
+    ///
+    /// use db1 = FractalDb.FromConnection(conn)  // First FractalDb instance
+    /// use db2 = FractalDb.FromConnection(conn)  // Second instance, same connection
+    ///
+    /// let! users = db1.Collection&lt;User&gt;("users", userSchema)
+    /// let! logs = db2.Collection&lt;Log&gt;("logs", logSchema)
+    ///
+    /// // Both databases share the same connection
+    /// // Caller must close connection after db1 and db2 are disposed
+    /// conn.Close()
+    ///
+    /// // Example 2: Mix FractalDb with Donald operations
+    /// use conn = new SqliteConnection("Data Source=data.db")
+    /// conn.Open()
+    ///
+    /// // Use Donald for custom SQL
+    /// do! Db.exec conn "PRAGMA journal_mode=WAL"
+    /// do! Db.exec conn "CREATE TABLE IF NOT EXISTS metadata (key TEXT, value TEXT)"
+    ///
+    /// // Use FractalDb for document operations
+    /// use db = FractalDb.FromConnection(conn, DbOptions.defaults)
+    /// let! collection = db.Collection&lt;Document&gt;("docs", schema)
+    /// do! collection.InsertOne({ Id = "1"; Data = "..." })
+    ///
+    /// // Custom Donald query on same connection
+    /// let! metadata =
+    ///     Db.query conn "SELECT * FROM metadata" (fun rd ->
+    ///         { Key = rd.ReadString "key"
+    ///           Value = rd.ReadString "value" })
+    ///
+    /// conn.Close()  // Caller closes the connection
+    ///
+    /// // Example 3: Testing with owned connection cleanup
+    /// [&lt;Test&gt;]
+    /// let ``test database operations`` () =
+    ///     use conn = new SqliteConnection(":memory:")
+    ///     conn.Open()
+    ///
+    ///     use db = FractalDb.FromConnection(conn)
+    ///     let! users = db.Collection&lt;User&gt;("users", userSchema)
+    ///
+    ///     // Test operations...
+    ///     let! result = users.InsertOne(testUser)
+    ///     Assert.IsOk(result)
+    ///
+    ///     // Automatic cleanup via 'use' bindings
+    ///     // db.Dispose() doesn't close conn
+    ///     // conn.Dispose() closes and disposes connection
+    /// </code>
+    /// </example>
+    static member FromConnection(connection: IDbConnection, ?options: DbOptions) : FractalDb =
+        let opts = defaultArg options DbOptions.defaults
+        // Cast to SqliteConnection - required for FractalDb's SQLite-specific operations
+        match connection with
+        | :? SqliteConnection as sqliteConn -> new FractalDb(sqliteConn, opts, false)
+        | _ -> failwith "FractalDb.FromConnection requires a SqliteConnection"
+
     // ═══════════════════════════════════════════════════════════════
     // COLLECTION ACCESS
     // ═══════════════════════════════════════════════════════════════
-    
+
     /// <summary>
     /// Gets or creates a collection with the specified schema.
     /// </summary>
@@ -541,29 +918,31 @@ type FractalDb private (connection: SqliteConnection, options: DbOptions) =
     member this.Collection<'T>(name: string, schema: SchemaDef<'T>) : Collection<'T> =
         if disposed then
             raise (ObjectDisposedException("FractalDb", "Database has been disposed"))
-        
+
         // Use GetOrAdd for thread-safe caching
-        let result = collections.GetOrAdd(name, fun _ ->
-            // Create collection instance
-            let coll = {
-                Name = name
-                Schema = schema
-                Connection = connection :> IDbConnection
-                IdGenerator = options.IdGenerator
-                Translator = SqlTranslator<'T>(schema, options.EnableCache)
-                EnableCache = options.EnableCache
-            }
-            
-            // Ensure table and indexes exist
-            TableBuilder.ensureTable (connection :> IDbConnection) name schema
-            
-            // Box for storage in untyped dictionary
-            box coll
-        )
-        
+        let result =
+            collections.GetOrAdd(
+                name,
+                fun _ ->
+                    // Create collection instance
+                    let coll =
+                        { Name = name
+                          Schema = schema
+                          Connection = connection :> IDbConnection
+                          IdGenerator = options.IdGenerator
+                          Translator = SqlTranslator<'T>(schema, options.EnableCache)
+                          EnableCache = options.EnableCache }
+
+                    // Ensure table and indexes exist
+                    TableBuilder.ensureTable (connection :> IDbConnection) name schema
+
+                    // Box for storage in untyped dictionary
+                    box coll
+            )
+
         // Unbox and return typed collection
         result :?> Collection<'T>
-    
+
     /// <summary>
     /// Creates a new manual transaction on this database connection.
     /// </summary>
@@ -603,9 +982,8 @@ type FractalDb private (connection: SqliteConnection, options: DbOptions) =
     ///     reraise()
     /// </code>
     /// </example>
-    member this.Transaction() : Transaction =
-        Transaction.create connection
-    
+    member this.Transaction() : Transaction = Transaction.create connection
+
     /// <summary>
     /// Executes a function within a transaction, automatically committing on success
     /// or rolling back on exception.
@@ -654,6 +1032,7 @@ type FractalDb private (connection: SqliteConnection, options: DbOptions) =
     member this.Execute<'T>(fn: Transaction -> Task<'T>) : Task<'T> =
         task {
             use tx = this.Transaction()
+
             try
                 let! result = fn tx
                 tx.Commit()
@@ -662,7 +1041,7 @@ type FractalDb private (connection: SqliteConnection, options: DbOptions) =
                 tx.Rollback()
                 return raise ex
         }
-    
+
     /// <summary>
     /// Executes a Result-returning function within a transaction, committing on Ok
     /// or rolling back on Error.
@@ -710,7 +1089,7 @@ type FractalDb private (connection: SqliteConnection, options: DbOptions) =
     ///             let! profileResult = profiles |&gt; Collection.insertOne profile
     ///             return profileResult  // Commit if Ok, rollback if Error
     ///     })
-    /// 
+    ///
     /// match result with
     /// | Ok _ -&gt; printfn "Transaction committed"
     /// | Error err -&gt; printfn "Transaction rolled back: %s" err.Message
@@ -719,17 +1098,20 @@ type FractalDb private (connection: SqliteConnection, options: DbOptions) =
     member this.ExecuteTransaction<'T>(fn: Transaction -> Task<FractalResult<'T>>) : Task<FractalResult<'T>> =
         task {
             use tx = this.Transaction()
+
             try
                 let! result = fn tx
+
                 match result with
                 | Ok _ -> tx.Commit()
                 | Error _ -> tx.Rollback()
+
                 return result
             with ex ->
                 tx.Rollback()
-                return Error (FractalError.Transaction ex.Message)
+                return Error(FractalError.Transaction ex.Message)
         }
-    
+
     /// <summary>
     /// Closes the database connection and releases all resources.
     /// </summary>
@@ -778,10 +1160,12 @@ type FractalDb private (connection: SqliteConnection, options: DbOptions) =
     /// </example>
     member this.Close() =
         if not disposed then
-            connection.Close()
-            connection.Dispose()
+            if ownsConnection then
+                connection.Close()
+                connection.Dispose()
+
             disposed <- true
-    
+
     /// <summary>
     /// Disposes the database instance, closing the connection and releasing resources.
     /// </summary>

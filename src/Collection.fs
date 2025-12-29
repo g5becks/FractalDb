@@ -24,6 +24,7 @@ open Donald
 open Microsoft.Data.Sqlite
 open FractalDb.Types
 open FractalDb.Errors
+open FractalDb.Errors.DonaldExceptions
 open FractalDb.Schema
 open FractalDb.Operators
 open FractalDb.Options
@@ -76,37 +77,39 @@ open FractalDb.Transaction
 /// // Collection is now ready for operations
 /// </code>
 /// </example>
-type Collection<'T> = internal {
-    /// <summary>
-    /// The collection name, used as the table name in SQLite.
-    /// </summary>
-    Name: string
-    
-    /// <summary>
-    /// Schema definition with indexed fields, constraints, and indexes.
-    /// </summary>
-    Schema: SchemaDef<'T>
-    
-    /// <summary>
-    /// Database connection for executing operations.
-    /// </summary>
-    Connection: IDbConnection
-    
-    /// <summary>
-    /// Function to generate unique document IDs (typically ULID generator).
-    /// </summary>
-    IdGenerator: unit -> string
-    
-    /// <summary>
-    /// SQL translator for converting Query<'T> to SQL statements.
-    /// </summary>
-    Translator: SqlTranslator<'T>
-    
-    /// <summary>
-    /// Whether to cache translated SQL queries for performance.
-    /// </summary>
-    EnableCache: bool
-}
+type Collection<'T> =
+    internal
+        {
+            /// <summary>
+            /// The collection name, used as the table name in SQLite.
+            /// </summary>
+            Name: string
+
+            /// <summary>
+            /// Schema definition with indexed fields, constraints, and indexes.
+            /// </summary>
+            Schema: SchemaDef<'T>
+
+            /// <summary>
+            /// Database connection for executing operations.
+            /// </summary>
+            Connection: IDbConnection
+
+            /// <summary>
+            /// Function to generate unique document IDs (typically ULID generator).
+            /// </summary>
+            IdGenerator: unit -> string
+
+            /// <summary>
+            /// SQL translator for converting Query<'T> to SQL statements.
+            /// </summary>
+            Translator: SqlTranslator<'T>
+
+            /// <summary>
+            /// Whether to cache translated SQL queries for performance.
+            /// </summary>
+            EnableCache: bool
+        }
 
 /// <summary>
 /// Result of insertMany operation containing inserted documents and count.
@@ -133,21 +136,22 @@ type Collection<'T> = internal {
 /// | Error e -> printfn $"Insert failed: {e.Message}"
 /// </code>
 /// </example>
-type InsertManyResult<'T> = {
-    /// <summary>
-    /// List of successfully inserted documents with generated IDs and metadata.
-    /// </summary>
-    Documents: list<Document<'T>>
-    
-    /// <summary>
-    /// Number of documents successfully inserted.
-    /// </summary>
-    /// <remarks>
-    /// Should equal Documents.Length. Provided for convenience and validation.
-    /// If InsertedCount is less than input count, some documents failed to insert.
-    /// </remarks>
-    InsertedCount: int
-}
+type InsertManyResult<'T> =
+    {
+        /// <summary>
+        /// List of successfully inserted documents with generated IDs and metadata.
+        /// </summary>
+        Documents: list<Document<'T>>
+
+        /// <summary>
+        /// Number of documents successfully inserted.
+        /// </summary>
+        /// <remarks>
+        /// Should equal Documents.Length. Provided for convenience and validation.
+        /// If InsertedCount is less than input count, some documents failed to insert.
+        /// </remarks>
+        InsertedCount: int
+    }
 
 /// <summary>
 /// Result of updateMany operation containing match and modification counts.
@@ -182,21 +186,22 @@ type InsertManyResult<'T> = {
 /// | Error e -> printfn $"Update failed: {e.Message}"
 /// </code>
 /// </example>
-type UpdateResult = {
-    /// <summary>
-    /// Number of documents that matched the filter criteria.
-    /// </summary>
-    MatchedCount: int
-    
-    /// <summary>
-    /// Number of documents where content was actually changed.
-    /// </summary>
-    /// <remarks>
-    /// May be less than MatchedCount if update function returns same content.
-    /// Example: updating status to "active" when already "active" → no modification.
-    /// </remarks>
-    ModifiedCount: int
-}
+type UpdateResult =
+    {
+        /// <summary>
+        /// Number of documents that matched the filter criteria.
+        /// </summary>
+        MatchedCount: int
+
+        /// <summary>
+        /// Number of documents where content was actually changed.
+        /// </summary>
+        /// <remarks>
+        /// May be less than MatchedCount if update function returns same content.
+        /// Example: updating status to "active" when already "active" → no modification.
+        /// </remarks>
+        ModifiedCount: int
+    }
 
 /// <summary>
 /// Result of deleteMany operation containing count of deleted documents.
@@ -220,12 +225,13 @@ type UpdateResult = {
 /// printfn $"Deleted {result.DeletedCount} inactive users"
 /// </code>
 /// </example>
-type DeleteResult = {
-    /// <summary>
-    /// Number of documents successfully deleted.
-    /// </summary>
-    DeletedCount: int
-}
+type DeleteResult =
+    {
+        /// <summary>
+        /// Number of documents successfully deleted.
+        /// </summary>
+        DeletedCount: int
+    }
 
 /// <summary>
 /// Specifies which version of document to return in find-and-modify operations.
@@ -270,7 +276,7 @@ type ReturnDocument =
     /// Return the document as it was before the modification.
     /// </summary>
     | Before
-    
+
     /// <summary>
     /// Return the document as it is after the modification.
     /// </summary>
@@ -307,16 +313,17 @@ type ReturnDocument =
 ///         (QueryOptions.sort [("age", SortDirection.Desc)])
 /// </code>
 /// </example>
-type FindOptions = {
-    /// <summary>
-    /// List of (fieldName, direction) tuples specifying sort order.
-    /// </summary>
-    /// <remarks>
-    /// Empty list = no sorting (results in arbitrary order).
-    /// Sort is stable - documents with equal sort values maintain insertion order.
-    /// </remarks>
-    Sort: list<string * SortDirection>
-}
+type FindOptions =
+    {
+        /// <summary>
+        /// List of (fieldName, direction) tuples specifying sort order.
+        /// </summary>
+        /// <remarks>
+        /// Empty list = no sorting (results in arbitrary order).
+        /// Sort is stable - documents with equal sort values maintain insertion order.
+        /// </remarks>
+        Sort: list<string * SortDirection>
+    }
 
 /// <summary>
 /// Options for controlling find-and-modify operations.
@@ -355,26 +362,27 @@ type FindOptions = {
 ///         options
 /// </code>
 /// </example>
-type FindAndModifyOptions = {
-    /// <summary>
-    /// Sort order to determine which document to modify when multiple match.
-    /// </summary>
-    Sort: list<string * SortDirection>
-    
-    /// <summary>
-    /// Whether to return document state before or after modification.
-    /// </summary>
-    ReturnDocument: ReturnDocument
-    
-    /// <summary>
-    /// Whether to insert a new document if no match is found.
-    /// </summary>
-    /// <remarks>
-    /// Only applies to update and replace operations (not delete).
-    /// If true and no match, inserts new document with update applied.
-    /// </remarks>
-    Upsert: bool
-}
+type FindAndModifyOptions =
+    {
+        /// <summary>
+        /// Sort order to determine which document to modify when multiple match.
+        /// </summary>
+        Sort: list<string * SortDirection>
+
+        /// <summary>
+        /// Whether to return document state before or after modification.
+        /// </summary>
+        ReturnDocument: ReturnDocument
+
+        /// <summary>
+        /// Whether to insert a new document if no match is found.
+        /// </summary>
+        /// <remarks>
+        /// Only applies to update and replace operations (not delete).
+        /// If true and no match, inserts new document with update applied.
+        /// </remarks>
+        Upsert: bool
+    }
 
 /// <summary>
 /// Module containing all collection operations for document storage and retrieval.
@@ -395,14 +403,14 @@ type FindAndModifyOptions = {
 /// </remarks>
 [<RequireQualifiedAccess>]
 module Collection =
-    
+
     /// <summary>
     /// Converts an obj parameter value to the appropriate SqlType case.
     /// </summary>
     /// <param name="value">The parameter value as obj.</param>
     /// <returns>The SqlType case matching the runtime type of the value.</returns>
     /// <remarks>
-    /// Helper function for converting SqlTranslator parameters (string * obj) 
+    /// Helper function for converting SqlTranslator parameters (string * obj)
     /// to Donald-compatible parameters (string * SqlType).
     /// Supports common types: string, int, int64, bool, float, decimal, DateTime, byte[], null.
     /// </remarks>
@@ -417,10 +425,10 @@ module Collection =
         | :? decimal as d -> SqlType.Decimal d
         | :? System.DateTime as dt -> SqlType.DateTime dt
         | :? array<byte> as bytes -> SqlType.Bytes bytes
-        | _ -> 
+        | _ ->
             // Fallback: convert to string representation
-            SqlType.String (value.ToString())
-    
+            SqlType.String(value.ToString())
+
     /// <summary>
     /// Finds a document by its unique identifier.
     /// </summary>
@@ -452,10 +460,10 @@ module Collection =
     /// // Find user by ID
     /// let! maybeUser = users |> Collection.findById "user123"
     /// match maybeUser with
-    /// | Some doc -> 
+    /// | Some doc ->
     ///     printfn $"Found: {doc.Data.Name}"
     ///     printfn $"Created: {doc.CreatedAt}"
-    /// | None -> 
+    /// | None ->
     ///     printfn "User not found"
     ///
     /// // Pipeline style
@@ -466,49 +474,45 @@ module Collection =
     /// </code>
     /// </example>
     let findById (id: string) (collection: Collection<'T>) : Task<option<Document<'T>>> =
-        let sql = $"SELECT _id, json(body) as body, createdAt, updatedAt 
+        let sql =
+            $"SELECT _id, json(body) as body, createdAt, updatedAt 
                     FROM {collection.Name} WHERE _id = @id"
-        
+
         let dbResult =
             collection.Connection
             |> Db.newCommand sql
-            |> Db.setParams ["id", SqlType.String id]
-            |> Db.querySingle (fun rd -> 
-                rd.ReadString "_id",
-                rd.ReadString "body",
-                rd.ReadInt64 "createdAt",
-                rd.ReadInt64 "updatedAt"
-            )
-        
+            |> Db.setParams [ "id", SqlType.String id ]
+            |> Db.querySingle (fun rd ->
+                rd.ReadString "_id", rd.ReadString "body", rd.ReadInt64 "createdAt", rd.ReadInt64 "updatedAt")
+
         let result =
             match dbResult with
-            | Some (docId, bodyJson, createdAt, updatedAt) ->
+            | Some(docId, bodyJson, createdAt, updatedAt) ->
                 // Deserialize JSON body to 'T (can throw exception)
                 let data = deserialize<'T> bodyJson
-                Some {
-                    Id = docId
-                    Data = data
-                    CreatedAt = createdAt
-                    UpdatedAt = updatedAt
-                }
+
+                Some
+                    { Id = docId
+                      Data = data
+                      CreatedAt = createdAt
+                      UpdatedAt = updatedAt }
             | None ->
                 // Document not found
                 None
-        
+
         Task.FromResult(result)
-    
+
     /// <summary>
     /// Helper function to deserialize a row tuple into a Document&lt;'T&gt;.
     /// </summary>
     let private rowToDocument (docId: string, bodyJson: string, createdAt: int64, updatedAt: int64) : Document<'T> =
         let data = deserialize<'T> bodyJson
-        {
-            Id = docId
-            Data = data
-            CreatedAt = createdAt
-            UpdatedAt = updatedAt
-        }
-    
+
+        { Id = docId
+          Data = data
+          CreatedAt = createdAt
+          UpdatedAt = updatedAt }
+
     /// <summary>
     /// Finds the first document matching a filter query.
     /// </summary>
@@ -546,30 +550,34 @@ module Collection =
     /// </example>
     let findOne (filter: Query<'T>) (collection: Collection<'T>) : Task<option<Document<'T>>> =
         let translated = collection.Translator.Translate(filter)
-        let whereClause = if translated.Sql = "" then "" else $"WHERE {translated.Sql}"
-        let sql = $"SELECT _id, json(body) as body, createdAt, updatedAt 
+
+        let whereClause =
+            if translated.Sql = "" then
+                ""
+            else
+                $"WHERE {translated.Sql}"
+
+        let sql =
+            $"SELECT _id, json(body) as body, createdAt, updatedAt 
                     FROM {collection.Name} {whereClause} LIMIT 1"
-        
-        let params' = translated.Parameters |> List.map (fun (name, value) -> name, toSqlType value)
-        
+
+        let params' =
+            translated.Parameters |> List.map (fun (name, value) -> name, toSqlType value)
+
         let dbResult =
             collection.Connection
             |> Db.newCommand sql
             |> Db.setParams params'
-            |> Db.querySingle (fun rd -> 
-                rd.ReadString "_id",
-                rd.ReadString "body",
-                rd.ReadInt64 "createdAt",
-                rd.ReadInt64 "updatedAt"
-            )
-        
+            |> Db.querySingle (fun rd ->
+                rd.ReadString "_id", rd.ReadString "body", rd.ReadInt64 "createdAt", rd.ReadInt64 "updatedAt")
+
         let result =
             match dbResult with
-            | Some rowData -> Some (rowToDocument rowData)
+            | Some rowData -> Some(rowToDocument rowData)
             | None -> None
-        
+
         Task.FromResult(result)
-    
+
     /// <summary>
     /// Finds the first document matching a filter with query options (sort, limit, skip).
     /// </summary>
@@ -598,41 +606,43 @@ module Collection =
     ///         (QueryOptions.sort [("createdAt", SortDirection.Desc)])
     /// </code>
     /// </example>
-    let findOneWith 
-        (filter: Query<'T>) 
-        (options: QueryOptions<'T>) 
-        (collection: Collection<'T>) 
+    let findOneWith
+        (filter: Query<'T>)
+        (options: QueryOptions<'T>)
+        (collection: Collection<'T>)
         : Task<option<Document<'T>>> =
         let translated = collection.Translator.Translate(filter)
-        let whereClause = if translated.Sql = "" then "" else $"WHERE {translated.Sql}"
-        
+
+        let whereClause =
+            if translated.Sql = "" then
+                ""
+            else
+                $"WHERE {translated.Sql}"
+
         let (optionsSql, optionsParams) = collection.Translator.TranslateOptions(options)
-        
-        let sql = $"SELECT _id, json(body) as body, createdAt, updatedAt 
+
+        let sql =
+            $"SELECT _id, json(body) as body, createdAt, updatedAt 
                     FROM {collection.Name} {whereClause} {optionsSql} LIMIT 1"
-        
-        let allParams = 
+
+        let allParams =
             (translated.Parameters |> List.map (fun (name, value) -> name, toSqlType value))
             @ (optionsParams |> List.map (fun (name, value) -> name, toSqlType value))
-        
+
         let dbResult =
             collection.Connection
             |> Db.newCommand sql
             |> Db.setParams allParams
-            |> Db.querySingle (fun rd -> 
-                rd.ReadString "_id",
-                rd.ReadString "body",
-                rd.ReadInt64 "createdAt",
-                rd.ReadInt64 "updatedAt"
-            )
-        
+            |> Db.querySingle (fun rd ->
+                rd.ReadString "_id", rd.ReadString "body", rd.ReadInt64 "createdAt", rd.ReadInt64 "updatedAt")
+
         let result =
             match dbResult with
-            | Some rowData -> Some (rowToDocument rowData)
+            | Some rowData -> Some(rowToDocument rowData)
             | None -> None
-        
+
         Task.FromResult(result)
-    
+
     /// <summary>
     /// Finds all documents matching a filter query.
     /// </summary>
@@ -668,27 +678,31 @@ module Collection =
     /// </example>
     let find (filter: Query<'T>) (collection: Collection<'T>) : Task<list<Document<'T>>> =
         let translated = collection.Translator.Translate(filter)
-        let whereClause = if translated.Sql = "" then "" else $"WHERE {translated.Sql}"
-        let sql = $"SELECT _id, json(body) as body, createdAt, updatedAt 
+
+        let whereClause =
+            if translated.Sql = "" then
+                ""
+            else
+                $"WHERE {translated.Sql}"
+
+        let sql =
+            $"SELECT _id, json(body) as body, createdAt, updatedAt 
                     FROM {collection.Name} {whereClause}"
-        
-        let params' = translated.Parameters |> List.map (fun (name, value) -> name, toSqlType value)
-        
+
+        let params' =
+            translated.Parameters |> List.map (fun (name, value) -> name, toSqlType value)
+
         let dbResult =
             collection.Connection
             |> Db.newCommand sql
             |> Db.setParams params'
-            |> Db.query (fun rd -> 
-                rd.ReadString "_id",
-                rd.ReadString "body",
-                rd.ReadInt64 "createdAt",
-                rd.ReadInt64 "updatedAt"
-            )
-        
+            |> Db.query (fun rd ->
+                rd.ReadString "_id", rd.ReadString "body", rd.ReadInt64 "createdAt", rd.ReadInt64 "updatedAt")
+
         let result = dbResult |> List.map rowToDocument
-        
+
         Task.FromResult(result)
-    
+
     /// <summary>
     /// Finds all documents matching a filter with query options (sort, limit, skip).
     /// </summary>
@@ -728,38 +742,40 @@ module Collection =
     ///             |> QueryOptions.skip 20)
     /// </code>
     /// </example>
-    let findWith 
-        (filter: Query<'T>) 
-        (options: QueryOptions<'T>) 
-        (collection: Collection<'T>) 
+    let findWith
+        (filter: Query<'T>)
+        (options: QueryOptions<'T>)
+        (collection: Collection<'T>)
         : Task<list<Document<'T>>> =
         let translated = collection.Translator.Translate(filter)
-        let whereClause = if translated.Sql = "" then "" else $"WHERE {translated.Sql}"
-        
+
+        let whereClause =
+            if translated.Sql = "" then
+                ""
+            else
+                $"WHERE {translated.Sql}"
+
         let (optionsSql, optionsParams) = collection.Translator.TranslateOptions(options)
-        
-        let sql = $"SELECT _id, json(body) as body, createdAt, updatedAt 
+
+        let sql =
+            $"SELECT _id, json(body) as body, createdAt, updatedAt 
                     FROM {collection.Name} {whereClause} {optionsSql}"
-        
-        let allParams = 
+
+        let allParams =
             (translated.Parameters |> List.map (fun (name, value) -> name, toSqlType value))
             @ (optionsParams |> List.map (fun (name, value) -> name, toSqlType value))
-        
+
         let dbResult =
             collection.Connection
             |> Db.newCommand sql
             |> Db.setParams allParams
-            |> Db.query (fun rd -> 
-                rd.ReadString "_id",
-                rd.ReadString "body",
-                rd.ReadInt64 "createdAt",
-                rd.ReadInt64 "updatedAt"
-            )
-        
+            |> Db.query (fun rd ->
+                rd.ReadString "_id", rd.ReadString "body", rd.ReadInt64 "createdAt", rd.ReadInt64 "updatedAt")
+
         let result = dbResult |> List.map rowToDocument
-        
+
         Task.FromResult(result)
-    
+
     /// <summary>
     /// Counts the number of documents matching the specified filter.
     /// </summary>
@@ -792,14 +808,14 @@ module Collection =
     /// <example>
     /// <code>
     /// // Count active users
-    /// let! activeCount = 
-    ///     users 
+    /// let! activeCount =
+    ///     users
     ///     |> Collection.count (Query.field "status" (Query.eq "active"))
     /// printfn $"Active users: {activeCount}"
     ///
     /// // Count users older than 18
-    /// let! adultCount = 
-    ///     users 
+    /// let! adultCount =
+    ///     users
     ///     |> Collection.count (Query.field "age" (Query.gte 18))
     /// printfn $"Adults: {adultCount}"
     ///
@@ -810,20 +826,26 @@ module Collection =
     /// </example>
     let count (filter: Query<'T>) (collection: Collection<'T>) : Task<int> =
         let translated = collection.Translator.Translate(filter)
-        let whereClause = if translated.Sql = "" then "" else $"WHERE {translated.Sql}"
-        
+
+        let whereClause =
+            if translated.Sql = "" then
+                ""
+            else
+                $"WHERE {translated.Sql}"
+
         let sql = $"SELECT COUNT(*) as count FROM {collection.Name} {whereClause}"
-        
-        let params' = translated.Parameters |> List.map (fun (name, value) -> name, toSqlType value)
-        
+
+        let params' =
+            translated.Parameters |> List.map (fun (name, value) -> name, toSqlType value)
+
         let dbResult =
             collection.Connection
             |> Db.newCommand sql
             |> Db.setParams params'
             |> Db.scalar Convert.ToInt32
-        
+
         Task.FromResult(dbResult)
-    
+
     /// <summary>
     /// Returns an estimated count of all documents in the collection.
     /// </summary>
@@ -878,15 +900,15 @@ module Collection =
     /// </example>
     let estimatedCount (collection: Collection<'T>) : Task<int> =
         let sql = $"SELECT COUNT(*) as count FROM {collection.Name}"
-        
+
         let dbResult =
             collection.Connection
             |> Db.newCommand sql
             |> Db.setParams []
             |> Db.scalar Convert.ToInt32
-        
+
         Task.FromResult(dbResult)
-    
+
     /// <summary>
     /// Searches for documents containing the specified text across multiple fields.
     /// </summary>
@@ -924,60 +946,50 @@ module Collection =
     /// <example>
     /// <code>
     /// // Search for users by name or email
-    /// let! results = 
-    ///     users 
+    /// let! results =
+    ///     users
     ///     |> Collection.search "john" ["name"; "email"]
     /// printfn $"Found {List.length results} matches"
     ///
     /// // Search nested fields
-    /// let! products = 
-    ///     catalog 
+    /// let! products =
+    ///     catalog
     ///     |> Collection.search "laptop" ["title"; "description"; "specs.brand"]
     /// </code>
     /// </example>
-    let search 
-        (text: string) 
-        (fields: list<string>) 
-        (collection: Collection<'T>) 
-        : Task<list<Document<'T>>> =
-        
+    let search (text: string) (fields: list<string>) (collection: Collection<'T>) : Task<list<Document<'T>>> =
+
         // Build OR conditions for LIKE queries across fields
         let likeConditions =
             fields
-            |> List.mapi (fun i field ->
-                $"json_extract(body, '$.{field}') LIKE @search{i}"
-            )
+            |> List.mapi (fun i field -> $"json_extract(body, '$.{field}') LIKE @search{i}")
             |> String.concat " OR "
-        
-        let sql = 
+
+        let sql =
             if likeConditions = "" then
                 $"SELECT _id, json(body) as body, createdAt, updatedAt 
-                    FROM {collection.Name} WHERE 1=0"  // No fields = no results
+                    FROM {collection.Name} WHERE 1=0" // No fields = no results
             else
                 $"SELECT _id, json(body) as body, createdAt, updatedAt 
                     FROM {collection.Name} WHERE {likeConditions}"
-        
+
         // Create parameters with wildcards
         let searchPattern = $"%%{text}%%"
-        let params' = 
-            fields 
-            |> List.mapi (fun i _ -> $"search{i}", SqlType.String searchPattern)
-        
+
+        let params' =
+            fields |> List.mapi (fun i _ -> $"search{i}", SqlType.String searchPattern)
+
         let dbResult =
             collection.Connection
             |> Db.newCommand sql
             |> Db.setParams params'
-            |> Db.query (fun rd -> 
-                rd.ReadString "_id",
-                rd.ReadString "body",
-                rd.ReadInt64 "createdAt",
-                rd.ReadInt64 "updatedAt"
-            )
-        
+            |> Db.query (fun rd ->
+                rd.ReadString "_id", rd.ReadString "body", rd.ReadInt64 "createdAt", rd.ReadInt64 "updatedAt")
+
         let result = dbResult |> List.map rowToDocument
-        
+
         Task.FromResult(result)
-    
+
     /// <summary>
     /// Searches for documents with QueryOptions support for sorting, pagination, etc.
     /// </summary>
@@ -1011,16 +1023,16 @@ module Collection =
     /// <example>
     /// <code>
     /// // Search with limit and sort
-    /// let! top10 = 
-    ///     products 
+    /// let! top10 =
+    ///     products
     ///     |> Collection.searchWith "laptop" ["title"; "description"]
     ///         (QueryOptions.create()
     ///             |> QueryOptions.sort [("price", SortDirection.Asc)]
     ///             |> QueryOptions.limit 10)
     ///
     /// // Paginated search
-    /// let! page2 = 
-    ///     users 
+    /// let! page2 =
+    ///     users
     ///     |> Collection.searchWith "john" ["name"; "email"]
     ///         (QueryOptions.create()
     ///             |> QueryOptions.limit 20
@@ -1033,48 +1045,46 @@ module Collection =
         (options: QueryOptions<'T>)
         (collection: Collection<'T>)
         : Task<list<Document<'T>>> =
-        
+
         // Build OR conditions for LIKE queries across fields
         let likeConditions =
             fields
-            |> List.mapi (fun i field ->
-                $"json_extract(body, '$.{field}') LIKE @search{i}"
-            )
+            |> List.mapi (fun i field -> $"json_extract(body, '$.{field}') LIKE @search{i}")
             |> String.concat " OR "
-        
-        let whereClause = 
-            if likeConditions = "" then "WHERE 1=0" 
-            else $"WHERE {likeConditions}"
-        
+
+        let whereClause =
+            if likeConditions = "" then
+                "WHERE 1=0"
+            else
+                $"WHERE {likeConditions}"
+
         let (optionsSql, optionsParams) = collection.Translator.TranslateOptions(options)
-        
-        let sql = $"SELECT _id, json(body) as body, createdAt, updatedAt 
+
+        let sql =
+            $"SELECT _id, json(body) as body, createdAt, updatedAt 
                     FROM {collection.Name} {whereClause} {optionsSql}"
-        
+
         // Create search parameters with wildcards
         let searchPattern = $"%%{text}%%"
-        let searchParams = 
-            fields 
-            |> List.mapi (fun i _ -> $"search{i}", SqlType.String searchPattern)
-        
-        let allParams = 
-            searchParams @ (optionsParams |> List.map (fun (name, value) -> name, toSqlType value))
-        
+
+        let searchParams =
+            fields |> List.mapi (fun i _ -> $"search{i}", SqlType.String searchPattern)
+
+        let allParams =
+            searchParams
+            @ (optionsParams |> List.map (fun (name, value) -> name, toSqlType value))
+
         let dbResult =
             collection.Connection
             |> Db.newCommand sql
             |> Db.setParams allParams
-            |> Db.query (fun rd -> 
-                rd.ReadString "_id",
-                rd.ReadString "body",
-                rd.ReadInt64 "createdAt",
-                rd.ReadInt64 "updatedAt"
-            )
-        
+            |> Db.query (fun rd ->
+                rd.ReadString "_id", rd.ReadString "body", rd.ReadInt64 "createdAt", rd.ReadInt64 "updatedAt")
+
         let result = dbResult |> List.map rowToDocument
-        
+
         Task.FromResult(result)
-    
+
     /// <summary>
     /// Returns distinct values for a specified field, optionally filtered.
     /// </summary>
@@ -1115,62 +1125,62 @@ module Collection =
     /// <example>
     /// <code>
     /// // Get all unique categories
-    /// let! categories = 
-    ///     products 
+    /// let! categories =
+    ///     products
     ///     |> Collection.distinct "category" None
     /// for cat in categories do
     ///     printfn $"Category: {cat :?> string}"
     ///
     /// // Get unique statuses for active users
-    /// let! statuses = 
-    ///     users 
-    ///     |> Collection.distinct "status" 
+    /// let! statuses =
+    ///     users
+    ///     |> Collection.distinct "status"
     ///         (Some (Query.field "active" (Query.eq true)))
     ///
     /// // Get distinct ages
-    /// let! ages = 
-    ///     users 
+    /// let! ages =
+    ///     users
     ///     |> Collection.distinct "age" None
     /// let ageList = ages |> List.map (fun x -> x :?> int64)
     /// </code>
     /// </example>
-    let distinct
-        (field: string)
-        (filter: option<Query<'T>>)
-        (collection: Collection<'T>)
-        : Task<list<obj>> =
-        
+    let distinct (field: string) (filter: option<Query<'T>>) (collection: Collection<'T>) : Task<list<obj>> =
+
         let whereClause =
             match filter with
             | None -> ""
             | Some q ->
                 let translated = collection.Translator.Translate(q)
-                if translated.Sql = "" then "" else $"WHERE {translated.Sql}"
-        
-        let sql = 
+
+                if translated.Sql = "" then
+                    ""
+                else
+                    $"WHERE {translated.Sql}"
+
+        let sql =
             $"SELECT DISTINCT json_extract(body, '$.{field}') as value 
                 FROM {collection.Name} {whereClause}
                 WHERE json_extract(body, '$.{field}') IS NOT NULL"
-        
+
         let params' =
             match filter with
             | None -> []
             | Some q ->
                 let translated = collection.Translator.Translate(q)
                 translated.Parameters |> List.map (fun (name, value) -> name, toSqlType value)
-        
+
         let dbResult =
             collection.Connection
             |> Db.newCommand sql
             |> Db.setParams params'
             |> Db.query (fun rd -> rd.GetValue(0))
-        
+
         Task.FromResult(dbResult)
-    
+
     // ═══════════════════════════════════════════════════════════════
     // WRITE OPERATIONS (Single Document)
     // ═══════════════════════════════════════════════════════════════
-    
+
     /// <summary>
     /// Inserts a new document into the collection with auto-generated ID.
     /// </summary>
@@ -1211,8 +1221,8 @@ module Collection =
     /// <example>
     /// <code>
     /// // Insert a new user
-    /// let! result = 
-    ///     users 
+    /// let! result =
+    ///     users
     ///     |> Collection.insertOne { Name = "Alice"; Email = "alice@example.com" }
     ///
     /// match result with
@@ -1233,62 +1243,42 @@ module Collection =
     let insertOne (doc: 'T) (collection: Collection<'T>) : Task<FractalResult<Document<'T>>> =
         // Create document with auto-generated ID and timestamps
         let document = Document.create doc
-        
+
         // Serialize document data to JSON
         let bodyJson = serialize document.Data
-        
+
         // Build INSERT statement
-        let sql = 
+        let sql =
             $"INSERT INTO {collection.Name} (_id, body, createdAt, updatedAt) 
                 VALUES (@id, @body, @created, @updated)"
-        
-        let params' = [
-            "id", SqlType.String document.Id
-            "body", SqlType.String bodyJson
-            "created", SqlType.Int64 document.CreatedAt
-            "updated", SqlType.Int64 document.UpdatedAt
-        ]
-        
+
+        let params' =
+            [ "id", SqlType.String document.Id
+              "body", SqlType.String bodyJson
+              "created", SqlType.Int64 document.CreatedAt
+              "updated", SqlType.Int64 document.UpdatedAt ]
+
         try
             collection.Connection
             |> Db.newCommand sql
             |> Db.setParams params'
             |> Db.exec
             |> ignore
-            
+
             Task.FromResult(Ok document)
-        with
-        | :? DbExecutionException as ex ->
+        with :? DbExecutionException as ex ->
             // Check if inner exception is SqliteException with constraint violation
             match ex.InnerException with
             | :? SqliteException as sqlEx when sqlEx.SqliteErrorCode = 19 ->
                 // SQLITE_CONSTRAINT error code = 19
-                // Parse the error message to extract field name
-                // Message format: "UNIQUE constraint failed: table.field"
-                // or "UNIQUE constraint failed: 'table'.'_field'"
-                let errorMsg = sqlEx.Message
-                let fieldName =
-                    if errorMsg.Contains("UNIQUE constraint failed:") then
-                        let parts = errorMsg.Split([|':'|], 2)
-                        if parts.Length > 1 then
-                            let tableDotField = parts.[1].Trim()
-                            let fieldParts = tableDotField.Split('.')
-                            if fieldParts.Length > 1 then
-                                // Remove leading underscore and any quotes from field name
-                                fieldParts.[1].Trim([|'_'; '\''; ' '|])
-                            else
-                                "id"  // Default to id
-                        else
-                            "id"
-                    else
-                        "id"
-                
+                // Use centralized parsing from DonaldExceptions module
+                let fieldName = parseUniqueConstraintField sqlEx.Message
                 let error = FractalError.UniqueConstraint(fieldName, box document.Id)
                 Task.FromResult(Error error)
             | _ ->
                 // Re-raise other exceptions
-                reraise()
-    
+                reraise ()
+
     /// <summary>
     /// Inserts multiple documents into the collection with transaction support.
     /// </summary>
@@ -1345,8 +1335,8 @@ module Collection =
     ///     { Name = "Carol"; Email = "carol@example.com" }
     /// ]
     ///
-    /// let! result = 
-    ///     users 
+    /// let! result =
+    ///     users
     ///     |> Collection.insertManyWith newUsers true  // ordered=true
     ///
     /// match result with
@@ -1361,8 +1351,8 @@ module Collection =
     ///     printfn $"Error: {err.Message}"
     ///
     /// // Unordered insert (partial success allowed)
-    /// let! result2 = 
-    ///     users 
+    /// let! result2 =
+    ///     users
     ///     |> Collection.insertManyWith newUsers false  // ordered=false
     ///
     /// match result2 with
@@ -1378,54 +1368,53 @@ module Collection =
         (ordered: bool)
         (collection: Collection<'T>)
         : Task<FractalResult<InsertManyResult<'T>>> =
-        
+
         if List.isEmpty docs then
             // Empty list - return empty result
             let emptyResult = { Documents = []; InsertedCount = 0 }
             Task.FromResult(Ok emptyResult)
         else
             use transaction = Transaction.create collection.Connection
-            
+
             let mutable insertedDocs = []
             let mutable error = None
-            
+
             for doc in docs do
                 if error.IsNone || not ordered then
                     // Create document with auto-generated ID and timestamps
                     let document = Document.create doc
                     let bodyJson = serialize document.Data
-                    
-                    let sql = 
+
+                    let sql =
                         $"INSERT INTO {collection.Name} (_id, body, createdAt, updatedAt) 
                             VALUES (@id, @body, @created, @updated)"
-                    
-                    let params' = [
-                        "id", SqlType.String document.Id
-                        "body", SqlType.String bodyJson
-                        "created", SqlType.Int64 document.CreatedAt
-                        "updated", SqlType.Int64 document.UpdatedAt
-                    ]
-                    
+
+                    let params' =
+                        [ "id", SqlType.String document.Id
+                          "body", SqlType.String bodyJson
+                          "created", SqlType.Int64 document.CreatedAt
+                          "updated", SqlType.Int64 document.UpdatedAt ]
+
                     try
                         collection.Connection
                         |> Db.newCommand sql
                         |> Db.setParams params'
                         |> Db.exec
                         |> ignore
-                        
+
                         insertedDocs <- document :: insertedDocs
-                    with
-                    | :? DbExecutionException as ex ->
+                    with :? DbExecutionException as ex ->
                         match ex.InnerException with
                         | :? SqliteException as sqlEx when sqlEx.SqliteErrorCode = 19 ->
                             let err = FractalError.UniqueConstraint("_id", box document.Id)
+
                             if ordered then
                                 error <- Some err
-                            // else: skip this document, continue with next
+                        // else: skip this document, continue with next
                         | _ ->
                             // Re-raise unexpected exceptions
-                            reraise()
-            
+                            reraise ()
+
             match error with
             | Some err when ordered ->
                 // Ordered mode with error - rollback
@@ -1434,12 +1423,13 @@ module Collection =
             | _ ->
                 // Success (or unordered with partial success)
                 transaction.Commit()
-                let result = {
-                    Documents = List.rev insertedDocs  // Reverse to maintain insertion order
-                    InsertedCount = List.length insertedDocs
-                }
+
+                let result =
+                    { Documents = List.rev insertedDocs // Reverse to maintain insertion order
+                      InsertedCount = List.length insertedDocs }
+
                 Task.FromResult(Ok result)
-    
+
     /// <summary>
     /// Inserts multiple documents into the collection (ordered mode).
     /// </summary>
@@ -1487,12 +1477,9 @@ module Collection =
     ///     printfn "No products were inserted (transaction rolled back)"
     /// </code>
     /// </example>
-    let insertMany
-        (docs: list<'T>)
-        (collection: Collection<'T>)
-        : Task<FractalResult<InsertManyResult<'T>>> =
+    let insertMany (docs: list<'T>) (collection: Collection<'T>) : Task<FractalResult<InsertManyResult<'T>>> =
         insertManyWith docs true collection
-    
+
     /// <summary>
     /// Updates a document by ID using a transformation function.
     /// </summary>
@@ -1538,9 +1525,9 @@ module Collection =
     /// <example>
     /// <code>
     /// // Increment user age
-    /// let! result = 
-    ///     users 
-    ///     |> Collection.updateById "user123" (fun user -> 
+    /// let! result =
+    ///     users
+    ///     |> Collection.updateById "user123" (fun user ->
     ///         { user with Age = user.Age + 1 })
     ///
     /// match result with
@@ -1553,9 +1540,9 @@ module Collection =
     ///     printfn $"Error: {err.Message}"
     ///
     /// // Update multiple fields
-    /// let! result2 = 
-    ///     products 
-    ///     |> Collection.updateById "prod456" (fun p -> 
+    /// let! result2 =
+    ///     products
+    ///     |> Collection.updateById "prod456" (fun p ->
     ///         { p with Price = p.Price * 0.9; OnSale = true })
     /// </code>
     /// </example>
@@ -1567,7 +1554,7 @@ module Collection =
         task {
             // Find existing document
             let! maybeDoc = findById id collection
-            
+
             match maybeDoc with
             | None ->
                 // Document not found
@@ -1576,47 +1563,44 @@ module Collection =
                 try
                     // Apply update function to document data
                     let updatedData = update doc.Data
-                    
+
                     // Serialize updated data
                     let bodyJson = serialize updatedData
-                    
+
                     // Get new timestamp
-                    let newUpdatedAt = Timestamp.now()
-                    
+                    let newUpdatedAt = Timestamp.now ()
+
                     // Build UPDATE statement
-                    let sql = 
+                    let sql =
                         $"UPDATE {collection.Name} 
                             SET body = @body, updatedAt = @updated 
                             WHERE _id = @id"
-                    
-                    let params' = [
-                        "body", SqlType.String bodyJson
-                        "updated", SqlType.Int64 newUpdatedAt
-                        "id", SqlType.String id
-                    ]
-                    
+
+                    let params' =
+                        [ "body", SqlType.String bodyJson
+                          "updated", SqlType.Int64 newUpdatedAt
+                          "id", SqlType.String id ]
+
                     collection.Connection
                     |> Db.newCommand sql
                     |> Db.setParams params'
                     |> Db.exec
                     |> ignore
-                    
+
                     // Return updated document
-                    let updatedDoc = {
-                        Id = doc.Id
-                        Data = updatedData
-                        CreatedAt = doc.CreatedAt
-                        UpdatedAt = newUpdatedAt
-                    }
-                    
-                    return Ok (Some updatedDoc)
-                with
-                | ex ->
+                    let updatedDoc =
+                        { Id = doc.Id
+                          Data = updatedData
+                          CreatedAt = doc.CreatedAt
+                          UpdatedAt = newUpdatedAt }
+
+                    return Ok(Some updatedDoc)
+                with ex ->
                     // Wrap serialization or database errors
                     let error = FractalError.Serialization ex.Message
                     return Error error
         }
-    
+
     /// <summary>
     /// Updates the first document matching the filter using a transformation function.
     /// </summary>
@@ -1651,9 +1635,9 @@ module Collection =
     /// <example>
     /// <code>
     /// // Update first active user
-    /// let! result = 
-    ///     users 
-    ///     |> Collection.updateOne 
+    /// let! result =
+    ///     users
+    ///     |> Collection.updateOne
     ///         (Query.field "status" (Query.eq "active"))
     ///         (fun user -> { user with LastSeen = DateTime.UtcNow })
     ///
@@ -1674,15 +1658,14 @@ module Collection =
         task {
             // Find first matching document
             let! maybeDoc = findOne filter collection
-            
+
             match maybeDoc with
-            | None ->
-                return Ok None
+            | None -> return Ok None
             | Some doc ->
                 // Use updateById for the actual update
                 return! updateById doc.Id update collection
         }
-    
+
     /// <summary>
     /// Updates first matching document with upsert option.
     /// </summary>
@@ -1724,9 +1707,9 @@ module Collection =
     /// <example>
     /// <code>
     /// // Update or create user profile
-    /// let! result = 
-    ///     profiles 
-    ///     |> Collection.updateOneWith 
+    /// let! result =
+    ///     profiles
+    ///     |> Collection.updateOneWith
     ///         (Query.field "userId" (Query.eq "user123"))
     ///         (fun profile -> { profile with LastLogin = DateTime.UtcNow })
     ///         true  // upsert=true
@@ -1741,9 +1724,9 @@ module Collection =
     ///     printfn $"Error: {err.Message}"
     ///
     /// // Without upsert (same as updateOne)
-    /// let! result2 = 
-    ///     users 
-    ///     |> Collection.updateOneWith 
+    /// let! result2 =
+    ///     users
+    ///     |> Collection.updateOneWith
     ///         (Query.field "email" (Query.eq "test@example.com"))
     ///         (fun u -> { u with Active = false })
     ///         false  // upsert=false
@@ -1758,7 +1741,7 @@ module Collection =
         task {
             // Find first matching document
             let! maybeDoc = findOne filter collection
-            
+
             match maybeDoc, upsert with
             | Some doc, _ ->
                 // Document found - update it
@@ -1772,21 +1755,18 @@ module Collection =
                 try
                     let defaultValue = Unchecked.defaultof<'T>
                     let newData = update defaultValue
-                    
+
                     let! insertResult = insertOne newData collection
-                    
+
                     match insertResult with
-                    | Ok doc ->
-                        return Ok (Some doc)
-                    | Error err ->
-                        return Error err
-                with
-                | ex ->
+                    | Ok doc -> return Ok(Some doc)
+                    | Error err -> return Error err
+                with ex ->
                     let errorMsg = $"Upsert failed: cannot create default value for type. {ex.Message}"
                     let error = FractalError.Serialization errorMsg
                     return Error error
         }
-    
+
     /// <summary>
     /// Replaces the first document matching the filter with new data.
     /// </summary>
@@ -1832,16 +1812,16 @@ module Collection =
     /// <example>
     /// <code>
     /// // Replace entire user document
-    /// let newUserData = { 
+    /// let newUserData = {
     ///     Name = "Alice Smith"
     ///     Email = "alice.smith@example.com"
     ///     Age = 31
-    ///     Active = true 
+    ///     Active = true
     /// }
     ///
-    /// let! result = 
-    ///     users 
-    ///     |> Collection.replaceOne 
+    /// let! result =
+    ///     users
+    ///     |> Collection.replaceOne
     ///         (Query.field "email" (Query.eq "alice@example.com"))
     ///         newUserData
     ///
@@ -1857,9 +1837,9 @@ module Collection =
     ///     printfn $"Error: {err.Message}"
     ///
     /// // Replace product by ID (more efficient)
-    /// let! result2 = 
-    ///     products 
-    ///     |> Collection.replaceOne 
+    /// let! result2 =
+    ///     products
+    ///     |> Collection.replaceOne
     ///         (Query.field "_id" (Query.eq "prod123"))
     ///         { Name = "New Product"; Price = 99.99 }
     /// </code>
@@ -1872,7 +1852,7 @@ module Collection =
         task {
             // Find first matching document
             let! maybeDoc = findOne filter collection
-            
+
             match maybeDoc with
             | None ->
                 // Document not found
@@ -1881,47 +1861,44 @@ module Collection =
                 try
                     // Serialize new data
                     let bodyJson = serialize doc
-                    
+
                     // Get new timestamp
-                    let newUpdatedAt = Timestamp.now()
-                    
+                    let newUpdatedAt = Timestamp.now ()
+
                     // Build UPDATE statement
-                    let sql = 
+                    let sql =
                         $"UPDATE {collection.Name} 
                             SET body = @body, updatedAt = @updated 
                             WHERE _id = @id"
-                    
-                    let params' = [
-                        "body", SqlType.String bodyJson
-                        "updated", SqlType.Int64 newUpdatedAt
-                        "id", SqlType.String existingDoc.Id
-                    ]
-                    
+
+                    let params' =
+                        [ "body", SqlType.String bodyJson
+                          "updated", SqlType.Int64 newUpdatedAt
+                          "id", SqlType.String existingDoc.Id ]
+
                     collection.Connection
                     |> Db.newCommand sql
                     |> Db.setParams params'
                     |> Db.exec
                     |> ignore
-                    
+
                     // Return replaced document
-                    let replacedDoc = {
-                        Id = existingDoc.Id
-                        Data = doc
-                        CreatedAt = existingDoc.CreatedAt
-                        UpdatedAt = newUpdatedAt
-                    }
-                    
-                    return Ok (Some replacedDoc)
-                with
-                | ex ->
+                    let replacedDoc =
+                        { Id = existingDoc.Id
+                          Data = doc
+                          CreatedAt = existingDoc.CreatedAt
+                          UpdatedAt = newUpdatedAt }
+
+                    return Ok(Some replacedDoc)
+                with ex ->
                     let error = FractalError.Serialization ex.Message
                     return Error error
         }
-    
+
     // ═══════════════════════════════════════════════════════════════
     // BATCH OPERATIONS
     // ═══════════════════════════════════════════════════════════════
-    
+
     /// <summary>
     /// Updates all documents matching the filter using a transformation function.
     /// </summary>
@@ -1973,9 +1950,9 @@ module Collection =
     /// <example>
     /// <code>
     /// // Deactivate all old users
-    /// let! result = 
-    ///     users 
-    ///     |> Collection.updateMany 
+    /// let! result =
+    ///     users
+    ///     |> Collection.updateMany
     ///         (Query.field "lastSeen" (Query.lt (DateTime.UtcNow.AddDays(-90))))
     ///         (fun user -> { user with Active = false })
     ///
@@ -1987,16 +1964,16 @@ module Collection =
     ///     printfn $"Error: {err.Message}"
     ///
     /// // Apply discount to all products in category
-    /// let! result2 = 
-    ///     products 
-    ///     |> Collection.updateMany 
+    /// let! result2 =
+    ///     products
+    ///     |> Collection.updateMany
     ///         (Query.field "category" (Query.eq "electronics"))
     ///         (fun p -> { p with Price = p.Price * 0.9; OnSale = true })
     ///
     /// // Increment view count for all featured items
-    /// let! result3 = 
-    ///     items 
-    ///     |> Collection.updateMany 
+    /// let! result3 =
+    ///     items
+    ///     |> Collection.updateMany
     ///         (Query.field "featured" (Query.eq true))
     ///         (fun item -> { item with Views = item.Views + 1 })
     /// </code>
@@ -2010,60 +1987,61 @@ module Collection =
             try
                 // Find all matching documents
                 let! docs = find filter collection
-                
+
                 let matchedCount = List.length docs
-                
+
                 if matchedCount = 0 then
                     // No documents matched - return zero counts
                     return Ok { MatchedCount = 0; ModifiedCount = 0 }
                 else
                     use transaction = Transaction.create collection.Connection
-                    
+
                     let mutable modifiedCount = 0
-                    let newUpdatedAt = Timestamp.now()
-                    
+                    let newUpdatedAt = Timestamp.now ()
+
                     // Update each document
                     for doc in docs do
                         // Apply update function
                         let updatedData = update doc.Data
-                        
+
                         // Serialize updated data
                         let bodyJson = serialize updatedData
-                        
+
                         // Build UPDATE statement
-                        let sql = 
+                        let sql =
                             $"UPDATE {collection.Name} 
                                 SET body = @body, updatedAt = @updated 
                                 WHERE _id = @id"
-                        
-                        let params' = [
-                            "body", SqlType.String bodyJson
-                            "updated", SqlType.Int64 newUpdatedAt
-                            "id", SqlType.String doc.Id
-                        ]
-                        
+
+                        let params' =
+                            [ "body", SqlType.String bodyJson
+                              "updated", SqlType.Int64 newUpdatedAt
+                              "id", SqlType.String doc.Id ]
+
                         collection.Connection
                         |> Db.newCommand sql
                         |> Db.setParams params'
                         |> Db.exec
                         |> ignore
-                        
+
                         modifiedCount <- modifiedCount + 1
-                    
+
                     // Commit transaction
                     transaction.Commit()
-                    
-                    return Ok { MatchedCount = matchedCount; ModifiedCount = modifiedCount }
-            with
-            | ex ->
+
+                    return
+                        Ok
+                            { MatchedCount = matchedCount
+                              ModifiedCount = modifiedCount }
+            with ex ->
                 let error = FractalError.Serialization ex.Message
                 return Error error
         }
-    
+
     // ═══════════════════════════════════════════════════════════════
     // DELETE OPERATIONS
     // ═══════════════════════════════════════════════════════════════
-    
+
     /// <summary>
     /// Deletes a document by its unique identifier.
     /// </summary>
@@ -2120,28 +2098,27 @@ module Collection =
         task {
             try
                 let sql = $"DELETE FROM {collection.Name} WHERE _id = @id"
-                
-                let params' = ["id", SqlType.String id]
-                
+
+                let params' = [ "id", SqlType.String id ]
+
                 collection.Connection
                 |> Db.newCommand sql
                 |> Db.setParams params'
                 |> Db.exec
                 |> ignore
-                
+
                 // Use SQLite changes() to get affected row count
                 let deletedCount =
                     collection.Connection
                     |> Db.newCommand "SELECT changes()"
                     |> Db.setParams []
                     |> Db.scalar Convert.ToInt32
-                
+
                 return deletedCount > 0
-            with
-            | _ ->
+            with _ ->
                 return false
         }
-    
+
     /// <summary>
     /// Deletes the first document matching the filter.
     /// </summary>
@@ -2172,23 +2149,23 @@ module Collection =
     /// <example>
     /// <code>
     /// // Delete first inactive user
-    /// let! deleted = 
-    ///     users 
-    ///     |> Collection.deleteOne 
+    /// let! deleted =
+    ///     users
+    ///     |> Collection.deleteOne
     ///         (Query.field "active" (Query.eq false))
     ///
     /// printfn $"Deleted: {deleted}"
     ///
     /// // Delete oldest post
-    /// let! deleted2 = 
-    ///     posts 
-    ///     |> Collection.deleteOne 
+    /// let! deleted2 =
+    ///     posts
+    ///     |> Collection.deleteOne
     ///         (Query.Empty)  // Would need sort in QueryOptions for truly "oldest"
     ///
     /// // Delete specific email
-    /// let! deleted3 = 
-    ///     users 
-    ///     |> Collection.deleteOne 
+    /// let! deleted3 =
+    ///     users
+    ///     |> Collection.deleteOne
     ///         (Query.field "email" (Query.eq "old@example.com"))
     /// </code>
     /// </example>
@@ -2196,14 +2173,12 @@ module Collection =
         task {
             // Find first matching document
             let! maybeDoc = findOne filter collection
-            
+
             match maybeDoc with
-            | None ->
-                return false
-            | Some doc ->
-                return! deleteById doc.Id collection
+            | None -> return false
+            | Some doc -> return! deleteById doc.Id collection
         }
-    
+
     /// <summary>
     /// Deletes all documents matching the filter.
     /// </summary>
@@ -2243,18 +2218,18 @@ module Collection =
     /// <example>
     /// <code>
     /// // Delete all inactive users
-    /// let! result = 
-    ///     users 
-    ///     |> Collection.deleteMany 
+    /// let! result =
+    ///     users
+    ///     |> Collection.deleteMany
     ///         (Query.field "active" (Query.eq false))
     ///
     /// printfn $"Deleted {result.DeletedCount} inactive users"
     ///
     /// // Delete old logs (with date filter)
     /// let cutoffDate = DateTime.UtcNow.AddDays(-30)
-    /// let! result2 = 
-    ///     logs 
-    ///     |> Collection.deleteMany 
+    /// let! result2 =
+    ///     logs
+    ///     |> Collection.deleteMany
     ///         (Query.field "timestamp" (Query.lt cutoffDate))
     ///
     /// printfn $"Deleted {result2.DeletedCount} old logs"
@@ -2269,37 +2244,42 @@ module Collection =
             try
                 // Translate filter to SQL
                 let translated = collection.Translator.Translate(filter)
-                let whereClause = if translated.Sql = "" then "" else $"WHERE {translated.Sql}"
-                
+
+                let whereClause =
+                    if translated.Sql = "" then
+                        ""
+                    else
+                        $"WHERE {translated.Sql}"
+
                 let sql = $"DELETE FROM {collection.Name} {whereClause}"
-                
-                let params' = translated.Parameters |> List.map (fun (name, value) -> name, toSqlType value)
-                
+
+                let params' =
+                    translated.Parameters |> List.map (fun (name, value) -> name, toSqlType value)
+
                 collection.Connection
                 |> Db.newCommand sql
                 |> Db.setParams params'
                 |> Db.exec
                 |> ignore
-                
+
                 // Get deleted count using changes()
                 let deletedCount =
                     collection.Connection
                     |> Db.newCommand "SELECT changes()"
                     |> Db.setParams []
                     |> Db.scalar Convert.ToInt32
-                
+
                 return { DeletedCount = deletedCount }
-            with
-            | ex ->
+            with ex ->
                 // Return zero count on error (or could throw)
                 printfn $"Delete error: {ex.Message}"
                 return { DeletedCount = 0 }
         }
-    
+
     // ═══════════════════════════════════════════════════════════════
     // ATOMIC FIND-AND-DELETE OPERATIONS
     // ═══════════════════════════════════════════════════════════════
-    
+
     /// <summary>
     /// Atomically finds and deletes a single document matching the filter.
     /// </summary>
@@ -2345,9 +2325,9 @@ module Collection =
     /// <example>
     /// <code>
     /// // Process next work item
-    /// let! work = 
-    ///     workQueue 
-    ///     |> Collection.findOneAndDelete 
+    /// let! work =
+    ///     workQueue
+    ///     |> Collection.findOneAndDelete
     ///         (Query.field "status" (Query.eq "pending"))
     ///
     /// match work with
@@ -2358,9 +2338,9 @@ module Collection =
     ///     printfn "No pending work"
     ///
     /// // Claim exclusive resource
-    /// let! resource = 
-    ///     pool 
-    ///     |> Collection.findOneAndDelete 
+    /// let! resource =
+    ///     pool
+    ///     |> Collection.findOneAndDelete
     ///         (Query.field "available" (Query.eq true))
     ///
     /// match resource with
@@ -2376,29 +2356,25 @@ module Collection =
         task {
             try
                 use transaction = Transaction.create collection.Connection
-                
+
                 // Find the document first
                 let! maybeDoc = collection |> findOne filter
-                
+
                 match maybeDoc with
                 | Some doc ->
                     // Delete it by ID
                     let! deleted = collection |> deleteById doc.Id
                     transaction.Commit()
-                    
-                    if deleted then
-                        return Some doc
-                    else
-                        return None
+
+                    if deleted then return Some doc else return None
                 | None ->
                     transaction.Commit()
                     return None
-            with
-            | ex ->
+            with ex ->
                 printfn $"findOneAndDelete error: {ex.Message}"
                 return None
         }
-    
+
     /// <summary>
     /// Atomically finds and deletes a single document with sort options.
     /// </summary>
@@ -2442,9 +2418,9 @@ module Collection =
     /// <code>
     /// // FIFO work queue - oldest first
     /// let options = { Sort = [("createdAt", Ascending)] }
-    /// let! work = 
-    ///     workQueue 
-    ///     |> Collection.findOneAndDeleteWith 
+    /// let! work =
+    ///     workQueue
+    ///     |> Collection.findOneAndDeleteWith
     ///         (Query.field "status" (Query.eq "pending"))
     ///         options
     ///
@@ -2457,52 +2433,51 @@ module Collection =
     /// let! item = collection |> Collection.findOneAndDeleteWith Query.Empty stackOptions
     ///
     /// // Priority queue - highest priority, then oldest
-    /// let priorityOptions = { 
-    ///     Sort = [("priority", Descending); ("createdAt", Ascending)] 
+    /// let priorityOptions = {
+    ///     Sort = [("priority", Descending); ("createdAt", Ascending)]
     /// }
-    /// let! task = 
-    ///     tasks 
-    ///     |> Collection.findOneAndDeleteWith 
+    /// let! task =
+    ///     tasks
+    ///     |> Collection.findOneAndDeleteWith
     ///         (Query.field "status" (Query.eq "ready"))
     ///         priorityOptions
     /// </code>
     /// </example>
-    let findOneAndDeleteWith 
-        (filter: Query<'T>) 
-        (options: FindOptions) 
-        (collection: Collection<'T>) 
+    let findOneAndDeleteWith
+        (filter: Query<'T>)
+        (options: FindOptions)
+        (collection: Collection<'T>)
         : Task<option<Document<'T>>> =
         task {
             try
                 use transaction = Transaction.create collection.Connection
-                
+
                 // Find the document with sort options
-                let queryOptions = { QueryOptions.empty with Sort = options.Sort }
+                let queryOptions =
+                    { QueryOptions.empty with
+                        Sort = options.Sort }
+
                 let! maybeDoc = collection |> findOneWith filter queryOptions
-                
+
                 match maybeDoc with
                 | Some doc ->
                     // Delete it by ID
                     let! deleted = collection |> deleteById doc.Id
                     transaction.Commit()
-                    
-                    if deleted then
-                        return Some doc
-                    else
-                        return None
+
+                    if deleted then return Some doc else return None
                 | None ->
                     transaction.Commit()
                     return None
-            with
-            | ex ->
+            with ex ->
                 printfn $"findOneAndDeleteWith error: {ex.Message}"
                 return None
         }
-    
+
     // ═══════════════════════════════════════════════════════════════
     // ATOMIC FIND-AND-UPDATE OPERATIONS
     // ═══════════════════════════════════════════════════════════════
-    
+
     /// <summary>
     /// Atomically finds and updates a single document matching the filter.
     /// </summary>
@@ -2605,10 +2580,10 @@ module Collection =
     ///         counterOptions
     ///
     /// // Optimistic locking with version check (return before for audit)
-    /// let lockOptions = { 
+    /// let lockOptions = {
     ///     Sort = []
     ///     ReturnDocument = Before
-    ///     Upsert = false 
+    ///     Upsert = false
     /// }
     ///
     /// let! lockResult =
@@ -2622,116 +2597,117 @@ module Collection =
     ///         lockOptions
     /// </code>
     /// </example>
-    let findOneAndUpdate 
-        (filter: Query<'T>) 
-        (update: 'T -> 'T) 
-        (options: FindAndModifyOptions) 
-        (collection: Collection<'T>) 
+    let findOneAndUpdate
+        (filter: Query<'T>)
+        (update: 'T -> 'T)
+        (options: FindAndModifyOptions)
+        (collection: Collection<'T>)
         : Task<FractalResult<option<Document<'T>>>> =
         task {
             try
                 use transaction = Transaction.create collection.Connection
-                
+
                 // Find the document with sort options
-                let queryOptions = { QueryOptions.empty with Sort = options.Sort }
+                let queryOptions =
+                    { QueryOptions.empty with
+                        Sort = options.Sort }
+
                 let! maybeDoc = collection |> findOneWith filter queryOptions
-                
+
                 match maybeDoc with
                 | Some doc ->
                     // Apply update function and serialize
                     let updatedData = update doc.Data
                     let dataJson = Serialization.serialize updatedData
-                    let now = Timestamp.now()
-                    
+                    let now = Timestamp.now ()
+
                     // Update the document in database
-                    let sql = $"
+                    let sql =
+                        $"
                         UPDATE {collection.Name}
                         SET body = @body, updatedAt = @updatedAt
                         WHERE _id = @id"
-                    
-                    let params' = [
-                        "@body", SqlType.String dataJson
-                        "@updatedAt", SqlType.Int64 now
-                        "@id", SqlType.String doc.Id
-                    ]
-                    
+
+                    let params' =
+                        [ "@body", SqlType.String dataJson
+                          "@updatedAt", SqlType.Int64 now
+                          "@id", SqlType.String doc.Id ]
+
                     collection.Connection
                     |> Db.newCommand sql
                     |> Db.setParams params'
                     |> Db.exec
                     |> ignore
-                    
+
                     transaction.Commit()
-                    
+
                     // Return document based on options
                     match options.ReturnDocument with
-                    | ReturnDocument.Before ->
-                        return Ok (Some doc)
+                    | ReturnDocument.Before -> return Ok(Some doc)
                     | ReturnDocument.After ->
-                        let updatedDoc = {
-                            Id = doc.Id
-                            Data = updatedData
-                            CreatedAt = doc.CreatedAt
-                            UpdatedAt = now
-                        }
-                        return Ok (Some updatedDoc)
-                
+                        let updatedDoc =
+                            { Id = doc.Id
+                              Data = updatedData
+                              CreatedAt = doc.CreatedAt
+                              UpdatedAt = now }
+
+                        return Ok(Some updatedDoc)
+
                 | None when options.Upsert ->
                     // No document found, but upsert is enabled - insert new document
                     // Apply update to default/'T value
                     let defaultData = Unchecked.defaultof<'T>
                     let newData = update defaultData
                     let dataJson = Serialization.serialize newData
-                    let now = Timestamp.now()
-                    let newId = IdGenerator.generate()
-                    
-                    let sql = $"
+                    let now = Timestamp.now ()
+                    let newId = IdGenerator.generate ()
+
+                    let sql =
+                        $"
                         INSERT INTO {collection.Name} (_id, body, createdAt, updatedAt)
                         VALUES (@id, @body, @createdAt, @updatedAt)"
-                    
-                    let params' = [
-                        "@id", SqlType.String newId
-                        "@body", SqlType.String dataJson
-                        "@createdAt", SqlType.Int64 now
-                        "@updatedAt", SqlType.Int64 now
-                    ]
-                    
+
+                    let params' =
+                        [ "@id", SqlType.String newId
+                          "@body", SqlType.String dataJson
+                          "@createdAt", SqlType.Int64 now
+                          "@updatedAt", SqlType.Int64 now ]
+
                     collection.Connection
                     |> Db.newCommand sql
                     |> Db.setParams params'
                     |> Db.exec
                     |> ignore
-                    
+
                     transaction.Commit()
-                    
-                    let newDoc = {
-                        Id = newId
-                        Data = newData
-                        CreatedAt = now
-                        UpdatedAt = now
-                    }
-                    
-                    return Ok (Some newDoc)
-                
+
+                    let newDoc =
+                        { Id = newId
+                          Data = newData
+                          CreatedAt = now
+                          UpdatedAt = now }
+
+                    return Ok(Some newDoc)
+
                 | None ->
                     // No document found and upsert is false
                     transaction.Commit()
                     return Ok None
-            
+
             with
             | :? DbExecutionException as ex ->
                 match ex.InnerException with
                 | :? SqliteException as sqlEx when sqlEx.SqliteErrorCode = 19 ->
                     // SQLITE_CONSTRAINT
-                    return Error (FractalError.UniqueConstraint("_id", obj()))
+                    return Error(FractalError.UniqueConstraint("_id", obj ()))
                 | _ ->
                     let msg = $"Database error during findOneAndUpdate: {ex.Message}"
-                    return Error (FractalError.InvalidOperation(msg))
+                    return Error(FractalError.InvalidOperation(msg))
             | ex ->
                 let msg = $"Unexpected error during findOneAndUpdate: {ex.Message}"
-                return Error (FractalError.InvalidOperation(msg))
+                return Error(FractalError.InvalidOperation(msg))
         }
-    
+
     /// <summary>
     /// Atomically finds and replaces a single document matching the filter.
     /// </summary>
@@ -2867,116 +2843,117 @@ module Collection =
     ///         versionOptions
     /// </code>
     /// </example>
-    let findOneAndReplace 
-        (filter: Query<'T>) 
-        (doc: 'T) 
-        (options: FindAndModifyOptions) 
-        (collection: Collection<'T>) 
+    let findOneAndReplace
+        (filter: Query<'T>)
+        (doc: 'T)
+        (options: FindAndModifyOptions)
+        (collection: Collection<'T>)
         : Task<FractalResult<option<Document<'T>>>> =
         task {
             try
                 use transaction = Transaction.create collection.Connection
-                
+
                 // Find the document with sort options
-                let queryOptions = { QueryOptions.empty with Sort = options.Sort }
+                let queryOptions =
+                    { QueryOptions.empty with
+                        Sort = options.Sort }
+
                 let! maybeDoc = collection |> findOneWith filter queryOptions
-                
+
                 match maybeDoc with
                 | Some existingDoc ->
                     // Replace document data (preserve Id and CreatedAt)
                     let dataJson = Serialization.serialize doc
-                    let now = Timestamp.now()
-                    
+                    let now = Timestamp.now ()
+
                     // Update the document in database
-                    let sql = $"
+                    let sql =
+                        $"
                         UPDATE {collection.Name}
                         SET body = @body, updatedAt = @updatedAt
                         WHERE _id = @id"
-                    
-                    let params' = [
-                        "@body", SqlType.String dataJson
-                        "@updatedAt", SqlType.Int64 now
-                        "@id", SqlType.String existingDoc.Id
-                    ]
-                    
+
+                    let params' =
+                        [ "@body", SqlType.String dataJson
+                          "@updatedAt", SqlType.Int64 now
+                          "@id", SqlType.String existingDoc.Id ]
+
                     collection.Connection
                     |> Db.newCommand sql
                     |> Db.setParams params'
                     |> Db.exec
                     |> ignore
-                    
+
                     transaction.Commit()
-                    
+
                     // Return document based on options
                     match options.ReturnDocument with
-                    | ReturnDocument.Before ->
-                        return Ok (Some existingDoc)
+                    | ReturnDocument.Before -> return Ok(Some existingDoc)
                     | ReturnDocument.After ->
-                        let replacedDoc = {
-                            Id = existingDoc.Id
-                            Data = doc
-                            CreatedAt = existingDoc.CreatedAt
-                            UpdatedAt = now
-                        }
-                        return Ok (Some replacedDoc)
-                
+                        let replacedDoc =
+                            { Id = existingDoc.Id
+                              Data = doc
+                              CreatedAt = existingDoc.CreatedAt
+                              UpdatedAt = now }
+
+                        return Ok(Some replacedDoc)
+
                 | None when options.Upsert ->
                     // No document found, but upsert is enabled - insert new document
                     let dataJson = Serialization.serialize doc
-                    let now = Timestamp.now()
-                    let newId = IdGenerator.generate()
-                    
-                    let sql = $"
+                    let now = Timestamp.now ()
+                    let newId = IdGenerator.generate ()
+
+                    let sql =
+                        $"
                         INSERT INTO {collection.Name} (_id, body, createdAt, updatedAt)
                         VALUES (@id, @body, @createdAt, @updatedAt)"
-                    
-                    let params' = [
-                        "@id", SqlType.String newId
-                        "@body", SqlType.String dataJson
-                        "@createdAt", SqlType.Int64 now
-                        "@updatedAt", SqlType.Int64 now
-                    ]
-                    
+
+                    let params' =
+                        [ "@id", SqlType.String newId
+                          "@body", SqlType.String dataJson
+                          "@createdAt", SqlType.Int64 now
+                          "@updatedAt", SqlType.Int64 now ]
+
                     collection.Connection
                     |> Db.newCommand sql
                     |> Db.setParams params'
                     |> Db.exec
                     |> ignore
-                    
+
                     transaction.Commit()
-                    
-                    let newDoc = {
-                        Id = newId
-                        Data = doc
-                        CreatedAt = now
-                        UpdatedAt = now
-                    }
-                    
-                    return Ok (Some newDoc)
-                
+
+                    let newDoc =
+                        { Id = newId
+                          Data = doc
+                          CreatedAt = now
+                          UpdatedAt = now }
+
+                    return Ok(Some newDoc)
+
                 | None ->
                     // No document found and upsert is false
                     transaction.Commit()
                     return Ok None
-            
+
             with
             | :? DbExecutionException as ex ->
                 match ex.InnerException with
                 | :? SqliteException as sqlEx when sqlEx.SqliteErrorCode = 19 ->
                     // SQLITE_CONSTRAINT
-                    return Error (FractalError.UniqueConstraint("_id", obj()))
+                    return Error(FractalError.UniqueConstraint("_id", obj ()))
                 | _ ->
                     let msg = $"Database error during findOneAndReplace: {ex.Message}"
-                    return Error (FractalError.InvalidOperation(msg))
+                    return Error(FractalError.InvalidOperation(msg))
             | ex ->
                 let msg = $"Unexpected error during findOneAndReplace: {ex.Message}"
-                return Error (FractalError.InvalidOperation(msg))
+                return Error(FractalError.InvalidOperation(msg))
         }
-    
+
     // ═══════════════════════════════════════════════════════════════
     // UTILITY OPERATIONS
     // ═══════════════════════════════════════════════════════════════
-    
+
     /// <summary>
     /// Drops the collection by deleting its table from the database.
     /// </summary>
@@ -3047,16 +3024,16 @@ module Collection =
     let drop (collection: Collection<'T>) : Task<unit> =
         task {
             let sql = $"DROP TABLE IF EXISTS {collection.Name}"
-            
+
             collection.Connection
             |> Db.newCommand sql
             |> Db.setParams []
             |> Db.exec
             |> ignore
-            
+
             return ()
         }
-    
+
     /// <summary>
     /// Validates a document against the collection's schema validator.
     /// </summary>
@@ -3166,13 +3143,7 @@ module Collection =
         | Some validator ->
             match validator doc with
             | Ok validDoc -> Ok validDoc
-            | Error errorMsg -> Error (FractalError.Validation(None, errorMsg))
+            | Error errorMsg -> Error(FractalError.Validation(None, errorMsg))
         | None ->
             // No validator defined, accept document
             Ok doc
-
-
-
-
-
-

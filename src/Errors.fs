@@ -1,5 +1,10 @@
 module FractalDb.Errors
 
+open System
+open System.Threading.Tasks
+open Donald
+open Microsoft.Data.Sqlite
+
 /// <summary>
 /// Represents all possible errors that can occur during FractalDb operations.
 /// </summary>
@@ -44,7 +49,7 @@ type FractalError =
     /// </code>
     /// </example>
     | Validation of field: option<string> * message: string
-    
+
     /// <summary>
     /// A unique constraint violation occurred when attempting to insert or update a document.
     /// </summary>
@@ -56,7 +61,7 @@ type FractalError =
     /// </code>
     /// </example>
     | UniqueConstraint of field: string * value: obj
-    
+
     /// <summary>
     /// An error occurred during query construction or execution.
     /// </summary>
@@ -69,7 +74,7 @@ type FractalError =
     /// </code>
     /// </example>
     | Query of message: string * sql: option<string>
-    
+
     /// <summary>
     /// A database connection error occurred.
     /// </summary>
@@ -81,7 +86,7 @@ type FractalError =
     /// </code>
     /// </example>
     | Connection of message: string
-    
+
     /// <summary>
     /// A transaction management error occurred.
     /// </summary>
@@ -93,7 +98,7 @@ type FractalError =
     /// </code>
     /// </example>
     | Transaction of message: string
-    
+
     /// <summary>
     /// A document with the specified ID was not found.
     /// </summary>
@@ -104,7 +109,7 @@ type FractalError =
     /// </code>
     /// </example>
     | NotFound of id: string
-    
+
     /// <summary>
     /// A JSON serialization or deserialization error occurred.
     /// </summary>
@@ -116,7 +121,7 @@ type FractalError =
     /// </code>
     /// </example>
     | Serialization of message: string
-    
+
     /// <summary>
     /// An operation was attempted that violates a precondition or invariant.
     /// </summary>
@@ -128,7 +133,7 @@ type FractalError =
     /// </code>
     /// </example>
     | InvalidOperation of message: string
-    
+
     /// <summary>
     /// Gets a human-readable error message describing the error.
     /// </summary>
@@ -148,17 +153,17 @@ type FractalError =
     /// </example>
     member this.Message =
         match this with
-        | Validation (Some field, msg) -> $"Validation failed for '{field}': {msg}"
-        | Validation (None, msg) -> $"Validation failed: {msg}"
-        | UniqueConstraint (field, value) -> $"Duplicate value for unique field '{field}': {value}"
-        | Query (msg, Some sql) -> $"Query error: {msg}. SQL: {sql}"
-        | Query (msg, None) -> $"Query error: {msg}"
+        | Validation(Some field, msg) -> $"Validation failed for '{field}': {msg}"
+        | Validation(None, msg) -> $"Validation failed: {msg}"
+        | UniqueConstraint(field, value) -> $"Duplicate value for unique field '{field}': {value}"
+        | Query(msg, Some sql) -> $"Query error: {msg}. SQL: {sql}"
+        | Query(msg, None) -> $"Query error: {msg}"
         | Connection msg -> $"Connection error: {msg}"
         | Transaction msg -> $"Transaction error: {msg}"
         | NotFound id -> $"Document not found: {id}"
         | Serialization msg -> $"Serialization error: {msg}"
         | InvalidOperation msg -> $"Invalid operation: {msg}"
-    
+
     /// <summary>
     /// Gets the category of the error for grouping and filtering.
     /// </summary>
@@ -239,7 +244,7 @@ type FractalResult<'T> = Result<'T, FractalError>
 /// - Utility functions for unwrapping results
 /// </remarks>
 module FractalResult =
-    
+
     /// <summary>
     /// Maps the success value of a FractalResult using the provided function.
     /// </summary>
@@ -264,7 +269,7 @@ module FractalResult =
     /// </code>
     /// </example>
     let map f result = Result.map f result
-    
+
     /// <summary>
     /// Applies a function that returns a FractalResult to the success value.
     /// </summary>
@@ -305,7 +310,7 @@ module FractalResult =
     /// </code>
     /// </example>
     let bind f result = Result.bind f result
-    
+
     /// <summary>
     /// Maps the error value of a FractalResult using the provided function.
     /// </summary>
@@ -329,7 +334,7 @@ module FractalResult =
     /// </code>
     /// </example>
     let mapError f result = Result.mapError f result
-    
+
     /// <summary>
     /// Converts an Option to a FractalResult, using NotFound error for None.
     /// </summary>
@@ -361,8 +366,8 @@ module FractalResult =
     let ofOption (id: string) (opt: option<'T>) : FractalResult<'T> =
         match opt with
         | Some v -> Ok v
-        | None -> Error (FractalError.NotFound id)
-    
+        | None -> Error(FractalError.NotFound id)
+
     /// <summary>
     /// Converts a FractalResult to an Option, discarding error information.
     /// </summary>
@@ -394,7 +399,7 @@ module FractalResult =
         match result with
         | Ok v -> Some v
         | Error _ -> None
-    
+
     /// <summary>
     /// Extracts the success value or raises an exception for errors.
     /// </summary>
@@ -433,7 +438,7 @@ module FractalResult =
         match result with
         | Ok v -> v
         | Error e -> failwith e.Message
-    
+
     /// <summary>
     /// Applies a function that returns a FractalResult to each element of a list,
     /// collecting the results. Stops at the first error.
@@ -480,14 +485,16 @@ module FractalResult =
     /// </code>
     /// </example>
     let traverse (f: 'T -> FractalResult<'U>) (xs: list<'T>) : FractalResult<list<'U>> =
-        let rec loop acc = function
-            | [] -> Ok (List.rev acc)
+        let rec loop acc =
+            function
+            | [] -> Ok(List.rev acc)
             | x :: rest ->
                 match f x with
                 | Ok y -> loop (y :: acc) rest
                 | Error e -> Error e
+
         loop [] xs
-    
+
     /// <summary>
     /// Converts a list of FractalResults into a FractalResult of a list.
     /// Stops at the first error.
@@ -525,9 +532,8 @@ module FractalResult =
     /// // Note: Ok 3 is never evaluated (short-circuit)
     /// </code>
     /// </example>
-    let sequence (results: list<FractalResult<'T>>) : FractalResult<list<'T>> =
-        traverse id results
-    
+    let sequence (results: list<FractalResult<'T>>) : FractalResult<list<'T>> = traverse id results
+
     /// <summary>
     /// Combines two FractalResults into a tuple.
     /// </summary>
@@ -564,5 +570,344 @@ module FractalResult =
     /// </example>
     let combine (r1: FractalResult<'T>) (r2: FractalResult<'U>) : FractalResult<'T * 'U> =
         match r1, r2 with
-        | Ok v1, Ok v2 -> Ok (v1, v2)
-        | Error e, _ | _, Error e -> Error e
+        | Ok v1, Ok v2 -> Ok(v1, v2)
+        | Error e, _
+        | _, Error e -> Error e
+
+/// <summary>
+/// Provides utilities for converting Donald exceptions to FractalError.
+/// </summary>
+///
+/// <remarks>
+/// Donald is the ADO.NET library used by FractalDb for database access.
+/// It throws four specific exception types with rich metadata:
+/// - DbConnectionException: Connection failures with connection string
+/// - DbExecutionException: Command execution failures with SQL statement
+/// - DbReaderException: Field reading failures with field name
+/// - DbTransactionException: Transaction failures with step information
+///
+/// This module maps these exceptions to appropriate FractalError cases,
+/// preserving the rich context for debugging and error handling.
+/// </remarks>
+module DonaldExceptions =
+
+    /// <summary>
+    /// Extracts the field name from a SQLite UNIQUE constraint error message.
+    /// </summary>
+    ///
+    /// <param name="errorMsg">The SQLite error message.</param>
+    ///
+    /// <returns>
+    /// The field name that caused the constraint violation, or "unknown" if parsing fails.
+    /// </returns>
+    ///
+    /// <remarks>
+    /// SQLite UNIQUE constraint error messages have the format:
+    /// - "UNIQUE constraint failed: table.field"
+    /// - "UNIQUE constraint failed: 'table'.'_field'"
+    ///
+    /// This function extracts the field name, removing table prefix, underscores, and quotes.
+    /// FractalDb uses leading underscores for internal JSON columns (e.g., _data).
+    /// </remarks>
+    ///
+    /// <example>
+    /// <code>
+    /// let msg1 = "UNIQUE constraint failed: users.email"
+    /// parseUniqueConstraintField msg1  // Returns "email"
+    ///
+    /// let msg2 = "UNIQUE constraint failed: 'users'.'_email'"
+    /// parseUniqueConstraintField msg2  // Returns "email"
+    ///
+    /// let msg3 = "Some other error"
+    /// parseUniqueConstraintField msg3  // Returns "unknown"
+    /// </code>
+    /// </example>
+    let parseUniqueConstraintField (errorMsg: string) : string =
+        if errorMsg.Contains("UNIQUE constraint failed:") then
+            let parts = errorMsg.Split([| ':' |], 2)
+
+            if parts.Length > 1 then
+                let tableDotField = parts.[1].Trim()
+                let fieldParts = tableDotField.Split('.')
+
+                if fieldParts.Length > 1 then
+                    // Remove leading underscore and any quotes from field name
+                    fieldParts.[1].Trim([| '_'; '\''; ' ' |])
+                else
+                    "unknown"
+            else
+                "unknown"
+        else
+            "unknown"
+
+    /// <summary>
+    /// Converts Donald exceptions to FractalError with rich context.
+    /// </summary>
+    ///
+    /// <param name="ex">The exception to convert.</param>
+    ///
+    /// <returns>
+    /// A FractalError with appropriate type and context from the Donald exception metadata.
+    /// </returns>
+    ///
+    /// <remarks>
+    /// <para>
+    /// This function handles all four Donald exception types and extracts their rich metadata:
+    /// </para>
+    /// <list type="bullet">
+    /// <item>
+    /// <term>DbConnectionException</term>
+    /// <description>Maps to Connection error with connection string context.</description>
+    /// </item>
+    /// <item>
+    /// <term>DbExecutionException</term>
+    /// <description>
+    /// Maps to Query error with SQL statement. Special handling for SQLite errors:
+    /// - Error code 19 (UNIQUE constraint) → UniqueConstraint error
+    /// - Error code 5 (BUSY/locked) → Connection error
+    /// </description>
+    /// </item>
+    /// <item>
+    /// <term>DbReaderException</term>
+    /// <description>Maps to Serialization error with field name context.</description>
+    /// </item>
+    /// <item>
+    /// <term>DbTransactionException</term>
+    /// <description>Maps to Transaction error with step information.</description>
+    /// </item>
+    /// <item>
+    /// <term>Other exceptions</term>
+    /// <description>Maps to Query error with generic message.</description>
+    /// </item>
+    /// </list>
+    /// </remarks>
+    ///
+    /// <example>
+    /// <code>
+    /// // Connection failure
+    /// try
+    ///     let conn = new SqliteConnection("invalid")
+    ///     conn.Open()
+    /// with
+    /// | ex ->
+    ///     let error = mapDonaldException ex
+    ///     // error = FractalError.Connection "Failed to open: ... (connection: invalid)"
+    ///
+    /// // UNIQUE constraint violation
+    /// try
+    ///     // Execute INSERT that violates unique constraint
+    ///     Db.exec connection "INSERT INTO users ..."
+    /// with
+    /// | ex ->
+    ///     let error = mapDonaldException ex
+    ///     // error = FractalError.UniqueConstraint ("email", box "duplicate@example.com")
+    ///
+    /// // Database locked
+    /// try
+    ///     // Try to write while another connection has exclusive lock
+    ///     Db.exec connection "INSERT INTO users ..."
+    /// with
+    /// | ex ->
+    ///     let error = mapDonaldException ex
+    ///     // error = FractalError.Connection "Database is locked: database is locked"
+    ///
+    /// // Field reading error
+    /// try
+    ///     // Try to read field with wrong type
+    ///     Db.query connection "SELECT * FROM users" (fun rd -> rd.ReadInt32 "name")
+    /// with
+    /// | ex ->
+    ///     let error = mapDonaldException ex
+    ///     // error = FractalError.Serialization "Failed to read field 'name': ..."
+    ///
+    /// // Transaction error
+    /// try
+    ///     // Transaction fails during commit
+    ///     transaction.Commit()
+    /// with
+    /// | ex ->
+    ///     let error = mapDonaldException ex
+    ///     // error = FractalError.Transaction "Commit: Transaction has already been committed or rolled back"
+    /// </code>
+    /// </example>
+    let mapDonaldException (ex: exn) : FractalError =
+        match ex with
+        | :? DbConnectionException as e ->
+            let connStr = e.ConnectionString |> Option.defaultValue "<unknown>"
+            FractalError.Connection $"{e.Message} (connection: {connStr})"
+
+        | :? DbExecutionException as e ->
+            let sql = e.Statement |> Option.defaultValue "<no statement>"
+
+            // Check for specific SQLite errors in InnerException
+            match e.InnerException with
+            | :? SqliteException as sqlEx when sqlEx.SqliteErrorCode = 19 ->
+                // SQLITE_CONSTRAINT (19) - UNIQUE constraint violation
+                let field = parseUniqueConstraintField sqlEx.Message
+                FractalError.UniqueConstraint(field, box "<value>")
+
+            | :? SqliteException as sqlEx when sqlEx.SqliteErrorCode = 5 ->
+                // SQLITE_BUSY (5) - Database is locked
+                FractalError.Connection $"Database is locked: {sqlEx.Message}"
+
+            | _ ->
+                // Generic execution error
+                FractalError.Query(e.Message, Some sql)
+
+        | :? DbReaderException as e ->
+            let field = e.FieldName |> Option.defaultValue "<unknown field>"
+            FractalError.Serialization $"Failed to read field '{field}': {e.Message}"
+
+        | :? DbTransactionException as e ->
+            let step = e.Step |> Option.map string |> Option.defaultValue "Unknown"
+            FractalError.Transaction $"{step}: {e.Message}"
+
+        | _ ->
+            // Catch-all for any other exceptions
+            FractalError.Query($"Unexpected database error: {ex.Message}", None)
+
+    /// <summary>
+    /// Wraps a synchronous database operation with consistent error handling.
+    /// </summary>
+    ///
+    /// <param name="operation">The database operation to execute.</param>
+    ///
+    /// <typeparam name="'T">The return type of the operation.</typeparam>
+    ///
+    /// <returns>
+    /// <c>Ok value</c> if the operation succeeds;
+    /// <c>Error fractalError</c> if a Donald exception occurs.
+    /// </returns>
+    ///
+    /// <remarks>
+    /// <para>
+    /// This function provides a standard way to wrap database operations that use Donald,
+    /// automatically converting all Donald exceptions to FractalError with rich context.
+    /// </para>
+    /// <para>
+    /// Use this wrapper for any synchronous database operation that could throw Donald exceptions.
+    /// It catches all four Donald exception types plus any unexpected exceptions.
+    /// </para>
+    /// <para>
+    /// For async operations, use <see cref="tryDbOperationAsync"/> instead.
+    /// </para>
+    /// </remarks>
+    ///
+    /// <example>
+    /// <code>
+    /// open FractalDb.Errors.DonaldExceptions
+    ///
+    /// // Wrap a Donald query operation
+    /// let getUserCount (conn: IDbConnection) : FractalResult&lt;int&gt; =
+    ///     tryDbOperation (fun () ->
+    ///         use cmd = conn.CreateCommand()
+    ///         cmd.CommandText <- "SELECT COUNT(*) FROM users"
+    ///         cmd.ExecuteScalar() :?> int64 |> int
+    ///     )
+    ///
+    /// // Wrap a Donald execution
+    /// let createTable (conn: IDbConnection) : FractalResult&lt;unit&gt; =
+    ///     tryDbOperation (fun () ->
+    ///         Db.exec conn "CREATE TABLE IF NOT EXISTS users (id TEXT PRIMARY KEY)"
+    ///     )
+    ///
+    /// // Usage
+    /// match getUserCount connection with
+    /// | Ok count -> printfn "Found %d users" count
+    /// | Error (FractalError.Connection msg) -> printfn "Connection failed: %s" msg
+    /// | Error (FractalError.Query (msg, sql)) -> printfn "Query failed: %s" msg
+    /// | Error e -> printfn "Error: %s" e.Message
+    /// </code>
+    /// </example>
+    let tryDbOperation<'T> (operation: unit -> 'T) : FractalResult<'T> =
+        try
+            Ok(operation ())
+        with
+        | :? DbConnectionException
+        | :? DbExecutionException
+        | :? DbReaderException
+        | :? DbTransactionException as ex -> Error(mapDonaldException ex)
+        | ex -> Error(FractalError.Query(ex.Message, None))
+
+    /// <summary>
+    /// Wraps an asynchronous database operation with consistent error handling.
+    /// </summary>
+    ///
+    /// <param name="operation">The async database operation to execute.</param>
+    ///
+    /// <typeparam name="'T">The return type of the operation.</typeparam>
+    ///
+    /// <returns>
+    /// A Task containing <c>Ok value</c> if the operation succeeds;
+    /// <c>Error fractalError</c> if a Donald exception occurs.
+    /// </returns>
+    ///
+    /// <remarks>
+    /// <para>
+    /// This function provides a standard way to wrap async database operations that use Donald,
+    /// automatically converting all Donald exceptions to FractalError with rich context.
+    /// </para>
+    /// <para>
+    /// Use this wrapper for any asynchronous database operation that could throw Donald exceptions.
+    /// It catches all four Donald exception types plus any unexpected exceptions.
+    /// </para>
+    /// <para>
+    /// For synchronous operations, use <see cref="tryDbOperation"/> instead.
+    /// </para>
+    /// </remarks>
+    ///
+    /// <example>
+    /// <code>
+    /// open System.Threading.Tasks
+    /// open FractalDb.Errors.DonaldExceptions
+    ///
+    /// // Wrap an async Donald query
+    /// let getUserCountAsync (conn: IDbConnection) : Task&lt;FractalResult&lt;int&gt;&gt; =
+    ///     tryDbOperationAsync (fun () ->
+    ///         task {
+    ///             use cmd = conn.CreateCommand()
+    ///             cmd.CommandText <- "SELECT COUNT(*) FROM users"
+    ///             let! result = cmd.ExecuteScalarAsync()
+    ///             return result :?> int64 |> int
+    ///         }
+    ///     )
+    ///
+    /// // Wrap Collection operations
+    /// let insertUserAsync (users: Collection&lt;User&gt;) (user: User)
+    ///     : Task&lt;FractalResult&lt;Document&lt;User&gt;&gt;&gt; =
+    ///     tryDbOperationAsync (fun () ->
+    ///         users.InsertOne(user)
+    ///     )
+    ///
+    /// // Usage with async workflows
+    /// task {
+    ///     match! getUserCountAsync connection with
+    ///     | Ok count -> printfn "Found %d users" count
+    ///     | Error (FractalError.Connection msg) -> printfn "Connection failed: %s" msg
+    ///     | Error (FractalError.Query (msg, sql)) ->
+    ///         printfn "Query failed: %s" msg
+    ///         sql |> Option.iter (printfn "SQL: %s")
+    ///     | Error e -> printfn "Error: %s" e.Message
+    /// }
+    ///
+    /// // Chaining operations
+    /// let insertAndCount (users: Collection&lt;User&gt;) (user: User) : Task&lt;FractalResult&lt;int&gt;&gt; =
+    ///     task {
+    ///         match! insertUserAsync users user with
+    ///         | Error e -> return Error e
+    ///         | Ok _ -> return! getUserCountAsync connection
+    ///     }
+    /// </code>
+    /// </example>
+    let tryDbOperationAsync<'T> (operation: unit -> Task<'T>) : Task<FractalResult<'T>> =
+        task {
+            try
+                let! result = operation ()
+                return Ok result
+            with
+            | :? DbConnectionException
+            | :? DbExecutionException
+            | :? DbReaderException
+            | :? DbTransactionException as ex -> return Error(mapDonaldException ex)
+            | ex -> return Error(FractalError.Query(ex.Message, None))
+        }
