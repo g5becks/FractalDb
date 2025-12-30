@@ -30,6 +30,7 @@
     <Compile Include="QueryOptionsTests.fs" />
     <Compile Include="DatabaseLifecycleTests.fs" />
     <Compile Include="ErrorRecoveryTests.fs" />
+    <Compile Include="TableBuilderTests.fs" />
     <Compile Include="Tests.fs" />
     <Compile Include="Program.fs" />
   </ItemGroup>
