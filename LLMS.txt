@@ -1,0 +1,3545 @@
+# FractalDb API Reference (for AI Agents)
+
+Summary:
+
+| Section            | Lines     | Content                                            |
+|--------------------|-----------|---------------------------------------------------|
+| Header             | 1-27      | This summary and grep instructions                |
+| Quick Reference    | 28-849    | Computation expressions, common patterns, examples |
+| Full API Reference | 850-3544  | Extracted XML docs for all modules                |
+| **Total**          | **3544**  | Complete documentation                            |
+
+Grepable patterns:
+
+```bash
+grep "^MODULE:" LLMS.txt              # Find all modules
+grep "^TYPE:" LLMS.txt                # Find all types
+grep "^FUNCTION:" LLMS.txt            # Find all functions (from XML docs)
+grep "^INSTANCE:" LLMS.txt            # Find instance method signatures
+grep -A5 "InsertOne" LLMS.txt         # Find specific API with context
+grep -i "transaction" LLMS.txt        # Search for any term
+```
+
+Documented items:
+- 28 modules
+- 50+ types
+- 151 functions
+- Parameters, return types, and examples included
+
+FractalDb is a lightweight F# document database built on SQLite.
+Uses computation expressions: `schema<'T> { }` for schemas, `query { }` for queries.
+
+================================================================================
+## IMPORTS
+================================================================================
+
+```fsharp
+open FractalDb              // Database, FractalDb class
+open FractalDb.Schema       // SqliteType, SchemaDef, FieldDef
+open FractalDb.Collection   // Collection module and types
+open FractalDb.QueryExpr    // query { } computation expression
+open FractalDb.Types        // Document<'T>, DocumentMeta
+open FractalDb.Errors       // FractalError, FractalResult
+open FractalDb.Operators    // Query<'T>, FieldOp, CompareOp (low-level)
+open FractalDb.Options      // QueryOptions, SortDirection
+```
+
+================================================================================
+## DATABASE
+================================================================================
+
+### FractalDb.Open
+Open or create a file-based database.
+```fsharp
+let db = FractalDb.Open("path.db")
+let db = FractalDb.Open("path.db", options)
+```
+
+### FractalDb.InMemory
+Create an in-memory database (data lost on close).
+```fsharp
+let db = FractalDb.InMemory()
+```
+
+### FractalDb.FromConnection
+Create FractalDb from existing SqliteConnection (for Donald interop).
+```fsharp
+let db = FractalDb.FromConnection(existingConnection)
+let db = FractalDb.FromConnection(existingConnection, options)
+```
+
+### db.Collection
+Get a typed collection with schema.
+```fsharp
+let users = db.Collection<User>("users", userSchema)
+```
+
+### db.Connection
+Access underlying IDbConnection for Donald interop.
+```fsharp
+let conn = db.Connection
+Db.exec conn "PRAGMA journal_mode=WAL" []
+```
+
+### db.Close
+Close database connection.
+```fsharp
+db.Close()
+```
+
+### db.Transact
+Transaction computation expression (auto commit/rollback).
+```fsharp
+let! result = db.Transact {
+    let! doc1 = users |> Collection.insertOne user1
+    let! doc2 = users |> Collection.insertOne user2
+    return (doc1.Id, doc2.Id)
+}
+```
+
+### DbOptions
+```fsharp
+type DbOptions = {
+    IdGenerator: unit -> string      // Default: UUID v7
+    EnableCache: bool                // Default: false
+    CommandBehavior: CommandBehavior // Default: SequentialAccess
+}
+let defaults = DbOptions.defaults
+```
+
+================================================================================
+## SCHEMA BUILDER
+================================================================================
+
+Use `schema<'T> { }` computation expression to define schemas.
+
+### SYNTAX
+```fsharp
+let userSchema = schema<User> {
+    field "name" SqliteType.Text                    // Basic field
+    indexed "age" SqliteType.Integer                // Indexed field
+    unique "email" SqliteType.Text                  // Unique indexed field
+    compoundIndex "idx_name_age" ["name"; "age"]    // Composite index
+    timestamps                                       // CreatedAt/UpdatedAt
+    validate (fun u -> if u.Age < 0 then Error "Invalid" else Ok u)
+}
+```
+
+### OPERATIONS
+
+OPERATION: field
+Define a basic field extracted from JSON.
+```fsharp
+field "name" SqliteType.Text
+field "name" SqliteType.Text (indexed=true)
+field "name" SqliteType.Text (nullable=true)
+field "city" SqliteType.Text (path="$.address.city")
+```
+
+OPERATION: indexed
+Define an indexed field for fast queries (28x speedup).
+```fsharp
+indexed "age" SqliteType.Integer
+indexed "status" SqliteType.Text
+```
+
+OPERATION: unique
+Define a unique indexed field (enforces no duplicates).
+```fsharp
+unique "email" SqliteType.Text
+unique "username" SqliteType.Text
+```
+
+OPERATION: compoundIndex
+Create multi-column index for multi-field queries.
+```fsharp
+compoundIndex "idx_author_date" ["authorId"; "publishedAt"]
+compoundIndex "idx_unique_combo" ["userId"; "roleId"] (unique=true)
+```
+
+OPERATION: timestamps
+Enable automatic CreatedAt/UpdatedAt tracking.
+```fsharp
+timestamps
+```
+
+OPERATION: validate
+Add validation function (runs before insert/update).
+```fsharp
+validate (fun user ->
+    if user.Age < 0 then Error "Age must be positive"
+    elif not (user.Email.Contains("@")) then Error "Invalid email"
+    else Ok user
+)
+```
+
+### SqliteType
+```fsharp
+SqliteType.Text      // Strings
+SqliteType.Integer   // 64-bit integers
+SqliteType.Real      // Floating-point
+SqliteType.Boolean   // Stored as 0/1
+SqliteType.Blob      // Binary data
+SqliteType.Numeric   // Flexible numeric
+```
+
+================================================================================
+## QUERY EXPRESSIONS
+================================================================================
+
+Use `query { }` computation expression for type-safe queries.
+
+### SYNTAX
+```fsharp
+let myQuery = query {
+    for user in users do
+    where (user.Age >= 18)
+    where (user.Active = true)
+    sortBy user.Name
+    take 10
+}
+let! results = users |> Collection.executeQuery myQuery
+```
+
+### OPERATIONS
+
+OPERATION: for ... in ... do
+Start a query over a collection.
+```fsharp
+for user in users do
+```
+
+OPERATION: where
+Filter documents (multiple where = AND).
+```fsharp
+where (user.Age >= 18)
+where (user.Active = true)
+where (user.Role = "admin" || user.Role = "mod")
+where (user.Name.Contains("Alice"))
+where (not (user.Status = "deleted"))
+```
+
+OPERATION: sortBy
+Sort ascending by field.
+```fsharp
+sortBy user.Name
+sortBy user.CreatedAt
+```
+
+OPERATION: sortByDescending
+Sort descending by field.
+```fsharp
+sortByDescending user.Score
+sortByDescending user.UpdatedAt
+```
+
+OPERATION: thenBy / thenByDescending
+Secondary sort.
+```fsharp
+sortBy user.Status
+thenByDescending user.CreatedAt
+```
+
+OPERATION: take
+Limit number of results.
+```fsharp
+take 10
+take 100
+```
+
+OPERATION: skip
+Skip first N results (pagination).
+```fsharp
+skip 20
+skip offset
+```
+
+OPERATION: select
+Project to different type/field.
+```fsharp
+select user.Email
+select { Name = user.Name; Email = user.Email }
+```
+
+OPERATION: count
+Count matching documents.
+```fsharp
+count
+```
+
+OPERATION: exists
+Check if any match predicate.
+```fsharp
+exists (user.Role = "admin")
+```
+
+OPERATION: head
+Get first document (throws if empty).
+```fsharp
+head
+```
+
+OPERATION: headOrDefault
+Get first document or None.
+```fsharp
+headOrDefault
+```
+
+### WHERE PREDICATES
+
+COMPARISON:
+```fsharp
+user.Field = value       // Equal
+user.Field <> value      // Not equal
+user.Field > value       // Greater than
+user.Field >= value      // Greater or equal
+user.Field < value       // Less than
+user.Field <= value      // Less or equal
+```
+
+LOGICAL:
+```fsharp
+pred1 && pred2           // AND
+pred1 || pred2           // OR
+not pred                 // NOT
+```
+
+STRING:
+```fsharp
+user.Name.Contains("text")      // Contains substring
+user.Name.StartsWith("prefix")  // Starts with
+user.Name.EndsWith("suffix")    // Ends with
+```
+
+NESTED FIELDS:
+```fsharp
+user.Address.City = "New York"
+user.Profile.Settings.Theme = "dark"
+```
+
+================================================================================
+## COLLECTION OPERATIONS
+================================================================================
+
+FractalDb provides TWO equivalent API styles:
+
+### API Style 1: Instance Methods (Object-Oriented)
+```fsharp
+let! result = users.InsertOne(doc)
+let! doc = users.FindById("id")
+let! updated = users.UpdateById("id", fun u -> { u with Age = u.Age + 1 })
+```
+
+### API Style 2: Module Functions (Functional/Pipeline)
+```fsharp
+let! result = users |> Collection.insertOne doc
+let! doc = users |> Collection.findById "id"
+let! updated = users |> Collection.updateById "id" (fun u -> { u with Age = u.Age + 1 })
+```
+
+Both styles are equivalent. Use instance methods for discoverability (IntelliSense),
+use module functions for pipelines and composition.
+
+### INSERT
+
+INSTANCE: users.InsertOne(doc)
+MODULE: Collection.insertOne doc users
+Insert single document, returns Document<'T> with generated ID.
+```fsharp
+// Instance method
+let! result = users.InsertOne { Name = "Alice"; Email = "a@test.com"; Age = 30; Active = true }
+
+// Module function (pipeline)
+let! result = users |> Collection.insertOne { Name = "Alice"; Email = "a@test.com"; Age = 30; Active = true }
+
+match result with
+| Ok doc -> printfn "Created: %s" doc.Id
+| Error err -> printfn "Error: %s" err.Message
+```
+
+INSTANCE: users.InsertMany(docs)
+MODULE: Collection.insertMany docs users
+Insert multiple documents in transaction.
+```fsharp
+let! result = users.InsertMany [user1; user2; user3]
+// or: let! result = users |> Collection.insertMany [user1; user2; user3]
+match result with
+| Ok batch -> printfn "Inserted: %d" batch.InsertedCount
+| Error err -> printfn "Error: %s" err.Message
+```
+
+### FIND
+
+INSTANCE: users.FindById(id)
+MODULE: Collection.findById id users
+Find document by ID.
+```fsharp
+let! doc = users.FindById("some-id")
+// or: let! doc = users |> Collection.findById "some-id"
+match doc with
+| Some user -> printfn "Found: %s" user.Data.Name
+| None -> printfn "Not found"
+```
+
+INSTANCE: users.FindOne(filter)
+MODULE: Collection.findOne filter users
+Find first matching document.
+```fsharp
+let! doc = users.FindOne(Query.Empty)
+// or: let! doc = users |> Collection.findOne Query.Empty
+```
+
+INSTANCE: users.Find(filter)
+MODULE: Collection.find filter users
+Find all matching documents.
+```fsharp
+let! docs = users.Find(Query.Empty)
+// or: let! docs = users |> Collection.find Query.Empty
+```
+
+MODULE: Collection.executeQuery query users
+Execute query expression.
+```fsharp
+let q = query { for u in users do where (u.Active = true) take 10 }
+let! results = users |> Collection.executeQuery q
+```
+
+INSTANCE: users.Count(filter)
+MODULE: Collection.count filter users
+Count matching documents.
+```fsharp
+let! total = users.Count(Query.Empty)
+// or: let! total = users |> Collection.count Query.Empty
+```
+
+INSTANCE: users.EstimatedCount()
+MODULE: Collection.estimatedCount users
+Fast count (no filter, uses table stats).
+```fsharp
+let! approxCount = users.EstimatedCount()
+// or: let! approxCount = users |> Collection.estimatedCount
+```
+
+### UPDATE
+
+INSTANCE: users.UpdateById(id, fn)
+MODULE: Collection.updateById id fn users
+Update document by ID with transform function.
+```fsharp
+let! updated = users.UpdateById("id", fun u -> { u with Age = u.Age + 1 })
+// or: let! updated = users |> Collection.updateById "id" (fun u -> { u with Age = u.Age + 1 })
+match updated with
+| Ok (Some doc) -> printfn "Updated: %s" doc.Data.Name
+| Ok None -> printfn "Not found"
+| Error err -> printfn "Error: %s" err.Message
+```
+
+INSTANCE: users.UpdateOne(filter, fn)
+MODULE: Collection.updateOne filter fn users
+Update first matching document.
+```fsharp
+let! updated = users.UpdateOne(query, fun u -> { u with Status = "active" })
+// or: let! updated = users |> Collection.updateOne query (fun u -> { u with Status = "active" })
+```
+
+INSTANCE: users.UpdateMany(filter, fn)
+MODULE: Collection.updateMany filter fn users
+Update all matching documents.
+```fsharp
+let! result = users.UpdateMany(query, fun u -> { u with Verified = true })
+// or: let! result = users |> Collection.updateMany query (fun u -> { u with Verified = true })
+match result with
+| Ok ur -> printfn "Modified: %d" ur.ModifiedCount
+| Error err -> printfn "Error: %s" err.Message
+```
+
+INSTANCE: users.ReplaceOne(filter, doc)
+MODULE: Collection.replaceOne filter doc users
+Replace first matching document.
+```fsharp
+let! replaced = users.ReplaceOne(query, newUserData)
+// or: let! replaced = users |> Collection.replaceOne query newUserData
+```
+
+### DELETE
+
+INSTANCE: users.DeleteById(id)
+MODULE: Collection.deleteById id users
+Delete document by ID.
+```fsharp
+let! deleted = users.DeleteById("id")
+// or: let! deleted = users |> Collection.deleteById "id"
+if deleted then printfn "Deleted" else printfn "Not found"
+```
+
+INSTANCE: users.DeleteOne(filter)
+MODULE: Collection.deleteOne filter users
+Delete first matching document.
+```fsharp
+let! deleted = users.DeleteOne(query)
+// or: let! deleted = users |> Collection.deleteOne query
+```
+
+INSTANCE: users.DeleteMany(filter)
+MODULE: Collection.deleteMany filter users
+Delete all matching documents.
+```fsharp
+let! result = users.DeleteMany(query)
+// or: let! result = users |> Collection.deleteMany query
+printfn "Deleted: %d" result.DeletedCount
+```
+
+### ATOMIC FIND-AND-MODIFY
+
+INSTANCE: users.FindOneAndUpdate(filter, fn, options)
+MODULE: Collection.findOneAndUpdate filter fn options users
+Atomically find and update, return document.
+```fsharp
+let options = { Sort = []; ReturnDocument = ReturnDocument.After; Upsert = false }
+let! doc = users.FindOneAndUpdate(query, updateFn, options)
+// or: let! doc = users |> Collection.findOneAndUpdate query updateFn options
+```
+
+INSTANCE: users.FindOneAndReplace(filter, doc, options)
+MODULE: Collection.findOneAndReplace filter doc options users
+Atomically find and replace, return document.
+```fsharp
+let! doc = users.FindOneAndReplace(query, newData, options)
+// or: let! doc = users |> Collection.findOneAndReplace query newData options
+```
+
+INSTANCE: users.FindOneAndDelete(filter)
+MODULE: Collection.findOneAndDelete filter users
+Atomically find and delete, return deleted document.
+```fsharp
+let! doc = users.FindOneAndDelete(query)
+// or: let! doc = users |> Collection.findOneAndDelete query
+```
+
+### SEARCH
+
+INSTANCE: users.Search(text, fields)
+MODULE: Collection.search text fields users
+Full-text search across fields.
+```fsharp
+let! results = users.Search("alice", ["name"; "email"])
+// or: let! results = users |> Collection.search "alice" ["name"; "email"]
+```
+
+INSTANCE: users.Distinct(field, filter)
+MODULE: Collection.distinct field filter users
+Get distinct values for field.
+```fsharp
+let! cities = users.Distinct<string>("address.city", Query.Empty)
+// or: let! cities = users |> Collection.distinct "address.city" Query.Empty
+```
+
+### UTILITY
+
+INSTANCE: users.Drop()
+MODULE: Collection.drop users
+Drop the collection (delete table).
+```fsharp
+let! () = users.Drop()
+// or: let! () = users |> Collection.drop
+```
+
+INSTANCE: users.Validate(doc)
+MODULE: Collection.validate doc users
+Validate document against schema.
+```fsharp
+match users.Validate(myDoc) with
+| Ok validDoc -> // document is valid
+| Error err -> // validation failed
+```
+
+================================================================================
+## TYPES
+================================================================================
+
+### Document<'T>
+Wrapper for user data with metadata.
+```fsharp
+type Document<'T> = {
+    Id: string          // Auto-generated UUID v7
+    Data: 'T            // User's document data
+    CreatedAt: int64    // Unix ms timestamp
+    UpdatedAt: int64    // Unix ms timestamp
+}
+```
+
+### InsertManyResult<'T>
+Result of batch insert.
+```fsharp
+type InsertManyResult<'T> = {
+    Documents: list<Document<'T>>
+    InsertedCount: int
+}
+```
+
+### UpdateResult
+Result of updateMany.
+```fsharp
+type UpdateResult = {
+    MatchedCount: int
+    ModifiedCount: int
+}
+```
+
+### DeleteResult
+Result of deleteMany.
+```fsharp
+type DeleteResult = {
+    DeletedCount: int
+}
+```
+
+### ReturnDocument
+For find-and-modify operations.
+```fsharp
+ReturnDocument.Before   // Return state before modification
+ReturnDocument.After    // Return state after modification
+```
+
+### SortDirection
+```fsharp
+SortDirection.Asc       // Ascending
+SortDirection.Desc      // Descending
+```
+
+================================================================================
+## ERRORS
+================================================================================
+
+### FractalError
+Discriminated union for all error types.
+```fsharp
+type FractalError =
+    | Validation of field: option<string> * message: string
+    | UniqueConstraint of field: string * value: obj
+    | Query of message: string * sql: option<string>
+    | Connection of message: string
+    | Transaction of message: string
+    | NotFound of id: string
+    | Serialization of message: string
+    | InvalidOperation of message: string
+```
+
+### Error Handling
+```fsharp
+match result with
+| Ok doc -> printfn "Success: %s" doc.Id
+| Error (FractalError.Validation (field, msg)) -> printfn "Validation: %s" msg
+| Error (FractalError.UniqueConstraint (field, _)) -> printfn "Duplicate: %s" field
+| Error (FractalError.NotFound id) -> printfn "Not found: %s" id
+| Error err -> printfn "Error: %s" err.Message
+```
+
+### FractalResult<'T>
+Type alias for Result<'T, FractalError>.
+```fsharp
+type FractalResult<'T> = Result<'T, FractalError>
+```
+
+================================================================================
+## TRANSACTIONS
+================================================================================
+
+### db.Transact { }
+Computation expression for transactions.
+- Auto commits on Ok
+- Auto rolls back on Error or exception
+
+```fsharp
+let! result = db.Transact {
+    let! user = users |> Collection.insertOne userData
+    let! profile = profiles |> Collection.insertOne { UserId = user.Id; Bio = "" }
+    return (user, profile)
+}
+
+match result with
+| Ok (user, profile) -> printfn "Committed"
+| Error err -> printfn "Rolled back: %s" err.Message
+```
+
+### Explicit Rollback
+```fsharp
+let! result = db.Transact {
+    let! doc = collection |> Collection.insertOne data
+    if doc.Data.Amount > 10000 then
+        return! Task.FromResult(Error(FractalError.Validation(None, "Too large")))
+    else
+        return doc
+}
+```
+
+### IMPORTANT: Avoid Nested Transactions
+SQLite doesn't support nested transactions. Don't wrap insertMany in Transact:
+```fsharp
+// WRONG - nested transaction error
+let! result = db.Transact {
+    let! batch = collection |> Collection.insertMany items
+    return batch
+}
+
+// CORRECT - insertMany has internal transaction
+let! result = collection |> Collection.insertMany items
+```
+
+================================================================================
+## UTILITY MODULES
+================================================================================
+
+### IdGenerator
+```fsharp
+IdGenerator.generate()              // Generate UUID v7
+IdGenerator.isEmptyOrDefault(id)    // Check if empty/default
+IdGenerator.isValid(id)             // Validate GUID format
+```
+
+### Timestamp
+```fsharp
+Timestamp.now()                     // Current Unix ms
+Timestamp.toDateTimeOffset(ts)      // Convert to DateTimeOffset
+Timestamp.fromDateTimeOffset(dto)   // Convert from DateTimeOffset
+Timestamp.isInRange(start, end, ts) // Check if in range
+```
+
+### Document
+```fsharp
+Document.create(data)               // Create with new ID
+Document.createWithId(id, data)     // Create with specific ID
+Document.update(fn, doc)            // Transform data, update timestamp
+Document.map(fn, doc)               // Transform data, preserve timestamp
+```
+
+### FractalResult
+```fsharp
+FractalResult.map(fn, result)       // Map success value
+FractalResult.bind(fn, result)      // Chain operations
+FractalResult.mapError(fn, result)  // Map error value
+FractalResult.ofOption(id, opt)     // Option to Result
+FractalResult.toOption(result)      // Result to Option
+FractalResult.getOrRaise(result)    // Unwrap or throw
+FractalResult.traverse(fn, list)    // Apply to list, collect
+FractalResult.sequence(list)        // Collect list of Results
+FractalResult.combine(r1, r2)       // Combine two Results
+```
+
+================================================================================
+## COMMON PATTERNS
+================================================================================
+
+### Complete Example
+```fsharp
+open FractalDb
+open FractalDb.Schema
+open FractalDb.Collection
+open FractalDb.QueryExpr
+
+type User = { Name: string; Email: string; Age: int; Active: bool }
+
+let userSchema = schema<User> {
+    field "name" SqliteType.Text
+    unique "email" SqliteType.Text
+    indexed "age" SqliteType.Integer
+    timestamps
+    validate (fun u -> if u.Age < 0 then Error "Invalid age" else Ok u)
+}
+
+let db = FractalDb.Open("app.db")
+let users = db.Collection<User>("users", userSchema)
+
+// Insert
+task {
+    let! result = users |> Collection.insertOne {
+        Name = "Alice"; Email = "alice@example.com"; Age = 30; Active = true
+    }
+    match result with
+    | Ok doc -> printfn "Created: %s" doc.Id
+    | Error err -> printfn "Error: %s" err.Message
+}
+
+// Query
+task {
+    let q = query {
+        for user in users do
+        where (user.Age >= 18)
+        where (user.Active = true)
+        sortBy user.Name
+        take 10
+    }
+    let! results = users |> Collection.executeQuery q
+    for user in results do
+        printfn "%s (%d)" user.Data.Name user.Data.Age
+}
+
+// Update
+task {
+    let! updated = users |> Collection.updateById "id" (fun u -> { u with Age = u.Age + 1 })
+    match updated with
+    | Some doc -> printfn "Updated: %s" doc.Data.Name
+    | None -> printfn "Not found"
+}
+
+// Transaction
+task {
+    let! result = db.Transact {
+        let! u1 = users |> Collection.insertOne user1
+        let! u2 = users |> Collection.insertOne user2
+        return [u1.Id; u2.Id]
+    }
+    match result with
+    | Ok ids -> printfn "Committed: %A" ids
+    | Error err -> printfn "Rolled back: %s" err.Message
+}
+
+db.Close()
+```
+
+### Pagination
+```fsharp
+let getPage pageNum pageSize = query {
+    for user in users do
+    sortBy user.Name
+    skip ((pageNum - 1) * pageSize)
+    take pageSize
+}
+```
+
+### Search with Filters
+```fsharp
+let searchActive term = query {
+    for user in users do
+    where (user.Name.Contains(term))
+    where (user.Active = true)
+    sortByDescending user.CreatedAt
+    take 50
+}
+```
+
+### Upsert Pattern
+```fsharp
+let upsertUser email userData =
+    let options = { Sort = []; ReturnDocument = ReturnDocument.After; Upsert = true }
+    let q = query { for u in users do where (u.Email = email) }
+    users |> Collection.findOneAndReplace q userData options
+```
+
+================================================================================
+## PERFORMANCE
+================================================================================
+
+| Operation | Throughput |
+|-----------|------------|
+| Single insert | ~2,700 ops/sec |
+| Batch insert (1000) | ~71,400 docs/sec |
+| Indexed query | ~72,000 queries/sec |
+| Non-indexed query | ~2,500 queries/sec |
+| Index speedup | 28x faster |
+| Transaction batch | 4x faster than individual |
+
+### Best Practices
+- Index fields used in where clauses
+- Use compoundIndex for multi-field queries
+- Use insertMany for bulk inserts (6x faster)
+- Use transactions for related writes (4x faster)
+- Avoid nested transactions (insertMany has internal transaction)
+
+
+================================================================================
+## FULL API REFERENCE (XML Documentation)
+================================================================================
+
+Grepable patterns:
+  grep 'TYPE:' LLMS.txt          # Find all types
+  grep 'FUNCTION:' LLMS.txt      # Find all functions
+  grep 'MODULE:' LLMS.txt        # Find all modules
+  grep -A5 'insertOne' LLMS.txt  # Find specific function
+
+--------------------------------------------------------------------------------
+MODULE: FractalDb
+--------------------------------------------------------------------------------
+
+TYPE: ArrayOp
+  Array-specific operators for querying list/array fields.
+  Note: ArrayOp provides operations for array fields including: - Contains all values (All) - Array size check (Size) - Element matching (ElemMatch, Index) Only valid for array-typed fields.
+
+TYPE: Builders
+  Computation expression builders for FractalDb schema, options, and transaction construction. Provides F#-idiomatic DSL for building schemas and query options.
+  Note: This module provides computation expression builders that make it easy to construct FractalDb schemas and options using a fluent, type-safe syntax. The builders are designed to work seamlessly with F#'s computation expression syntax. All builders are auto-opened for convenience, making them available without explicit module qualification.
+
+TYPE: Collection
+  A typed collection of documents in the database.
+
+TYPE: CompareOp
+  Comparison operators for querying document fields by value.
+  Note: CompareOp provides type-safe comparison operations including: - Equality/inequality (Eq, Ne) - Ordered comparisons (Gt, Gte, Lt, Lte) - Set membership (In, NotIn) The type parameter ensures compile-time type safety for comparisons.
+
+TYPE: CursorSpec
+  Cursor specification for pagination.
+  Note: CursorSpec enables cursor-based pagination by specifying: - Field to use as cursor (must be sortable and indexed) - Last value seen in previous page More efficient than offset-based pagination for large datasets.
+
+TYPE: Database
+  FractalDb database class providing the main API for database operations.
+
+TYPE: DbOptions
+  Configuration options for opening a database.
+  Note: DbOptions controls database behavior including: - AutoCheckpoint: SQLite WAL checkpoint interval - BusyTimeout: Timeout for lock acquisition - CacheSize: Page cache size - JournalMode: SQLite journal mode (WAL recommended) - Synchronous: Durability vs. performance tradeoff Use DbOptions.Default for sensible defaults optimized for FractalDb.
+
+TYPE: DeleteResult
+  Result of a delete operation.
+  Note: Contains: - DeletedCount: Number of documents deleted
+
+TYPE: Document
+  A document wrapper that combines user data with metadata.
+  Note: Document<'T> wraps user data with automatic metadata management. The Meta field contains ID, version, and timestamps managed by the database.
+
+TYPE: DocumentMeta
+  Metadata for a document including ID, version, and timestamps.
+  Note: DocumentMeta is automatically managed by FractalDb. All documents have: - A unique ID (ULID format) - A version number for optimistic concurrency - Creation and update timestamps (Unix milliseconds)
+
+TYPE: ExistsOp
+  Field existence check operator.
+  Note: ExistsOp checks whether a field is present in a document, independent of its value. This is distinct from null checks - a field can exist with a null value, or be completely absent from the JSON document.
+
+TYPE: FieldDef
+  Field definition for schema specification.
+  Note: FieldDef describes a field in a document schema including: - Field name (dot notation for nested fields) - SQLite column type - Optional constraints (unique, not null) Used in SchemaDef to define document structure.
+
+TYPE: FieldOp
+  Type-erased wrapper for field operations.
+  Note: FieldOp boxes generic operators to enable storage in a uniform query structure. Contains: - Compare: Boxed CompareOp<'T> - String: StringOp - Array: Boxed ArrayOp<'T> - Exist: ExistsOp Type safety is enforced at query construction time.
+
+TYPE: FindAndModifyOptions
+  Options for atomic find-and-modify operations.
+  Note: Controls behavior of findOneAndUpdate/Replace/Delete operations including: - Upsert: Whether to insert if no match found - ReturnDocument: Before or After modification - Sort: Which document to select if multiple matches
+
+TYPE: FindOptions
+  Options for find operations.
+  Note: Alias for QueryOptions<'T> with additional find-specific behavior.
+
+TYPE: FractalDb
+  Main database class for FractalDb operations.
+  Note: FractalDb provides: - Database lifecycle (Open, InMemory, Close) - Collection access with automatic schema management - ACID transactions - Connection management Usage pattern: 1. Open database (file or in-memory) 2. Get collections with schemas 3. Perform operations 4. Close database when done (or use 'use' for automatic disposal)
+
+TYPE: FractalError
+  Error types that can occur during FractalDb operations.
+
+TYPE: FractalResult
+  Result type alias for FractalDb operations.
+  Note: FractalResult<'T> is an alias for Result<'T, FractalError>. All FractalDb operations that can fail return this type instead of throwing exceptions. This enables: - Explicit error handling - Composable error handling with Result combinators - Exhaustive pattern matching
+
+TYPE: IndexDef
+  Index definition for optimizing queries.
+  Note: IndexDef creates an index on one or more fields to improve query performance. Supports: - Single or multi-column indexes - Unique constraints - Custom index names
+
+TYPE: InsertManyResult
+  Result of inserting multiple documents.
+  Note: Contains: - InsertedIds: List of generated document IDs - Documents: Full documents with metadata
+
+TYPE: Query
+  Complete query structure for building complex document queries.
+  Note: Query<'T> is the central type for expressing document queries. Supports: - Field-level operations - Logical combinators (And, Or, Nor, Not) - Empty query (matches all) Queries are immutable and composable. Use QueryExpr computation expression for ergonomic construction with quotations.
+
+TYPE: QueryOptions
+  Query options for controlling query execution and result formatting.
+  Note: QueryOptions controls: - Pagination (limit, skip, cursor) - Sorting (field and direction) - Projection (field selection) - Text search (FTS5) All fields are optional with sensible defaults.
+
+TYPE: ReturnDocument
+  Specifies whether to return the document before or after modification.
+  Note: Used in atomic operations (findOneAndUpdate, findOneAndReplace) to control which version of the document is returned.
+
+TYPE: SchemaDef
+  Complete schema definition for a collection.
+  Note: SchemaDef describes the structure of documents in a collection including: - Field definitions (optional) - Indexes for query optimization Can be inferred from F# type or explicitly defined.
+
+TYPE: SortDirection
+  Sort direction for query results.
+  Note: Specifies ascending or descending order for sort operations. Used in QueryOptions.Sort field.
+
+TYPE: SqliteType
+  SQLite column types for schema definitions.
+  Note: SqliteType maps F# types to SQLite storage classes: - Integer: 64-bit signed integers - Real: 64-bit IEEE floating point - Text: UTF-8 text strings - Blob: Binary data - Numeric: Mixed numeric types Used in FieldDef for explicit schema definitions.
+
+TYPE: StringOp
+  String pattern matching operators for querying text fields.
+  Note: StringOp provides SQL-like pattern matching including: - LIKE/ILIKE patterns with wildcards (%, _) - Convenience operators (Contains, StartsWith, EndsWith) LIKE is case-sensitive, ILIKE is case-insensitive.
+
+TYPE: TableBuilder
+  Internal module for generating SQLite DDL statements (CREATE TABLE, CREATE INDEX). Used by Collection to ensure tables and indexes exist with proper schema.
+
+TYPE: TextSearchSpec
+  Text search specification for full-text queries.
+  Note: TextSearchSpec defines full-text search parameters including: - Search terms - Fields to search - Case sensitivity Requires FTS5 extension and appropriate indexes.
+
+TYPE: Transaction
+  Module providing transaction management for FractalDb database operations.
+
+TYPE: UpdateResult
+  Result of an update operation.
+  Note: Contains: - MatchedCount: Number of documents matching the query - ModifiedCount: Number of documents actually modified ModifiedCount may be less than MatchedCount if some documents already had the target values.
+
+--------------------------------------------------------------------------------
+MODULE: FractalDb.Builders
+--------------------------------------------------------------------------------
+
+TYPE: OptionsBuilder
+  Computation expression builder for constructing query options. Provides custom operations for sorting, pagination, field projection, and search.
+
+TYPE: OptionsBuilderInstance
+  Auto-opened module providing global options builder instances. Makes options builder available without explicit module qualification.
+  Note: This module is automatically opened when you open FractalDb.Builders or FractalDb, making the 'options<'T>' builder available for immediate use in computation expressions.
+
+TYPE: SchemaBuilder
+  Computation expression builder for constructing type-safe schema definitions. Provides custom operations for defining fields, indexes, timestamps, and validation.
+
+TYPE: SchemaBuilderInstance
+  Auto-opened module providing global schema builder instances. Makes schema builder available without explicit module qualification.
+  Note: This module is automatically opened when you open FractalDb.Builders or FractalDb, making the 'schema<'T>' builder available for immediate use in computation expressions.
+
+TYPE: TransactionBuilder
+  Result-aware computation expression builder for database transactions. Provides automatic commit/rollback based on Result values within a transaction scope.
+
+--------------------------------------------------------------------------------
+MODULE: FractalDb.Builders.FractalDb
+--------------------------------------------------------------------------------
+
+FUNCTION: get_Transact
+  Creates a TransactionBuilder for Result-aware transactional operations.
+  @returns: A TransactionBuilder instance bound to this database.
+  Example:
+    // Transfer balance between users atomically
+    let! result = db.Transact {
+    let users = db.Collection<User>("users", userSchema)
+    let! sender = users |> Collection.findById senderId
+    let! receiver = users |> Collection.findById receiverId
+    // Validation
+
+--------------------------------------------------------------------------------
+MODULE: FractalDb.Builders.OptionsBuilder
+--------------------------------------------------------------------------------
+
+FUNCTION: CursorAfter
+  Set cursor for forward pagination (results after specified ID).
+  @param state: The current options state.
+  @param id: The document ID to start after.
+  @returns: New options with cursor set for forward pagination.
+  Example:
+    // First page
+    let page1 = options<User> {
+    sortAsc "name"
+    limit 20
+    }
+    // Next page (after last ID from page1)
+    let page2 = options<User> {
+
+FUNCTION: CursorBefore
+  Set cursor for backward pagination (results before specified ID).
+  @param state: The current options state.
+  @param id: The document ID to start before.
+  @returns: New options with cursor set for backward pagination.
+  Example:
+    // Previous page (before first ID from current page)
+    let prevPage = options<User> {
+    sortAsc "name"
+    cursorBefore firstIdFromCurrentPage
+    limit 20
+    }
+
+FUNCTION: Limit
+  Limit the number of results returned.
+  @param state: The current options state.
+  @param n: The maximum number of results to return.
+  @returns: New options with limit set.
+  Example:
+    // First page (items 0-19)
+    let page1 = options<User> {
+    sortAsc "name"
+    limit 20
+    }
+    // Second page (items 20-39)
+    let page2 = options<User> {
+
+FUNCTION: Omit
+  Omit specific fields from results (inverse projection).
+  @param state: The current options state.
+  @param fields: List of field names to exclude.
+  @returns: New options with field omission set.
+  Example:
+    // Return all fields except password and internalNotes
+    let opts = options<User> {
+    omit ["password"; "internalNotes"]
+    sortAsc "name"
+    }
+
+FUNCTION: Search
+  Enable full-text search across specified fields.
+  @param state: The current options state.
+  @param text: The search text/query.
+  @param fields: List of field names to search.
+  @returns: New options with search specification set.
+  Example:
+    // Search for "Smith" in name and email fields
+    let opts = options<User> {
+    search "Smith" ["name"; "email"]
+    sortAsc "name"
+    limit 50
+    }
+    // Combine with query
+
+FUNCTION: Select
+  Select only specific fields to include in results (projection).
+  @param state: The current options state.
+  @param fields: List of field names to include.
+  @returns: New options with field projection set.
+  Example:
+    // Return only name and email fields
+    let opts = options<User> {
+    select ["name"; "email"]
+    sortAsc "name"
+    }
+    // Result documents will only contain id, name, and email
+
+FUNCTION: Skip
+  Skip a number of results (offset pagination).
+  @param state: The current options state.
+  @param n: The number of results to skip.
+  @returns: New options with skip offset set.
+  Example:
+    // Page 3 of results (skip first 40, take next 20)
+    let page3 = options<Product> {
+    sortDesc "popularity"
+    skip 40
+    limit 20
+    }
+
+FUNCTION: SortAsc
+  Sort by a field in ascending order (shorthand for sortBy with Ascending).
+  @param state: The current options state.
+  @param field: The field name to sort by.
+  @returns: New options with ascending sort added.
+  Example:
+    let opts = options<User> {
+    sortAsc "lastName"
+    sortAsc "firstName"
+    }
+    // Results sorted by lastName, then firstName (both ascending)
+
+FUNCTION: SortBy
+  Sort by a field with specified direction.
+  @param state: The current options state.
+  @param field: The field name to sort by.
+  @param dir: The sort direction (Ascending or Descending).
+  @returns: New options with the sort specification added.
+  Example:
+    let opts = options<Product> {
+    sortBy "category" SortDirection.Ascending
+    sortBy "price" SortDirection.Descending
+    }
+    // Sorts by category (asc), then by price (desc) within each category
+
+FUNCTION: SortDesc
+  Sort by a field in descending order (shorthand for sortBy with Descending).
+  @param state: The current options state.
+  @param field: The field name to sort by.
+  @returns: New options with descending sort added.
+  Example:
+    let recentUsers = options<User> {
+    sortDesc "createdAt"
+    limit 10
+    }
+    // Returns 10 most recently created users
+
+FUNCTION: Yield
+  Yield operation for computation expression (returns empty options).
+  @param x: The unit value (ignored).
+  @returns: Empty query options.
+
+FUNCTION: Zero
+  Zero operation for computation expression (returns empty options).
+  @returns: Empty query options.
+
+--------------------------------------------------------------------------------
+MODULE: FractalDb.Builders.OptionsBuilderInstance
+--------------------------------------------------------------------------------
+
+FUNCTION: options
+  Global OptionsBuilder instance for computation expressions. Use this in 'options { }' computation expressions to build query options.
+  Example:
+    type Product = { Name: string; Category: string; Price: int }
+    // Type parameter inferred from context
+    let productOptions = options<Product> {
+    sortDesc "price"
+    limit 10
+    select ["name"; "price"]
+    }
+
+--------------------------------------------------------------------------------
+MODULE: FractalDb.Builders.SchemaBuilder
+--------------------------------------------------------------------------------
+
+FUNCTION: CompoundIndex
+  Define a compound index spanning multiple fields. Creates an index that includes multiple columns for efficient multi-field queries.
+  @param state: The current schema state.
+  @param name: The index name (must be unique within the collection).
+  @param fields: The list of field names to include in the index (in order).
+  @param unique: Whether the combination of fields must be unique (default: false).
+  @returns: A new schema state with the compound index added.
+  Example:
+    let productSchema = schema<Product> {
+    field "category" SqliteType.Text
+    field "name" SqliteType.Text
+    field "price" SqliteType.Integer
+    // Efficient queries by category + name
+    compoundIndex "idx_category_name" ["category"; "name"]
+
+FUNCTION: Delay
+  Delay operation for computation expression (defers evaluation).
+  @param f: The delayed computation function.
+  @returns: The result of invoking the delayed computation.
+
+FUNCTION: Field
+  Define a field in the schema. Creates a FieldDef with the specified name and type, with optional parameters.
+  @param state: The current schema state.
+  @param name: The field name (used for column naming and queries).
+  @param sqlType: The SQLite type for this field.
+  @param indexed: Whether to create an index (default: false).
+  @param unique: Whether the field must be unique (default: false).
+  @param nullable: Whether NULL values are allowed (default: false).
+  @param path: Custom JSON path (default: None, uses $.name).
+  @returns: A new schema state with the field added.
+  Example:
+    // Simple field
+    let schema1 = schema<User> {
+    field "name" SqliteType.Text
+    }
+    // Field with options
+    let schema2 = schema<User> {
+    field "email" SqliteType.Text (indexed=true, unique=true, nullable=false)
+
+FUNCTION: Indexed
+  Define an indexed field (shorthand for field with indexed=true).
+  @param state: The current schema state.
+  @param name: The field name.
+  @param sqlType: The SQLite type for this field.
+  @param unique: Whether the field must be unique (default: false).
+  @param nullable: Whether NULL values are allowed (default: false).
+  @param path: Custom JSON path (default: None, uses $.name).
+  @returns: A new schema state with the indexed field added.
+  Example:
+    let userSchema = schema<User> {
+    field "name" SqliteType.Text
+    indexed "age" SqliteType.Integer  // Will be indexed for fast queries
+    indexed "createdAt" SqliteType.Integer
+    }
+    // Indexed field with unique constraint
+    let accountSchema = schema<Account> {
+
+FUNCTION: Timestamps
+  Enable automatic timestamp management for the schema. Adds createdAt and updatedAt timestamps that are managed automatically.
+  @param state: The current schema state.
+  @returns: A new schema state with timestamps enabled.
+  Example:
+    let userSchema = schema<User> {
+    field "name" SqliteType.Text
+    unique "email" SqliteType.Text
+    timestamps  // Enable automatic timestamp tracking
+    }
+    // Later, query by timestamps
+    let recentUsers = query {
+
+FUNCTION: Unique
+  Define a unique indexed field (shorthand for field with indexed=true, unique=true).
+  @param state: The current schema state.
+  @param name: The field name.
+  @param sqlType: The SQLite type for this field.
+  @param nullable: Whether NULL values are allowed (default: false).
+  @param path: Custom JSON path (default: None, uses $.name).
+  @returns: A new schema state with the unique indexed field added.
+  Example:
+    let userSchema = schema<User> {
+    field "name" SqliteType.Text
+    unique "email" SqliteType.Text  // No two users can have the same email
+    unique "username" SqliteType.Text
+    }
+    // Unique but nullable (multiple NULLs allowed)
+    let productSchema = schema<Product> {
+
+FUNCTION: Validate
+  Add a validation function to the schema. The function is called on every insert/update to validate documents.
+  @param state: The current schema state.
+  @param validator: A function that validates documents and returns Result.
+  @returns: A new schema state with the validation function added.
+  Example:
+    type User = { Name: string; Email: string; Age: int }
+    let userSchema = schema<User> {
+    field "name" SqliteType.Text
+    unique "email" SqliteType.Text
+    indexed "age" SqliteType.Integer
+    validate (fun user ->
+
+FUNCTION: Yield
+  Yield operation for computation expression (returns empty schema definition).
+  @param x: The unit value (ignored).
+  @returns: An empty schema definition with no fields, indexes, or validation.
+
+FUNCTION: Zero
+  Zero operation for computation expression (returns empty schema definition).
+  @returns: An empty schema definition with no fields, indexes, or validation.
+
+--------------------------------------------------------------------------------
+MODULE: FractalDb.Builders.SchemaBuilderInstance
+--------------------------------------------------------------------------------
+
+FUNCTION: schema
+  Global SchemaBuilder instance for computation expressions. Use this in 'schema { }' computation expressions to build type-safe schemas.
+  Example:
+    type User = { Name: string; Email: string; Age: int }
+    // Type parameter inferred from context
+    let userSchema = schema<User> {
+    field "name" SqliteType.Text
+    unique "email" SqliteType.Text
+    indexed "age" SqliteType.Integer
+    timestamps
+
+--------------------------------------------------------------------------------
+MODULE: FractalDb.Builders.TransactionBuilder
+--------------------------------------------------------------------------------
+
+FUNCTION: Bind
+  Bind operation for chaining FractalResult<'T> computations. Implements monadic bind for synchronous Result values.
+  @param result: The FractalResult to bind.
+  @param f: The continuation function to apply on success.
+  @returns: A task with the result of the continuation or propagated error.
+
+FUNCTION: Delay
+  Delay operation deferring computation execution.
+  @param f: The delayed computation function.
+  @returns: The delayed computation function unchanged.
+
+FUNCTION: Return
+  Return operation wrapping a value in a successful Result within a Task.
+  @param value: The value to wrap.
+  @returns: A completed task with Ok result containing the value.
+
+FUNCTION: ReturnFrom
+  ReturnFrom operation for returning an existing Task<FractalResult<'T>>.
+  @param taskValue: The task to return directly.
+  @returns: The task unchanged.
+
+FUNCTION: Run
+  Run operation executing the computation within a transaction scope. Automatically commits on Ok result or rolls back on Error result.
+  @param f: The delayed computation to execute.
+  @returns: A task with the computation result.
+
+FUNCTION: TryFinally
+  TryFinally operation for cleanup within transactions.
+  @param computation: The computation to execute.
+  @param compensation: The cleanup function to run regardless of success/failure.
+  @returns: A delayed computation with cleanup logic.
+
+FUNCTION: TryWith
+  TryWith operation for exception handling within transactions.
+  @param computation: The computation that may throw.
+  @param handler: The exception handler function.
+  @returns: A delayed computation with exception handling.
+
+FUNCTION: Zero
+  Zero operation returning an empty success result.
+  @returns: A completed task with Ok unit result.
+
+--------------------------------------------------------------------------------
+MODULE: FractalDb.Collection
+--------------------------------------------------------------------------------
+
+TYPE: Collection
+  Represents a typed document collection with schema, connection, and configuration.
+
+TYPE: DeleteResult
+  Result of deleteMany operation containing count of deleted documents.
+  Note: DeleteResult is returned by Collection.deleteMany after deleting documents. Provides count of how many documents were actually removed from the collection. Use cases: - Verify expected documents were deleted - Detect no-op deletes (DeletedCount = 0 when expecting deletions) - Audit record of deletions
+
+TYPE: FindAndModifyOptions
+  Options for controlling find-and-modify operations.
+
+TYPE: FindOptions
+  Options for controlling find operations (findOne, find).
+
+TYPE: InsertManyResult
+  Result of insertMany operation containing inserted documents and count.
+
+TYPE: ReturnDocument
+  Specifies which version of document to return in find-and-modify operations.
+
+TYPE: UpdateResult
+  Result of updateMany operation containing match and modification counts.
+
+--------------------------------------------------------------------------------
+MODULE: FractalDb.Collection.Collection
+--------------------------------------------------------------------------------
+
+PROPERTY: Connection
+  Database connection for executing operations.
+
+PROPERTY: EnableCache
+  Whether to cache translated SQL queries for performance.
+
+PROPERTY: IdGenerator
+  Function to generate unique document IDs (typically ULID generator).
+
+PROPERTY: Name
+  The collection name, used as the table name in SQLite.
+
+PROPERTY: Schema
+  Schema definition with indexed fields, constraints, and indexes.
+
+PROPERTY: Translator
+  SQL translator for converting Query to SQL statements.
+
+FUNCTION: count
+  Counts the number of documents matching the specified filter.
+  @param filter: The query filter to match documents against.
+  @param collection: The collection to count documents in.
+  @returns: Task containing the count of matching documents as an integer.
+  Example:
+    // Count active users
+    let! activeCount =
+    users
+    |> Collection.count (Query.Field("status", FieldOp.Compare (box (CompareOp.Eq "active"))))
+    printfn $"Active users: {activeCount}"
+    // Count users older than 18
+    let! adultCount =
+
+FUNCTION: deleteById
+  Deletes a document by its unique identifier.
+  @param id: The document ID to delete.
+  @param collection: The collection to delete from.
+  @returns: Task containing true if document was deleted, false if not found.
+  Example:
+    // Delete user by ID
+    let! deleted = users |> Collection.deleteById "user123"
+    if deleted then
+    printfn "User deleted successfully"
+    else
+    printfn "User not found"
+    // Delete with confirmation
+
+FUNCTION: deleteMany
+  Deletes all documents matching the filter.
+  @param filter: Query filter to match documents.
+  @param collection: The collection to delete from.
+  @returns: Task containing DeleteResult with count of deleted documents.
+  Example:
+    // Delete all inactive users
+    let! result =
+    users
+    |> Collection.deleteMany
+    (Query.Field("active", FieldOp.Compare (box (CompareOp.Eq false))))
+    printfn $"Deleted {result.DeletedCount} inactive users"
+
+FUNCTION: deleteOne
+  Deletes the first document matching the filter.
+  @param filter: Query filter to match documents.
+  @param collection: The collection to delete from.
+  @returns: Task containing true if a document was deleted, false if none matched.
+  Example:
+    // Delete first inactive user
+    let! deleted =
+    users
+    |> Collection.deleteOne
+    (Query.Field("active", FieldOp.Compare (box (CompareOp.Eq false))))
+    printfn $"Deleted: {deleted}"
+
+FUNCTION: distinct
+  Returns distinct values for a specified field, optionally filtered by a query.
+  @param field: The field path to extract distinct values from (e.g., "email", "address.city").
+  @param filter: The query filter to apply before extracting distinct values.
+  @param collection: The collection to query.
+  @returns: Task containing FractalResult with list of distinct values of type 'V.
+  Example:
+    // Get all unique email addresses
+    let! result = users |> Collection.distinct "email" Query.Empty
+    match result with
+    | Ok emails ->
+    for email in emails do
+    printfn $"Email: {email}"
+    | Error err ->
+    printfn $"Error: {err}"
+
+FUNCTION: drop
+  Drops the collection by deleting its table from the database.
+  @param collection: The collection to drop.
+  @returns: Task that completes when the table is dropped.
+  Example:
+    // Drop collection
+    do! tempData |> Collection.drop
+    printfn "Temporary data collection dropped"
+    // Drop and recreate pattern (schema migration)
+    do! users |> Collection.drop
+    let! newUsers = db |> FractalDb.collection "users" newSchema
+    printfn "Users collection recreated with new schema"
+
+FUNCTION: estimatedCount
+  Returns an estimated count of all documents in the collection.
+  @param collection: The collection to count documents in.
+  @returns: Task containing the estimated document count as an integer.
+  Example:
+    // Get estimated total users (fast)
+    let! userCount = users |> Collection.estimatedCount
+    printfn $"Approximately {userCount} users"
+    // Use for pagination info
+    let! total = products |> Collection.estimatedCount
+    let pageCount = (total + pageSize - 1) / pageSize
+    printfn $"Total pages: {pageCount}"
+
+FUNCTION: find
+  Finds all documents matching a filter query.
+  @param filter: The query filter to match documents.
+  @param collection: The collection to search in.
+  @returns: Task containing list of matching documents (empty list if no matches).
+  Example:
+    // Find all active users
+    let! activeUsers =
+    users
+    |> Collection.find (Query.Field("active", FieldOp.Compare (box (CompareOp.Eq true))))
+    for doc in activeUsers do
+    printfn $"{doc.Data.Name} - {doc.Data.Email}"
+
+FUNCTION: findById
+  Finds a document by its unique identifier.
+  @param id: The document ID to search for.
+  @param collection: The collection to search in.
+  @returns: Task containing Some document if found, None if not found.
+  Example:
+    // Find user by ID
+    let! maybeUser = users |> Collection.findById "user123"
+    match maybeUser with
+    | Some doc ->
+    printfn $"Found: {doc.Data.Name}"
+    printfn $"Created: {doc.CreatedAt}"
+    | None ->
+    printfn "User not found"
+
+FUNCTION: findOne
+  Finds the first document matching a filter query.
+  @param filter: The query filter to match documents.
+  @param collection: The collection to search in.
+  @returns: Task containing Some document if found, None if no match.
+  Example:
+    // Find first active user
+    let! maybeUser =
+    users
+    |> Collection.findOne (Query.Field("active", FieldOp.Compare (box (CompareOp.Eq true))))
+    match maybeUser with
+    | Some doc -> printfn $"Found: {doc.Data.Name}"
+    | None -> printfn "No active users"
+
+FUNCTION: findOneAndDelete
+  Atomically finds and deletes a single document matching the filter.
+  @param filter: Query filter to match documents.
+  @param collection: The collection to operate on.
+  @returns: Task containing Some(document) if found and deleted, or None if no match. Returns the document state before deletion.
+  Example:
+    // Process next work item
+    let! work =
+    workQueue
+    |> Collection.findOneAndDelete
+    (Query.Field("status", FieldOp.Compare (box (CompareOp.Eq "pending"))))
+    match work with
+    | Some doc ->
+
+FUNCTION: findOneAndDeleteWith
+  Atomically finds and deletes a single document with sort options.
+  @param filter: Query filter to match documents.
+  @param options: Find options for controlling sort order.
+  @param collection: The collection to operate on.
+  @returns: Task containing Some(document) if found and deleted, or None if no match. Returns the document state before deletion.
+  Example:
+    // FIFO work queue - oldest first
+    let options = { Sort = [("createdAt", Ascending)] }
+    let! work =
+    workQueue
+    |> Collection.findOneAndDeleteWith
+    (Query.Field("status", FieldOp.Compare (box (CompareOp.Eq "pending"))))
+    options
+
+FUNCTION: findOneAndReplace
+  Atomically finds and replaces a single document matching the filter.
+  @param filter: Query filter to match documents.
+  @param doc: New document data to replace with.
+  @param options: Options controlling sort, return document, and upsert behavior.
+  @param collection: The collection to operate on.
+  @returns: Task containing FractalResult with: - Ok(Some(document)): Document found and replaced (before or after state per options) - Ok(None): No match found and upsert=false - Error(SerializationError): New document data is invalid
+  Example:
+    // Replace user profile completely (return new state)
+    let options = {
+    Sort = []
+    ReturnDocument = After
+    Upsert = false
+    }
+    let newProfile = {
+
+FUNCTION: findOneAndUpdate
+  Atomically finds and updates a single document matching the filter.
+  @param filter: Query filter to match documents.
+  @param update: Update function to transform the document body.
+  @param options: Options controlling sort, return document, and upsert behavior.
+  @param collection: The collection to operate on.
+  @returns: Task containing FractalResult with: - Ok(Some(document)): Document found and updated (before or after state per options) - Ok(None): No match found and upsert=false - Error(SerializationError): Update function produced invalid data
+  Example:
+    // Claim and process next work item (return after state)
+    let options = {
+    Sort = [("priority", Descending); ("createdAt", Ascending)]
+    ReturnDocument = After
+    Upsert = false
+    }
+    let! result =
+
+FUNCTION: findOneWith
+  Finds the first document matching a filter with query options (sort, limit, skip).
+  @param filter: The query filter to match documents.
+  @param options: Query options for sorting, limiting, and skipping results.
+  @param collection: The collection to search in.
+  @returns: Task containing Some document if found, None if no match.
+  Example:
+    // Find newest active user
+    let! maybeUser =
+    users
+    |> Collection.findOneWith
+    (Query.Field("active", FieldOp.Compare (box (CompareOp.Eq true))))
+    (QueryOptions.sort [("createdAt", SortDirection.Desc)])
+
+FUNCTION: findWith
+  Finds all documents matching a filter with query options (sort, limit, skip).
+  @param filter: The query filter to match documents.
+  @param options: Query options for sorting, limiting, and skipping results.
+  @param collection: The collection to search in.
+  @returns: Task containing list of matching documents (empty list if no matches).
+  Example:
+    // Get second page of active users, sorted by name
+    let! users =
+    users
+    |> Collection.findWith
+    (Query.Field("active", FieldOp.Compare (box (CompareOp.Eq true))))
+    (QueryOptions.create()
+    |> QueryOptions.sort [("name", SortDirection.Asc)]
+    |> QueryOptions.limit 20
+
+FUNCTION: insertMany
+  Inserts multiple documents into the collection (ordered mode).
+  @param docs: The list of documents to insert.
+  @param collection: The collection to insert into.
+  @returns: Task containing FractalResult with InsertManyResult on success, or error if any insert fails (all inserts rolled back).
+  Example:
+    // Insert batch of products
+    let products = [
+    { Name = "Laptop"; Price = 999.99 }
+    { Name = "Mouse"; Price = 29.99 }
+    { Name = "Keyboard"; Price = 79.99 }
+    ]
+    let! result = products |> Collection.insertMany catalog
+
+FUNCTION: insertManyWith
+  Inserts multiple documents into the collection with transaction support.
+  @param docs: The list of documents to insert.
+  @param ordered: If true (default), stops on first error and rolls back all inserts. If false, continues inserting remaining documents on error.
+  @param collection: The collection to insert into.
+  @returns: Task containing FractalResult with InsertManyResult on success, or error on failure (ordered mode) or partial success (unordered mode).
+  Example:
+    // Insert multiple users (ordered - all or nothing)
+    let newUsers = [
+    { Name = "Alice"; Email = "alice@example.com" }
+    { Name = "Bob"; Email = "bob@example.com" }
+    { Name = "Carol"; Email = "carol@example.com" }
+    ]
+    let! result =
+
+FUNCTION: insertOne
+  Inserts a new document into the collection with auto-generated ID.
+  @param doc: The document data to insert.
+  @param collection: The collection to insert into.
+  @returns: Task containing FractalResult with the inserted document on success, or UniqueConstraint error if a duplicate ID or unique field violation occurs.
+  Example:
+    // Insert a new user
+    let! result =
+    users
+    |> Collection.insertOne { Name = "Alice"; Email = "alice@example.com" }
+    match result with
+    | Ok doc ->
+    printfn $"Inserted user with ID: {doc.Id}"
+
+FUNCTION: replaceOne
+  Replaces the first document matching the filter with new data.
+  @param filter: Query filter to match documents.
+  @param doc: The new document data to replace with.
+  @param collection: The collection to update in.
+  @returns: Task containing FractalResult with Some replaced document on success, None if no matching document found, or Error on failure.
+  Example:
+    // Replace entire user document
+    let newUserData = {
+    Name = "Alice Smith"
+    Email = "alice.smith@example.com"
+    Age = 31
+    Active = true
+    }
+
+FUNCTION: rowToDocument
+  Helper function to deserialize a row tuple into a Document<'T>.
+
+FUNCTION: search
+  Searches for documents containing the specified text across multiple fields.
+  @param text: The text to search for.
+  @param fields: The list of field names to search in.
+  @param collection: The collection to search.
+  @returns: Task containing a list of documents matching the search criteria.
+  Example:
+    // Search for users by name or email
+    let! results =
+    users
+    |> Collection.search "john" ["name"; "email"]
+    printfn $"Found {List.length results} matches"
+    // Search nested fields
+    let! products =
+
+FUNCTION: searchWith
+  Searches for documents with QueryOptions support for sorting, pagination, etc.
+  @param text: The text to search for.
+  @param fields: The list of field names to search in.
+  @param options: Query options for sort, limit, skip, etc.
+  @param collection: The collection to search.
+  @returns: Task containing a list of documents matching the search criteria.
+  Example:
+    // Search with limit and sort
+    let! top10 =
+    products
+    |> Collection.searchWith "laptop" ["title"; "description"]
+    (QueryOptions.create()
+    |> QueryOptions.sort [("price", SortDirection.Asc)]
+    |> QueryOptions.limit 10)
+
+FUNCTION: toSqlType
+  Converts an obj parameter value to the appropriate SqlType case.
+  @param value: The parameter value as obj.
+  @returns: The SqlType case matching the runtime type of the value.
+
+FUNCTION: updateById
+  Updates a document by ID using a transformation function.
+  @param id: The document ID to update.
+  @param update: Function to transform the document data.
+  @param collection: The collection to update in.
+  @returns: Task containing FractalResult with Some updated document on success, None if document not found, or Error on failure.
+  Example:
+    // Increment user age
+    let! result =
+    users
+    |> Collection.updateById "user123" (fun user ->
+    { user with Age = user.Age + 1 })
+    match result with
+    | Ok (Some doc) ->
+
+FUNCTION: updateMany
+  Updates all documents matching the filter using a transformation function.
+  @param filter: Query filter to match documents.
+  @param update: Function to transform each document's data.
+  @param collection: The collection to update in.
+  @returns: Task containing FractalResult with UpdateResult showing matched and modified counts, or Error on failure.
+  Example:
+    // Deactivate all old users
+    let! result =
+    users
+    |> Collection.updateMany
+    (Query.Field("lastSeen", FieldOp.Compare (box (CompareOp.Lt (DateTime.UtcNow.AddDays(-90))))))
+    (fun user -> { user with Active = false })
+    match result with
+
+FUNCTION: updateOne
+  Updates the first document matching the filter using a transformation function.
+  @param filter: Query filter to match documents.
+  @param update: Function to transform the document data.
+  @param collection: The collection to update in.
+  @returns: Task containing FractalResult with Some updated document on success, None if no matching document found, or Error on failure.
+  Example:
+    // Update first active user
+    let! result =
+    users
+    |> Collection.updateOne
+    (Query.Field("status", FieldOp.Compare (box (CompareOp.Eq "active"))))
+    (fun user -> { user with LastSeen = DateTime.UtcNow })
+    match result with
+
+FUNCTION: updateOneWith
+  Updates first matching document with upsert option.
+  @param filter: Query filter to match documents.
+  @param update: Function to transform the document data.
+  @param upsert: If true, inserts a new document when no match found. If false, behaves like updateOne.
+  @param collection: The collection to update in.
+  @returns: Task containing FractalResult with Some document (updated or inserted), None if not found and upsert=false, or Error on failure.
+  Example:
+    // Update or create user profile
+    let! result =
+    profiles
+    |> Collection.updateOneWith
+    (Query.Field("userId", FieldOp.Compare (box (CompareOp.Eq "user123"))))
+    (fun profile -> { profile with LastLogin = DateTime.UtcNow })
+    true  // upsert=true
+
+FUNCTION: validate
+  Validates a document against the collection's schema validator.
+  @param doc: The document data to validate.
+  @param collection: The collection with the validation schema.
+  @returns: FractalResult containing: - Ok(doc): Document is valid (or no validator defined) - Error(Validation): Document failed validation with error message
+  Example:
+    // Define schema with validator
+    let userSchema = {
+    Fields = []
+    Indexes = []
+    Validate = Some (fun user ->
+    if String.IsNullOrWhiteSpace(user.Email) then
+    Error "Email is required"
+    elif not (user.Email.Contains("@")) then
+
+--------------------------------------------------------------------------------
+MODULE: FractalDb.Collection.DeleteResult
+--------------------------------------------------------------------------------
+
+PROPERTY: DeletedCount
+  Number of documents successfully deleted.
+
+--------------------------------------------------------------------------------
+MODULE: FractalDb.Collection.FindAndModifyOptions
+--------------------------------------------------------------------------------
+
+PROPERTY: ReturnDocument
+  Whether to return document state before or after modification.
+
+PROPERTY: Sort
+  Sort order to determine which document to modify when multiple match.
+
+PROPERTY: Upsert
+  Whether to insert a new document if no match is found.
+
+--------------------------------------------------------------------------------
+MODULE: FractalDb.Collection.FindOptions
+--------------------------------------------------------------------------------
+
+PROPERTY: Sort
+  List of (fieldName, direction) tuples specifying sort order.
+
+--------------------------------------------------------------------------------
+MODULE: FractalDb.Collection.InsertManyResult
+--------------------------------------------------------------------------------
+
+PROPERTY: Documents
+  List of successfully inserted documents with generated IDs and metadata.
+
+PROPERTY: InsertedCount
+  Number of documents successfully inserted.
+
+--------------------------------------------------------------------------------
+MODULE: FractalDb.Collection.ReturnDocument
+--------------------------------------------------------------------------------
+
+TYPE: After
+  Return the document as it is after the modification.
+
+TYPE: Before
+  Return the document as it was before the modification.
+
+--------------------------------------------------------------------------------
+MODULE: FractalDb.Collection.UpdateResult
+--------------------------------------------------------------------------------
+
+PROPERTY: MatchedCount
+  Number of documents that matched the filter criteria.
+
+PROPERTY: ModifiedCount
+  Number of documents where content was actually changed.
+
+--------------------------------------------------------------------------------
+MODULE: FractalDb.Database
+--------------------------------------------------------------------------------
+
+TYPE: DbOptions
+  Configuration options for the FractalDb database.
+
+TYPE: DbOptionsModule
+  Module for DbOptions default values and utilities.
+
+TYPE: FractalDb
+  Main database class for FractalDb operations.
+
+--------------------------------------------------------------------------------
+MODULE: FractalDb.Database.DbOptions
+--------------------------------------------------------------------------------
+
+PROPERTY: CommandBehavior
+  Command behavior for database operations (default: SequentialAccess).
+
+PROPERTY: EnableCache
+  Whether to cache translated SQL queries for performance.
+
+PROPERTY: IdGenerator
+  Function to generate unique document IDs.
+
+--------------------------------------------------------------------------------
+MODULE: FractalDb.Database.DbOptionsModule
+--------------------------------------------------------------------------------
+
+PROPERTY: defaults
+  Default database options with standard settings.
+
+FUNCTION: withCommandBehavior
+  Sets the CommandBehavior for database operations.
+  @param behavior: The CommandBehavior to use for database operations.
+  @param opts: The DbOptions to modify.
+  @returns: A new DbOptions with the specified CommandBehavior.
+  Example:
+    // Configure for SequentialAccess (default, recommended)
+    let opts1 = DbOptions.defaults
+    // Configure for Default mode (random column access)
+    let opts2 =
+    DbOptions.defaults
+    |> DbOptions.withCommandBehavior CommandBehavior.Default
+
+--------------------------------------------------------------------------------
+MODULE: FractalDb.Database.FractalDb
+--------------------------------------------------------------------------------
+
+PROPERTY: Connection
+  Gets the underlying database connection for advanced scenarios and Donald interop.
+
+PROPERTY: IsDisposed
+  Gets whether the database has been disposed.
+
+PROPERTY: Options
+  Gets the database options.
+
+PROPERTY: OwnsConnection
+  Gets whether this FractalDb instance owns and manages the database connection.
+
+FIELD: collections
+  Thread-safe cache of collection instances.
+
+FIELD: disposed
+  Track whether the database has been disposed.
+
+FUNCTION: Close
+  Closes the database connection and releases all resources.
+  Example:
+    // Manual close
+    let db = FractalDb.Open("data.db")
+    try
+    // Use database...
+    let users = db.Collection<"users", userSchema>
+    // ... operations ...
+    finally
+    db.Close()  // Explicit cleanup
+
+FUNCTION: Collection
+  Gets or creates a collection with the specified schema.
+  @param name: Name of the collection (used as table name).
+  @param schema: Schema definition with fields, indexes, and validation.
+  @returns: Collection instance for performing CRUD operations.
+  Example:
+    // Define user type
+    type User = {
+    Name: string
+    Email: string
+    Age: int
+    }
+    // Define schema
+
+FUNCTION: Execute
+  Executes a function within a transaction, automatically committing on success or rolling back on exception.
+  @param fn: Function to execute within the transaction context.
+  @returns: Task containing the result of the function.
+  Example:
+    // Execute multiple operations in a transaction
+    let! userId = db.Execute(fun tx ->
+    task {
+    // Insert user
+    let! userResult = users |> Collection.insertOne newUser
+    let userId = userResult.Id
+    // Insert related profile
+
+FUNCTION: ExecuteTransaction
+  Executes a Result-returning function within a transaction, committing on Ok or rolling back on Error.
+  @param fn: Function returning FractalResult<'T> within transaction.
+  @returns: Task containing FractalResult<'T> from the function.
+  Example:
+    // Execute operations with Result-based error handling
+    let! result = db.ExecuteTransaction(fun tx ->
+    task {
+    // Insert user
+    let! userResult = users |> Collection.insertOne newUser
+    match userResult with
+    | Error err -> return Error err  // Rollback on error
+    | Ok user ->
+
+FUNCTION: FromConnection
+  Creates a FractalDb instance from an existing database connection.
+  @param connection: The ADO.NET database connection to use.
+  @param options: Optional database configuration options.
+  @returns: FractalDb instance that uses the provided connection without owning it.
+  Example:
+    open System.Data
+    open Microsoft.Data.Sqlite
+    open Donald
+    // Example 1: Share connection across multiple databases
+    use conn = new SqliteConnection("Data Source=app.db")
+    conn.Open()
+
+FUNCTION: InMemory
+  Creates an in-memory SQLite database.
+  @param options: Optional database configuration options.
+  @returns: FractalDb instance with in-memory database.
+  Example:
+    // Testing with in-memory database
+    [<Test>]
+    let testUserOperations() = task {
+    use db = FractalDb.InMemory()
+    let! users = db.Collection<User>("users", userSchema)
+    let! inserted = users |> Collection.insertOne testUser
+    let! found = users |> Collection.findById inserted.Id
+
+FUNCTION: Open
+  Opens a SQLite database from a file path.
+  @param path: Path to the database file.
+  @param options: Optional database configuration options.
+  @returns: FractalDb instance connected to the database file.
+  Example:
+    // Open database with defaults
+    use db = FractalDb.Open("data.db")
+    let! users = db.Collection<User>("users", userSchema)
+    // Open with custom options
+    let options = {
+    IdGenerator = fun () -> Guid.NewGuid().ToString()
+    EnableCache = true
+
+FUNCTION: Transaction
+  Creates a new manual transaction on this database connection.
+  @returns: A new Transaction instance for manual transaction control.
+  Example:
+    // Manual transaction control
+    use tx = db.Transaction()
+    try
+    // Perform multiple operations...
+    users |> Collection.insertOne newUser |> Async.RunSynchronously |> ignore
+    posts |> Collection.insertOne newPost |> Async.RunSynchronously |> ignore
+    // Commit if all succeed
+
+--------------------------------------------------------------------------------
+MODULE: FractalDb.Errors
+--------------------------------------------------------------------------------
+
+TYPE: DonaldExceptions
+  Provides utilities for converting Donald exceptions to FractalError.
+
+TYPE: FractalError
+  Represents all possible errors that can occur during FractalDb operations.
+
+TYPE: FractalResult
+  Type alias for Result with FractalError as the error type.
+  Note: FractalResult is the standard return type for all FractalDb operations that can fail. It provides explicit, type-safe error handling without exceptions.
+
+--------------------------------------------------------------------------------
+MODULE: FractalDb.Errors.DonaldExceptions
+--------------------------------------------------------------------------------
+
+FUNCTION: mapDonaldException
+  Converts Donald exceptions to FractalError with rich context.
+  @param ex: The exception to convert.
+  @returns: A FractalError with appropriate type and context from the Donald exception metadata.
+  Example:
+    // Connection failure
+    try
+    let conn = new SqliteConnection("invalid")
+    conn.Open()
+    with
+    | ex ->
+    let error = mapDonaldException ex
+    // error = FractalError.Connection "Failed to open: ... (connection: invalid)"
+
+FUNCTION: parseUniqueConstraintField
+  Extracts the field name from a SQLite UNIQUE constraint error message.
+  @param errorMsg: The SQLite error message.
+  @returns: The field name that caused the constraint violation, or "unknown" if parsing fails.
+  Example:
+    let msg1 = "UNIQUE constraint failed: users.email"
+    parseUniqueConstraintField msg1  // Returns "email"
+    let msg2 = "UNIQUE constraint failed: 'users'.'_email'"
+    parseUniqueConstraintField msg2  // Returns "email"
+    let msg3 = "Some other error"
+    parseUniqueConstraintField msg3  // Returns "unknown"
+
+FUNCTION: tryDbOperation
+  Wraps a synchronous database operation with consistent error handling.
+  @param operation: The database operation to execute.
+  @returns: Ok value if the operation succeeds; Error fractalError if a Donald exception occurs.
+  Example:
+    open FractalDb.Errors.DonaldExceptions
+    // Wrap a Donald query operation
+    let getUserCount (conn: IDbConnection) : FractalResult<int> =
+    tryDbOperation (fun () ->
+    use cmd = conn.CreateCommand()
+    cmd.CommandText <- "SELECT COUNT(*) FROM users"
+    cmd.ExecuteScalar() :?> int64 |> int
+
+FUNCTION: tryDbOperationAsync
+  Wraps an asynchronous database operation with consistent error handling.
+  @param operation: The async database operation to execute.
+  @returns: A Task containing Ok value if the operation succeeds; Error fractalError if a Donald exception occurs.
+  Example:
+    open System.Threading.Tasks
+    open FractalDb.Errors.DonaldExceptions
+    // Wrap an async Donald query
+    let getUserCountAsync (conn: IDbConnection) : Task<FractalResult<int>> =
+    tryDbOperationAsync (fun () ->
+    task {
+    use cmd = conn.CreateCommand()
+
+--------------------------------------------------------------------------------
+MODULE: FractalDb.Errors.FractalError
+--------------------------------------------------------------------------------
+
+TYPE: Connection
+  A database connection error occurred.
+
+TYPE: InvalidOperation
+  An operation was attempted that violates a precondition or invariant.
+
+TYPE: NotFound
+  A document with the specified ID was not found.
+
+TYPE: Query
+  An error occurred during query construction or execution.
+
+TYPE: Serialization
+  A JSON serialization or deserialization error occurred.
+
+TYPE: Transaction
+  A transaction management error occurred.
+
+TYPE: UniqueConstraint
+  A unique constraint violation occurred when attempting to insert or update a document.
+
+TYPE: Validation
+  A validation error occurred during schema validation or data validation.
+
+PROPERTY: Category
+  Gets the category of the error for grouping and filtering.
+
+PROPERTY: Message
+  Gets a human-readable error message describing the error.
+
+--------------------------------------------------------------------------------
+MODULE: FractalDb.Errors.FractalResult
+--------------------------------------------------------------------------------
+
+FUNCTION: bind
+  Applies a function that returns a FractalResult to the success value.
+  @param f: The function to apply that returns a FractalResult.
+  @param result: The FractalResult to bind.
+  @returns: The result of applying if result is Ok ; otherwise returns the error unchanged.
+  Example:
+    let parseId (s: string) : FractalResult<int> =
+    match System.Int32.TryParse(s) with
+    | true, n -> Ok n
+    | false, _ -> Error (FractalError.Validation (Some "id", "Must be a number"))
+    let validatePositive (n: int) : FractalResult<int> =
+    if n > 0 then Ok n
+    else Error (FractalError.Validation (Some "id", "Must be positive"))
+
+FUNCTION: combine
+  Combines two FractalResults into a tuple.
+  @param r1: The first FractalResult.
+  @param r2: The second FractalResult.
+  @returns: Ok (v1, v2) if both results are Ok ; otherwise returns the first Error encountered.
+  Example:
+    let result1: FractalResult<int> = Ok 42
+    let result2: FractalResult<string> = Ok "hello"
+    let combined = FractalResult.combine result1 result2
+    // combined = Ok (42, "hello")
+    let error1: FractalResult<int> = Error (FractalError.NotFound "id1")
+    let error2: FractalResult<string> = Error (FractalError.NotFound "id2")
+    let failed = FractalResult.combine error1 error2
+
+FUNCTION: getOrRaise
+  Extracts the success value or raises an exception for errors.
+  @param result: The FractalResult to unwrap.
+  @returns: The success value if result is Ok .
+  Example:
+    let result: FractalResult<int> = Ok 42
+    let value = FractalResult.getOrRaise result
+    // value = 42
+    let error: FractalResult<int> = Error (FractalError.NotFound "id")
+    let throws = FractalResult.getOrRaise error
+    // Throws exception: "Document not found: id"
+
+FUNCTION: map
+  Maps the success value of a FractalResult using the provided function.
+  @param f: The function to apply to the success value.
+  @param result: The FractalResult to map.
+  @returns: Ok (f value) if result is Ok value ; otherwise returns the error unchanged.
+  Example:
+    let result: FractalResult<int> = Ok 42
+    let doubled = FractalResult.map (fun x -> x * 2) result
+    // doubled = Ok 84
+    let error: FractalResult<int> = Error (FractalError.NotFound "id")
+    let stillError = FractalResult.map (fun x -> x * 2) error
+    // stillError = Error (FractalError.NotFound "id")
+
+FUNCTION: mapError
+  Maps the error value of a FractalResult using the provided function.
+  @param f: The function to apply to the error value.
+  @param result: The FractalResult to map.
+  @returns: Error (f error) if result is Error error ; otherwise returns the success value unchanged.
+  Example:
+    let result: FractalResult<int> = Error (FractalError.NotFound "id")
+    let transformed =
+    result
+    |> FractalResult.mapError (fun _ -> FractalError.InvalidOperation "Wrapped error")
+    // transformed = Error (FractalError.InvalidOperation "Wrapped error")
+
+FUNCTION: ofOption
+  Converts an Option to a FractalResult, using NotFound error for None.
+  @param id: The document ID to include in the NotFound error message.
+  @param opt: The Option value to convert.
+  @returns: Ok value if opt is Some value ; Error (FractalError.NotFound id) if opt is None .
+  Example:
+    let maybeUser: option<User> = Some { Name = "Alice" }
+    let result = FractalResult.ofOption "user-123" maybeUser
+    // result = Ok { Name = "Alice" }
+    let notFound: option<User> = None
+    let error = FractalResult.ofOption "user-456" notFound
+    // error = Error (FractalError.NotFound "user-456")
+
+FUNCTION: sequence
+  Converts a list of FractalResults into a FractalResult of a list. Stops at the first error.
+  @param results: The list of FractalResults to sequence.
+  @returns: Ok [values] if all results are Ok ; Error e with the first error encountered.
+  Example:
+    let results = [
+    Ok 1
+    Ok 2
+    Ok 3
+    ]
+    let sequenced = FractalResult.sequence results
+    // sequenced = Ok [1; 2; 3]
+
+FUNCTION: toOption
+  Converts a FractalResult to an Option, discarding error information.
+  @param result: The FractalResult to convert.
+  @returns: Some value if result is Ok value ; None if result is Error .
+  Example:
+    let result: FractalResult<int> = Ok 42
+    let opt = FractalResult.toOption result
+    // opt = Some 42
+    let error: FractalResult<int> = Error (FractalError.NotFound "id")
+    let none = FractalResult.toOption error
+    // none = None
+
+FUNCTION: traverse
+  Applies a function that returns a FractalResult to each element of a list, collecting the results. Stops at the first error.
+  @param f: The function to apply to each element.
+  @param xs: The list of elements to process.
+  @returns: Ok [results] if all applications succeed; Error e with the first error encountered.
+  Example:
+    let validateAge (age: int) : FractalResult<int> =
+    if age >= 0 && age <= 150 then Ok age
+    else Error (FractalError.Validation (Some "age", "Age must be 0-150"))
+    // All valid
+    let result1 = FractalResult.traverse validateAge [25; 30; 45]
+    // result1 = Ok [25; 30; 45]
+
+--------------------------------------------------------------------------------
+MODULE: FractalDb.Operators
+--------------------------------------------------------------------------------
+
+TYPE: ArrayOp
+  Array-specific operators for querying array/list fields.
+
+TYPE: CompareOp
+  Comparison operators for querying document fields by value.
+
+TYPE: ExistsOp
+  Existence check operator for determining whether a field exists in a document.
+
+TYPE: FieldOp
+  Type-erased wrapper for field operations, allowing heterogeneous storage of different operator types.
+
+TYPE: Query
+  Complete query structure with logical operators for building complex document queries.
+
+TYPE: StringOp
+  String-specific query operators for pattern matching and substring operations.
+
+--------------------------------------------------------------------------------
+MODULE: FractalDb.Operators.ArrayOp
+--------------------------------------------------------------------------------
+
+TYPE: All
+  Matches arrays that contain all of the specified values.
+  Note: Order does not matter - the array can contain the values in any order and can contain additional values beyond those specified. This operator only checks that all specified values are present somewhere in the array.
+
+TYPE: ElemMatch
+  Matches arrays where at least one element satisfies the specified query.
+  Note: ElemMatch allows complex queries on array elements. It's particularly useful for arrays of objects where you need to match multiple fields within the same element. The query operates on individual array elements.
+
+TYPE: Index
+  Matches arrays where the element at the specified index satisfies the query.
+  Note: Index allows querying specific positions in an array. The index is zero-based. If the array doesn't have an element at the specified index, the query fails to match.
+
+TYPE: Size
+  Matches arrays that have exactly the specified number of elements.
+  Note: This operator checks the array's length. Use it to find arrays with a specific size, including empty arrays (Size 0).
+
+--------------------------------------------------------------------------------
+MODULE: FractalDb.Operators.CompareOp
+--------------------------------------------------------------------------------
+
+TYPE: Eq
+  Equal to (==). Matches values that are equal to the specified value.
+
+TYPE: Gt
+  Greater than (>). Matches values that are greater than the specified value.
+  Note: Only valid for orderable types (numbers, dates, comparable strings). The comparison uses the type's natural ordering.
+
+TYPE: Gte
+  Greater than or equal to (>=). Matches values greater than or equal to the specified value.
+  Note: Only valid for orderable types (numbers, dates, comparable strings).
+
+TYPE: In
+  In list. Matches values that are present in the specified list.
+  Note: Equivalent to SQL IN operator. An empty list will match no documents. The order of values in the list does not matter.
+
+TYPE: Lt
+  Less than (<). Matches values that are less than the specified value.
+  Note: Only valid for orderable types (numbers, dates, comparable strings).
+
+TYPE: Lte
+  Less than or equal to (<=). Matches values less than or equal to the specified value.
+  Note: Only valid for orderable types (numbers, dates, comparable strings).
+
+TYPE: Ne
+  Not equal to (!=). Matches values that are not equal to the specified value.
+
+TYPE: NotIn
+  Not in list. Matches values that are not present in the specified list.
+  Note: Equivalent to SQL NOT IN operator. An empty list will match all documents. Useful for excluding specific values from results.
+
+--------------------------------------------------------------------------------
+MODULE: FractalDb.Operators.ExistsOp
+--------------------------------------------------------------------------------
+
+TYPE: Exists
+  Checks whether a field exists in the document.
+  Note: This is distinct from null checks. A field can exist with a null value, or it can be completely absent from the document. Exists checks presence/absence, not the value.
+
+--------------------------------------------------------------------------------
+MODULE: FractalDb.Operators.FieldOp
+--------------------------------------------------------------------------------
+
+TYPE: Array
+  Boxed array operator for type-erased storage.
+  Note: The generic ArrayOp<'T> is boxed to 'obj' to allow storage alongside operations for fields of different types. Only valid for array-typed fields.
+
+TYPE: Compare
+  Boxed comparison operator for type-erased storage.
+  Note: The generic CompareOp<'T> is boxed to 'obj' to allow storage alongside operations for fields of different types. The SQL translator will unbox and validate the type at query execution time.
+
+TYPE: Exist
+  Field existence check.
+  Note: ExistsOp doesn't require boxing since it's not generic. Checks whether a field is present in the document, independent of its value.
+
+TYPE: String
+  String pattern matching operator.
+  Note: StringOp doesn't require boxing since it's not generic. Only valid for string-typed fields.
+
+--------------------------------------------------------------------------------
+MODULE: FractalDb.Operators.Query
+--------------------------------------------------------------------------------
+
+TYPE: And
+  Logical AND - all sub-queries must match.
+  Note: An empty list is treated as Empty (matches all documents). A single-element list can be unwrapped to the contained query.
+
+TYPE: Empty
+  Empty query that matches all documents.
+  Note: Translates to SQL "WHERE 1=1" or is omitted entirely. Useful as a base case for query composition.
+
+TYPE: Field
+  Single field operation query.
+  Note: Queries a single field using the specified operation. Field paths use dot notation for nested JSON fields (e.g., "user.profile.email").
+
+TYPE: Nor
+  Logical NOR - none of the sub-queries must match.
+  Note: NOR is equivalent to NOT (OR ...). Useful for exclusion patterns. An empty list matches all documents (nothing to exclude).
+
+TYPE: Not
+  Logical NOT - negates the sub-query.
+  Note: Matches documents that do NOT match the sub-query. Double negation (Not (Not q)) can be simplified to q.
+
+TYPE: Or
+  Logical OR - at least one sub-query must match.
+  Note: An empty list matches no documents. A single-element list can be unwrapped to the contained query.
+
+--------------------------------------------------------------------------------
+MODULE: FractalDb.Operators.StringOp
+--------------------------------------------------------------------------------
+
+TYPE: Contains
+  Matches strings containing the specified substring anywhere within them.
+  Note: Contains is syntactic sugar for the LIKE pattern '%substring%'. The matching is case-sensitive by default.
+
+TYPE: EndsWith
+  Matches strings that end with the specified suffix.
+  Note: EndsWith is syntactic sugar for the LIKE pattern '%suffix'. The matching is case-sensitive by default.
+
+TYPE: ILike
+  SQL LIKE pattern matching (case-insensitive).
+  Note: ILike performs case-insensitive pattern matching by adding the COLLATE NOCASE clause. This is useful for user-facing searches where case should be ignored.
+
+TYPE: Like
+  SQL LIKE pattern matching (case-sensitive).
+  Note: LIKE performs case-sensitive pattern matching in most SQLite configurations. For case-insensitive matching, use ILike instead.
+
+TYPE: StartsWith
+  Matches strings that start with the specified prefix.
+  Note: StartsWith is syntactic sugar for the LIKE pattern 'prefix%'. The matching is case-sensitive by default.
+
+--------------------------------------------------------------------------------
+MODULE: FractalDb.Options
+--------------------------------------------------------------------------------
+
+TYPE: CursorSpec
+  Cursor specification for cursor-based pagination.
+
+TYPE: QueryOptions
+  Query options for controlling result set size, ordering, and field projection.
+  Note: Combines pagination, sorting, field selection, and search. Use QueryOptions.empty as starting point. Mutually exclusive: Select/Omit, Skip/Cursor. Execution: filter → sort → skip/cursor → limit → projection.
+
+TYPE: SortDirection
+  Sort direction for query result ordering.
+
+TYPE: TextSearchSpec
+  Full-text search specification for searching across multiple fields.
+  Note: Simple full-text search using SQLite LIKE operator. Substring matches across specified fields. Multiple fields use OR logic. Wildcards (%, _) are escaped and treated literally.
+
+--------------------------------------------------------------------------------
+MODULE: FractalDb.Options.CursorSpec
+--------------------------------------------------------------------------------
+
+PROPERTY: After
+  Cursor token for forward pagination (results after this cursor).
+
+PROPERTY: Before
+  Cursor token for backward pagination (results before this cursor).
+
+--------------------------------------------------------------------------------
+MODULE: FractalDb.Options.QueryOptions
+--------------------------------------------------------------------------------
+
+PROPERTY: Cursor
+  Cursor-based pagination (O(1), prefer over Skip).
+
+PROPERTY: Limit
+  Maximum number of results (None = all results).
+
+PROPERTY: Omit
+  Exclude these fields (blacklist projection).
+
+PROPERTY: Search
+  Full-text search specification.
+
+PROPERTY: Select
+  Include only these fields (whitelist projection).
+
+PROPERTY: Skip
+  Number of results to skip (offset pagination, O(n)).
+
+PROPERTY: Sort
+  Sort order: list of (field, direction) tuples.
+
+FUNCTION: cursorAfter
+  Sets cursor for forward pagination (results after the cursor).
+  @param id: The cursor token (opaque string).
+  @param opts: The QueryOptions to modify.
+  @returns: QueryOptions with Cursor.After set.
+  Example:
+    QueryOptions.empty |> QueryOptions.cursorAfter "token" |> QueryOptions.limit 20
+
+FUNCTION: cursorBefore
+  Sets cursor for backward pagination (results before the cursor).
+  @param id: The cursor token (opaque string).
+  @param opts: The QueryOptions to modify.
+  @returns: QueryOptions with Cursor.Before set.
+  Example:
+    QueryOptions.empty |> QueryOptions.cursorBefore "token" |> QueryOptions.limit 20
+
+FUNCTION: empty
+  Creates an empty QueryOptions with all fields set to default values.
+  @returns: A QueryOptions<'T> with Sort = [], and all option fields = None.
+  Example:
+    // Empty options - return all results
+    let opts1 = QueryOptions.empty<User>
+    // Build options with fluent API
+    let opts2 =
+    QueryOptions.empty<User>
+    |> QueryOptions.limit 10
+    |> QueryOptions.sortDesc "createdAt"
+
+FUNCTION: limit
+  Sets the maximum number of results to return.
+  @param n: Maximum number of results (must be positive).
+  @param opts: The QueryOptions to modify.
+  @returns: A new QueryOptions with Limit set to Some n.
+  Example:
+    // Limit to 10 results
+    let opts = QueryOptions.empty |> QueryOptions.limit 10
+    // Combine with other options
+    let pagedOpts =
+    QueryOptions.empty
+    |> QueryOptions.limit 25
+    |> QueryOptions.skip 50
+
+FUNCTION: omit
+  Sets the fields to exclude from results (blacklist projection).
+  @param fields: List of field names to exclude.
+  @param opts: The QueryOptions to modify.
+  @returns: A new QueryOptions with Omit set to Some fields.
+  Example:
+    // Exclude sensitive fields
+    let opts =
+    QueryOptions.empty
+    |> QueryOptions.omit ["password"; "ssn"; "creditCard"]
+    // Result: All fields except password, ssn, creditCard
+    // Public user profile (hide internal fields)
+    let publicProfile =
+
+FUNCTION: search
+  Sets case-insensitive text search across specified fields.
+  @param text: The search query text to find.
+  @param fields: List of field names to search within.
+  @param opts: The QueryOptions to modify.
+  @returns: QueryOptions with Search set (CaseSensitive = false).
+  Example:
+    QueryOptions.empty |> QueryOptions.search "functional" ["title"; "description"]
+
+FUNCTION: searchCaseSensitive
+  Sets case-sensitive text search across specified fields.
+  @param text: The search query text (exact case).
+  @param fields: List of field names to search within.
+  @param opts: The QueryOptions to modify.
+  @returns: QueryOptions with Search set (CaseSensitive = true).
+  Example:
+    QueryOptions.empty |> QueryOptions.searchCaseSensitive "FractalDb" ["code"]
+
+FUNCTION: select
+  Sets the fields to include in results (whitelist projection).
+  @param fields: List of field names to include.
+  @param opts: The QueryOptions to modify.
+  @returns: A new QueryOptions with Select set to Some fields.
+  Example:
+    // Include only email and name
+    let opts =
+    QueryOptions.empty
+    |> QueryOptions.select ["email"; "name"]
+    // Result: { _id, email, name, _createdAt, _updatedAt }
+    // Get minimal user info
+    let minimalUser =
+
+FUNCTION: skip
+  Sets the number of results to skip (offset pagination).
+  @param n: Number of results to skip (must be non-negative).
+  @param opts: The QueryOptions to modify.
+  @returns: A new QueryOptions with Skip set to Some n.
+  Example:
+    // Skip first 20 results
+    let opts = QueryOptions.empty |> QueryOptions.skip 20
+    // Pagination: page 3, 10 items per page (skip 20, limit 10)
+    let page3 =
+    QueryOptions.empty
+    |> QueryOptions.skip 20  // Skip pages 1 and 2
+    |> QueryOptions.limit 10 // Get page 3
+
+FUNCTION: sortAsc
+  Adds a field to sort in ascending order.
+  @param field: Field name to sort by.
+  @param opts: The QueryOptions to modify.
+  @returns: A new QueryOptions with the field added to Sort in Ascending direction.
+  Example:
+    // Sort by name A-Z
+    let opts = QueryOptions.empty |> QueryOptions.sortAsc "name"
+    // Sort by email asc, then age asc
+    let multiSort =
+    QueryOptions.empty
+    |> QueryOptions.sortAsc "age"
+    |> QueryOptions.sortAsc "email"
+
+FUNCTION: sortBy
+  Adds a sort field with specified direction to the sort order.
+  @param field: Field name to sort by.
+  @param dir: Sort direction (Ascending or Descending).
+  @param opts: The QueryOptions to modify.
+  @returns: A new QueryOptions with the field added to the beginning of the Sort list.
+  Example:
+    // Sort by name ascending
+    let opts1 =
+    QueryOptions.empty
+    |> QueryOptions.sortBy "name" SortDirection.Ascending
+    // Multi-field sort: age desc, then name asc
+    // Note: reverse order due to prepending
+    let opts2 =
+
+FUNCTION: sortDesc
+  Adds a field to sort in descending order.
+  @param field: Field name to sort by.
+  @param opts: The QueryOptions to modify.
+  @returns: A new QueryOptions with the field added to Sort in Descending direction.
+  Example:
+    // Sort by createdAt newest first
+    let opts = QueryOptions.empty |> QueryOptions.sortDesc "createdAt"
+    // Sort by score desc, then name asc
+    let leaderboard =
+    QueryOptions.empty
+    |> QueryOptions.sortAsc "name"
+    |> QueryOptions.sortDesc "score"
+
+--------------------------------------------------------------------------------
+MODULE: FractalDb.Options.SortDirection
+--------------------------------------------------------------------------------
+
+TYPE: Ascending
+  Sort from smallest to largest.
+  Note: Ascending order: - Text: A → Z (case-sensitive, uppercase before lowercase) - Numbers: 0 → 9, -100 → 100 - Timestamps: Oldest → Newest - Booleans: false (0) → true (1) - NULL: Always first SQL equivalent: ORDER BY field ASC
+
+TYPE: Descending
+  Sort from largest to smallest.
+  Note: Descending order: - Text: Z → A (case-sensitive, lowercase before uppercase) - Numbers: 100 → -100, 9 → 0 - Timestamps: Newest → Oldest - Booleans: true (1) → false (0) - NULL: Always first (even in descending) SQL equivalent: ORDER BY field DESC Note: NULL values sort first regardless of direction (SQLite default).
+
+--------------------------------------------------------------------------------
+MODULE: FractalDb.Options.TextSearchSpec
+--------------------------------------------------------------------------------
+
+PROPERTY: CaseSensitive
+  Whether the search should be case-sensitive.
+
+PROPERTY: Fields
+  List of field names to search within (OR logic).
+
+PROPERTY: Text
+  Search query text (substring match, wildcards escaped).
+
+--------------------------------------------------------------------------------
+MODULE: FractalDb.QueryExpr
+--------------------------------------------------------------------------------
+
+TYPE: Projection
+  Projection configuration for controlling which fields are returned in query results.
+
+TYPE: QueryBuilder
+  Computation expression builder for LINQ-style queries using F# quotations.
+
+TYPE: QueryBuilderInstance
+  Module providing the global 'query' computation expression instance.
+
+TYPE: QueryTranslator
+  Internal module for translating F# quotation expressions to Query<'T> filters.
+
+TYPE: SortDirection
+  Sort direction for query result ordering.
+  Note: Specifies whether query results should be sorted in ascending or descending order. Used in conjunction with field names to define sort order in TranslatedQuery.
+
+TYPE: TranslatedQuery
+  Represents a translated query ready for execution against the database.
+
+--------------------------------------------------------------------------------
+MODULE: FractalDb.QueryExpr.Projection
+--------------------------------------------------------------------------------
+
+TYPE: SelectAll
+  Returns complete documents with all fields included.
+  Note: This is the default behavior when no projection is specified. All document fields are returned, including metadata fields (_id, _createdAt, _updatedAt). Use SelectAll when: - You need the complete document - The document is small - You're storing the document for later use
+
+TYPE: SelectFields
+  Returns only the specified fields (whitelist projection).
+
+TYPE: SelectSingle
+  Returns a single field value, unwrapped from the document structure.
+
+--------------------------------------------------------------------------------
+MODULE: FractalDb.QueryExpr.QueryBuilder
+--------------------------------------------------------------------------------
+
+FUNCTION: Count
+  Enables 'count' syntax to count matching documents.
+  @param source: The source sequence from previous operations.
+  @returns: int - Count of matching documents. Returns Unchecked.defaultof (never executes, only for type inference).
+  Example:
+    query {
+    for user in users do
+    where (user.Status = "active")
+    count
+    }
+    // Translates to: SELECT COUNT(*) FROM users WHERE data->>'status' = 'active'
+
+FUNCTION: Exists
+  Enables 'exists' syntax to check if any documents match a predicate.
+  @param source: The source sequence from previous operations.
+  @param predicate: Lambda expression defining the existence test (e.g., fun x -> x.Email = email). Analyzed in quotation to extract filter condition.
+  @returns: bool - true if any matching documents exist, false otherwise. Returns Unchecked.defaultof (never executes, only for type inference).
+  Example:
+    query {
+    for user in users do
+    where (user.Email = "test@example.com")
+    exists
+    }
+    // Translates to: SELECT 1 FROM users WHERE data->>'email' = 'test@example.com' LIMIT 1
+    // Returns: true if any row found, false if none
+
+FUNCTION: For
+  Enables 'for x in source do' syntax in query expressions.
+  @param source: The collection to query (Collection<'T> instance).
+  @param body: The body of the query expression (never executed, only analyzed in quotation).
+  @returns: Unchecked.defaultof (never returns, only for type inference).
+  Example:
+    // The 'for user in usersCollection do' part uses this member
+    query {
+    for user in usersCollection do
+    where (user.Age >= 18)
+    }
+    // Multiple queries on different collections
+    let userQuery = query { for user in usersCollection do where (user.Active = true) }
+
+FUNCTION: Head
+  Enables 'head' syntax to retrieve the first matching document.
+  @param source: The source sequence from previous operations.
+  @returns: 'T - The first matching document (Document<'T>). Throws exception if no documents match. Returns Unchecked.defaultof (never executes, only for type inference).
+  Example:
+    query {
+    for user in users do
+    where (user.Id = userId)
+    head
+    }
+    // Translates to: SELECT * FROM users WHERE data->>'id' = '...' LIMIT 1
+    // Throws: InvalidOperationException if no rows returned
+
+FUNCTION: HeadOrDefault
+  Enables 'headOrDefault' syntax to safely retrieve the first matching document.
+  @param source: The source sequence from previous operations.
+  @returns: 'T option - Some(document) if found, None if no matches. Returns Unchecked.defaultof (never executes, only for type inference).
+  Example:
+    query {
+    for user in users do
+    where (user.Email = email)
+    headOrDefault
+    }
+    // Translates to: SELECT * FROM users WHERE data->>'email' = '...' LIMIT 1
+    // Returns: Some(document) if found, None if no rows
+
+FUNCTION: Quote
+  Captures the query expression as an F# quotation for analysis.
+  @param expr: The quotation representing the entire query expression AST.
+  @returns: The same quotation, unmodified (passed through to Run).
+  Example:
+    // User writes this query
+    query {
+    for user in usersCollection do
+    where (user.Age >= 18)
+    select user.Email
+    }
+    // Quote captures it as (simplified):
+
+FUNCTION: Run
+  Translates the captured quotation into a TranslatedQuery.
+  @param expr: The quotation captured by Quote, containing the query AST.
+  @returns: A TranslatedQuery record ready for execution.
+  Example:
+    // Query expression usage:
+    let translatedQuery =
+    query {
+    for user in usersCollection do
+    where (user.Age >= 18)
+    sortBy user.Name
+    take 10
+    }
+
+FUNCTION: Select
+  Enables 'select projection' syntax for field projection and result transformation.
+  @param source: The source sequence from previous operations.
+  @param projection: Lambda expression defining what fields/values to project (e.g., fun x -> x.Email or fun x -> (x.Name, x.Age)). Analyzed in quotation to determine projection type.
+  @returns: TranslatedQuery<'R> - Result type may differ from source type. Returns Unchecked.defaultof (never executes, only for type inference).
+  Example:
+    query {
+    for user in users do
+    where (user.Age > 18)
+    select user.Email  // Changes from TranslatedQuery<User> to TranslatedQuery<string>
+    }
+
+FUNCTION: Skip
+  Enables 'skip n' syntax to skip the first n results (offset pagination).
+  @param source: The source sequence from previous operations.
+  @param count: Number of results to skip.
+  @returns: Unchecked.defaultof (never returns, only for type inference).
+  Example:
+    skip ((N - 1) * P)
+    take P
+
+FUNCTION: SortBy
+  Enables 'sortBy field' syntax for ascending sort order.
+  @param source: The source sequence from previous operations.
+  @param keySelector: Lambda expression selecting the field to sort by (e.g., fun x -> x.Name). Analyzed in quotation to extract field name.
+  @returns: Unchecked.defaultof (never returns, only for type inference).
+  Example:
+    // Sort by name ascending
+    query {
+    for user in users do
+    sortBy user.Name
+    }
+    // Sort with secondary field (use thenBy)
+    query {
+
+FUNCTION: SortByDescending
+  Enables 'sortByDescending field' syntax for descending sort order.
+  @param source: The source sequence from previous operations.
+  @param keySelector: Lambda expression selecting the field to sort by (e.g., fun x -> x.CreatedAt). Analyzed in quotation to extract field name.
+  @returns: Unchecked.defaultof (never returns, only for type inference).
+  Example:
+    // Recent posts first
+    query {
+    for post in posts do
+    sortByDescending post.CreatedAt
+    take 10
+    }
+    // Highest rated products
+
+FUNCTION: Take
+  Enables 'take n' syntax to limit the number of results returned.
+  @param source: The source sequence from previous operations.
+  @param count: Maximum number of results to return.
+  @returns: Unchecked.defaultof (never returns, only for type inference).
+  Example:
+    let pageSize = 20
+    let pageNumber = 3
+    skip (pageNumber * pageSize)  // Skip 60 items (pages 1-3)
+    take pageSize                  // Return 20 items (page 4)
+
+FUNCTION: ThenBy
+  Enables 'thenBy field' syntax for secondary ascending sort.
+  @param source: The source sequence with existing sort order.
+  @param keySelector: Lambda expression selecting the secondary sort field.
+  @returns: Unchecked.defaultof (never returns, only for type inference).
+  Example:
+    sortBy user.LastName
+    thenBy user.FirstName
+    thenByDescending user.Age
+
+FUNCTION: ThenByDescending
+  Enables 'thenByDescending field' syntax for secondary descending sort.
+  @param source: The source sequence with existing sort order.
+  @param keySelector: Lambda expression selecting the secondary sort field.
+  @returns: Unchecked.defaultof (never returns, only for type inference).
+  Example:
+    sortBy user.Status          // "active", "inactive", "pending"
+    thenByDescending user.LastLogin  // Most recent first within each status
+
+FUNCTION: Where
+  Enables 'where (predicate)' filtering syntax in query expressions.
+  @param source: The source sequence (from the 'for..in' clause).
+  @param predicate: A boolean predicate function that filters documents. The lambda expression (fun x -> x.Field op value) is analyzed in the quotation.
+  @returns: Unchecked.defaultof (never returns, only for type inference).
+  Example:
+    query {
+    for user in users do
+    where (user.Age > 18)    // 'user' variable defined here
+    sortBy user.Name         // 'user' still in scope
+    }
+
+FUNCTION: Yield
+  Enables 'yield' and implicit select syntax in query expressions.
+  @param value: The value to yield (never used, only for type inference).
+  @returns: Unchecked.defaultof (never returns, only for type inference).
+  Example:
+    // Implicitly uses Yield (no explicit select)
+    query {
+    for user in usersCollection do
+    where (user.Age >= 18)
+    }
+    // Returns: seq<User> with all fields
+    // Equivalent to:
+
+--------------------------------------------------------------------------------
+MODULE: FractalDb.QueryExpr.QueryBuilderInstance
+--------------------------------------------------------------------------------
+
+PROPERTY: query
+  Global instance of QueryBuilder for use in query expressions.
+
+--------------------------------------------------------------------------------
+MODULE: FractalDb.QueryExpr.QueryTranslator
+--------------------------------------------------------------------------------
+
+FUNCTION: evaluateExpr
+  Evaluates a quotation expression to extract its runtime value.
+  @param expr: F# quotation expression to evaluate (e.g., Value(42), captured variables, computed expressions).
+  @returns: Boxed object representing the runtime value of the expression.
+  Example:
+    let maxAge = 65
+    query { for user in users do where (user.Age <= maxAge) }
+    // maxAge evaluated once → SQL: WHERE data->>'age' <= 65
+    // Not evaluated per row
+
+FUNCTION: extractPropertyName
+  Extracts property name from F# quotation expression, converting to camelCase.
+  @param expr: F# quotation expression representing property access (e.g., user.Email, user.Address.City).
+  @returns: String representing the property path in camelCase with dot notation for nested fields. Returns empty string for identity (Var) references.
+  Example:
+    user.Address.City
+    // Quotation: PropertyGet(PropertyGet(Var(user), Address), City)
+    // Result: "address.city"
+    // SQL: data->'address'->>'city'
+
+FUNCTION: simplify
+  Simplifies Query<'T> structures by optimizing nested And/Or operations.
+  @param q: Query structure to simplify.
+  @returns: Optimized Query<'T> with flattened And/Or operations and empty queries removed.
+  Example:
+    query {
+    for user in users do
+    where (user.Age >= 18)
+    where (user.Status = "active")
+    where (user.Country = "USA")
+    }
+    // Without simplify: And [And [And [Empty; q1]; q2]; q3]
+    // With simplify: And [q1; q2; q3]
+
+FUNCTION: toCamelCase
+  Converts PascalCase property names to camelCase for JSON field names.
+  @param s: The PascalCase string to convert.
+  @returns: The camelCase version of the input string.
+  Example:
+    toCamelCase "CreatedAt"    // "createdAt"
+    toCamelCase "FirstName"    // "firstName"
+    toCamelCase "Age"          // "age"
+    toCamelCase "email"        // "email" (unchanged)
+    toCamelCase ""             // ""
+
+FUNCTION: translate
+  Main translation function: converts full query expression quotation to TranslatedQuery<'T>.
+  @param expr: F# quotation expression representing complete query computation expression. Type is Expr<TranslatedQuery<'T>> but cast to Expr for pattern matching.
+  @returns: TranslatedQuery<'T> record containing all query components ready for execution.
+  Example:
+    let rec loop (expr: Expr) (query: TranslatedQuery<'T>) : TranslatedQuery<'T> =
+    match expr with
+    | SpecificCall QueryBuilderMethod -> extract + recurse
+    | _ -> return accumulator
+
+FUNCTION: translatePredicate
+  Translates F# quotation predicate expressions to Query<'T> AST.
+  @param expr: F# quotation expression representing a boolean predicate (e.g., user.Age > 18).
+  @returns: Query<'T> AST node representing the translated predicate.
+  Example:
+    SpecificCall <@ (>) @> (_, _, [left; right])
+    // Matches: left > right
+    // Extracts: left expression, right expression
+
+FUNCTION: translateProjection
+  Analyzes projection expression to determine projection type and fields.
+  @param expr: F# quotation expression from select clause representing the projection.
+  @returns: Projection discriminated union: SelectAll, SelectSingle, or SelectFields.
+  Example:
+    // Identity projection - complete documents
+    translateProjection <@ fun (user: User) -> user @>
+    // Returns: Projection.SelectAll
+    // Single field - unwrapped value
+    translateProjection <@ fun (user: User) -> user.Email @>
+    // Returns: Projection.SelectSingle "email"
+
+--------------------------------------------------------------------------------
+MODULE: FractalDb.QueryExpr.SortDirection
+--------------------------------------------------------------------------------
+
+TYPE: Asc
+  Ascending order (smallest to largest, A-Z, oldest to newest).
+
+TYPE: Desc
+  Descending order (largest to smallest, Z-A, newest to oldest).
+
+--------------------------------------------------------------------------------
+MODULE: FractalDb.QueryExpr.TranslatedQuery
+--------------------------------------------------------------------------------
+
+PROPERTY: OrderBy
+  List of sort specifications in precedence order.
+
+PROPERTY: Projection
+  Field projection configuration.
+
+PROPERTY: Skip
+  Number of documents to skip for pagination.
+
+PROPERTY: Source
+  The name of the collection to query.
+
+PROPERTY: Take
+  Maximum number of documents to return.
+
+PROPERTY: Where
+  Optional filter predicate to apply to documents.
+
+--------------------------------------------------------------------------------
+MODULE: FractalDb.Schema
+--------------------------------------------------------------------------------
+
+TYPE: FieldDef
+  Field definition for a document field to be indexed or constrained.
+
+TYPE: IndexDef
+  Index definition for creating composite or custom indexes.
+
+TYPE: SchemaDef
+  Schema definition for a document collection with field definitions and validation.
+
+TYPE: SqliteType
+  SQLite column type mapping for document fields.
+
+--------------------------------------------------------------------------------
+MODULE: FractalDb.Schema.FieldDef
+--------------------------------------------------------------------------------
+
+PROPERTY: Indexed
+  Whether to create an index on this field.
+
+PROPERTY: Name
+  Field name used in queries and for generated column naming.
+
+PROPERTY: Nullable
+  Whether the field can be NULL.
+
+PROPERTY: Path
+  JSON path for field extraction. Defaults to $.{Name} if None.
+
+PROPERTY: SqlType
+  SQLite type for the generated column.
+
+PROPERTY: Unique
+  Whether to enforce uniqueness constraint.
+
+--------------------------------------------------------------------------------
+MODULE: FractalDb.Schema.IndexDef
+--------------------------------------------------------------------------------
+
+PROPERTY: Fields
+  List of field names to include in the index.
+
+PROPERTY: Name
+  Index name used in CREATE INDEX statement.
+
+PROPERTY: Unique
+  Whether this is a UNIQUE index.
+
+--------------------------------------------------------------------------------
+MODULE: FractalDb.Schema.SchemaDef
+--------------------------------------------------------------------------------
+
+PROPERTY: Fields
+  List of field definitions for generated columns.
+
+PROPERTY: Indexes
+  List of composite or custom index definitions.
+
+PROPERTY: Timestamps
+  Whether to automatically manage createdAt and updatedAt timestamps.
+
+PROPERTY: Validate
+  Optional validation function called before insert/update operations.
+
+--------------------------------------------------------------------------------
+MODULE: FractalDb.Schema.SqliteType
+--------------------------------------------------------------------------------
+
+TYPE: Blob
+  BLOB storage class for binary data.
+  Note: Used for binary data stored exactly as input. Useful for images, encrypted data, serialized objects, etc.
+
+TYPE: Boolean
+  Boolean values stored as INTEGER (0=false, 1=true).
+  Note: SQLite doesn't have a native boolean type. Boolean fields are stored as INTEGER with 0 representing false and 1 representing true. The SQL translation layer handles the conversion automatically.
+
+TYPE: Integer
+  INTEGER storage class for signed 64-bit integer values.
+  Note: Used for integer fields, counts, IDs, Unix timestamps, etc. SQLite integers can be 1, 2, 3, 4, 6, or 8 bytes depending on magnitude. Boolean values should use SqliteType.Boolean instead (also stored as INTEGER).
+
+TYPE: Numeric
+  NUMERIC storage class for flexible numeric values.
+  Note: SQLite NUMERIC affinity attempts to convert values to INTEGER or REAL when possible, otherwise stores as TEXT. Useful for decimal numbers that should maintain precision.
+
+TYPE: Real
+  REAL storage class for floating-point values.
+  Note: Used for floating-point numbers (IEEE 754 double-precision). SQLite stores REAL as 8-byte IEEE floating point numbers.
+
+TYPE: Text
+  TEXT storage class for string values.
+  Note: Used for string fields, serialized JSON, dates as ISO strings, etc. SQLite stores TEXT as UTF-8, UTF-16BE, or UTF-16LE based on encoding.
+
+--------------------------------------------------------------------------------
+MODULE: FractalDb.Serialization
+--------------------------------------------------------------------------------
+
+PROPERTY: defaultOptions
+  Default JSON serializer options configured for F# types.
+
+FUNCTION: deserialize
+  Deserializes a JSON string to an F# value.
+  @param json: The JSON string to deserialize.
+  @returns: The deserialized F# value of type 'T.
+  Example:
+    type User = { Name: string; Age: int }
+    let json = """{"name":"Bob","age":25}"""
+    let user = deserialize<User> json
+    // Result: { Name = "Bob"; Age = 25 }
+
+FUNCTION: deserializeFromBytes
+  Deserializes a UTF-8 byte array (JSONB format) to an F# value.
+  @param bytes: The UTF-8 encoded JSON byte array.
+  @returns: The deserialized F# value of type 'T.
+  Example:
+    type User = { Name: string; Age: int }
+    // bytes retrieved from SQLite BLOB column
+    let user = deserializeFromBytes<User> bytes
+    // Result: { Name = "Alice"; Age = 30 }
+
+FUNCTION: serialize
+  Serializes an F# value to a JSON string.
+  @param value: The value to serialize.
+  @returns: A JSON string representation of the value.
+  Example:
+    type User = { Name: string; Age: int }
+    let user = { Name = "Alice"; Age = 30 }
+    let json = serialize user
+    // Result: """{"name":"Alice","age":30}"""
+
+FUNCTION: serializeToBytes
+  Serializes an F# value to a UTF-8 byte array (JSONB format for SQLite).
+  @param value: The value to serialize.
+  @returns: A UTF-8 encoded byte array containing the JSON representation.
+  Example:
+    type User = { Name: string; Age: int }
+    let user = { Name = "Alice"; Age = 30 }
+    let bytes = serializeToBytes user
+    // Use with SQLite: INSERT INTO docs (data) VALUES (@bytes)
+
+--------------------------------------------------------------------------------
+MODULE: FractalDb.SqlTranslator
+--------------------------------------------------------------------------------
+
+TYPE: SqlTranslator
+  Translates FractalDb Query expressions to parameterized SQLite SQL.
+  Note: Converts type-safe Query<'T> to SQL WHERE clauses with parameter bindings. Field resolution: indexed fields use _fieldName, non-indexed use jsonb_extract.
+
+TYPE: TranslatorResult
+  Result of translating a Query to SQL with parameterized values.
+  Note: Encapsulates the SQL WHERE clause and parameter bindings after translation. Uses parameterized queries (@p0, @p1, ...) to prevent SQL injection.
+
+TYPE: TranslatorResultModule
+  Helper functions for creating TranslatorResult values.
+
+--------------------------------------------------------------------------------
+MODULE: FractalDb.SqlTranslator.SqlTranslator
+--------------------------------------------------------------------------------
+
+FIELD: fieldMap
+  Map of field names to their definitions for fast lookup.
+
+FIELD: paramCounter
+  Counter for generating unique parameter names (@p0, @p1, etc.).
+
+FUNCTION: NextParam
+  Generates the next unique parameter name and increments the counter.
+  @returns: A unique parameter name in the format "@p0", "@p1", "@p2", etc.
+
+FUNCTION: ResolveField
+  Resolves a field name to its SQL column reference.
+  @param fieldName: The field name to resolve.
+  @returns: The SQL column reference: direct column, generated column, or jsonb_extract call.
+
+FUNCTION: Translate
+  Translates a Query expression to a parameterized SQL WHERE clause.
+  @param query: The Query<'T> to translate.
+  @returns: A TranslatorResult containing the SQL WHERE clause and parameter bindings.
+  Example:
+    open FractalDb.Query
+    let translator = SqlTranslator(schema, false)
+    // Simple query
+    let query1 = Query.Field("name", FieldOp.Compare (box (CompareOp.Eq "Alice")))
+    let result1 = translator.Translate(query1)
+    // result1.Sql = "_name = @p0" (if indexed)
+
+FUNCTION: TranslateArray
+  Translates an ArrayOp to SQL using JSON array functions.
+  @param fieldSql: The SQL column reference for the field.
+  @param arrayOp: The array operator (boxed).
+  @returns: A TranslatorResult with SQL array operation and parameter bindings.
+  Example:
+    // ArrayOp.All with values
+    TranslateArray("_tags", box (ArrayOp.All ["featured"; "public"]))
+    // SQL: EXISTS(SELECT 1 FROM json_each(_tags) WHERE value = @p0) AND
+    //      EXISTS(SELECT 1 FROM json_each(_tags) WHERE value = @p1)
+    // Params: [("@p0", "featured"); ("@p1", "public")]
+    // ArrayOp.All with empty list
+    TranslateArray("_tags", box (ArrayOp.All []))
+
+FUNCTION: TranslateCompare
+  Translates a CompareOp to SQL with appropriate comparison operator.
+  @param fieldSql: The SQL column reference for the field.
+  @param compareOp: The comparison operator (boxed).
+  @returns: A TranslatorResult with SQL comparison expression and parameter bindings.
+
+FUNCTION: TranslateExist
+  Translates an ExistsOp to SQL using JSON type checking.
+  @param fieldSql: The SQL column reference for the field.
+  @param existsOp: The existence operator.
+  @returns: A TranslatorResult with SQL existence check (no parameters needed).
+  Example:
+    // Check field exists
+    TranslateExist("_email", ExistsOp.Exists true)
+    // SQL: "json_type(_email) IS NOT NULL"
+    // Params: []
+    // Check field doesn't exist
+    TranslateExist("_deletedAt", ExistsOp.Exists false)
+    // SQL: "json_type(_deletedAt) IS NULL"
+
+FUNCTION: TranslateFieldOp
+  Translates a FieldOp to SQL by dispatching to the appropriate operator handler.
+  @param fieldSql: The SQL column reference for the field.
+  @param op: The field operator to translate.
+  @returns: A TranslatorResult with SQL and parameters for the field operation.
+
+FUNCTION: TranslateOptions
+  Translates QueryOptions to SQL clauses (ORDER BY, LIMIT, OFFSET).
+  @param options: The QueryOptions<'T> to translate.
+  @returns: A tuple of (SQL clauses string, parameter bindings list).
+  Example:
+    open FractalDb.Options
+    let translator = SqlTranslator(schema, false)
+    // Sort + Limit + Skip
+    let options1 = {
+    Sort = [("name", SortDirection.Ascending); ("age", SortDirection.Descending)]
+    Limit = Some 10
+
+FUNCTION: TranslateQuery
+  Recursively translates a Query expression to SQL.
+  @param query: The Query<'T> to translate.
+  @returns: A TranslatorResult containing the SQL WHERE clause and parameter bindings.
+
+FUNCTION: TranslateString
+  Translates a StringOp to SQL LIKE pattern matching expressions.
+  @param fieldSql: The SQL column reference for the field.
+  @param stringOp: The string operator to translate.
+  @returns: A TranslatorResult with SQL LIKE expression and parameter bindings.
+  Example:
+    // Like with user pattern
+    TranslateString("_name", StringOp.Like "A%")
+    // SQL: "_name LIKE @p0"
+    // Params: [("@p0", "A%")]
+    // Case-insensitive like
+    TranslateString("_email", StringOp.ILike "admin%")
+    // SQL: "_email LIKE @p0 COLLATE NOCASE"
+
+--------------------------------------------------------------------------------
+MODULE: FractalDb.SqlTranslator.TranslatorResult
+--------------------------------------------------------------------------------
+
+PROPERTY: Parameters
+  List of parameter bindings as (name, value) tuples.
+
+PROPERTY: Sql
+  The SQL WHERE clause expression with parameter placeholders.
+
+--------------------------------------------------------------------------------
+MODULE: FractalDb.SqlTranslator.TranslatorResultModule
+--------------------------------------------------------------------------------
+
+PROPERTY: empty
+  Returns an empty TranslatorResult that matches all documents (SQL: "1=1").
+
+FUNCTION: create
+  Creates a TranslatorResult with the specified SQL and parameters.
+  @param sql: The SQL WHERE clause expression.
+  @param params': List of parameter bindings.
+  @returns: A TranslatorResult with the given Sql and Parameters.
+  Example:
+    let result = TranslatorResult.create "_name = @p0" [("@p0", box "Alice")]
+
+--------------------------------------------------------------------------------
+MODULE: FractalDb.TableBuilder
+--------------------------------------------------------------------------------
+
+FUNCTION: createIndexesSql
+  Generates a list of CREATE INDEX SQL statements for a FractalDb collection schema.
+  @param name: The table name (typically the collection name).
+  @param schema: The SchemaDef containing field definitions and composite indexes.
+  @returns: A list of CREATE INDEX IF NOT EXISTS statements including: - Single-field indexes for each indexed field (e.g., idx_users_email) - UNIQUE keyword for fields with Unique = true - Composite indexes from schema.Indexes with multiple columns - All indexes use generated column names (prefixed with underscore)
+  Example:
+    // Example schema with both field and composite indexes
+    let schema = {
+    Fields = [
+    { Name = "email"; Path = None; SqlType = SqliteType.Text;
+    Indexed = true; Unique = true; Nullable = false }
+    { Name = "status"; Path = None; SqlType = SqliteType.Text;
+    Indexed = true; Unique = false; Nullable = false }
+    ]
+
+FUNCTION: createTableSql
+  Generates a CREATE TABLE SQL statement for a FractalDb collection schema.
+  @param name: The table name (typically the collection name).
+  @param schema: The SchemaDef containing field definitions and indexes.
+  @returns: A complete CREATE TABLE IF NOT EXISTS statement with: - Base columns: _id (PRIMARY KEY), body (JSON BLOB), createdAt, updatedAt - Generated columns for indexed fields using jsonb_extract - Proper column types via mapSqliteType - VIRTUAL generated columns (computed on read, not stored)
+  Example:
+    // Example schema
+    let schema = {
+    Fields = [
+    { Name = "email"; Path = None; SqlType = SqliteType.Text; Indexed = true; Unique = true; Nullable = false }
+    { Name = "age"; Path = None; SqlType = SqliteType.Integer; Indexed = true; Unique = false; Nullable = true }
+    ]
+    Indexes = []
+    Timestamps = true
+
+FUNCTION: ensureTable
+  Ensures that a table and its indexes exist in the database by executing DDL statements.
+  @param conn: The IDbConnection to execute DDL statements against.
+  @param name: The table name to create.
+  @param schema: The SchemaDef defining the table structure and indexes.
+  @returns: Unit - throws exception if DDL execution fails.
+  Example:
+    open System.Data
+    open Microsoft.Data.Sqlite
+    // Create connection
+    let conn = new SqliteConnection("Data Source=:memory:")
+    conn.Open()
+    // Define schema
+
+FUNCTION: mapSqliteType
+  Maps a FractalDb SqliteType discriminated union case to its corresponding SQLite SQL type string for use in CREATE TABLE statements.
+  @param sqlType: The SqliteType discriminated union case to map.
+  @returns: The SQLite SQL type string: - Text → "TEXT" - Integer → "INTEGER" - Real → "REAL" - Blob → "BLOB" - Numeric → "NUMERIC" - Boolean → "INTEGER" (SQLite convention: 0 = false, 1 = true)
+  Example:
+    // String field
+    mapSqliteType SqliteType.Text  // Returns "TEXT"
+    // Numeric field
+    mapSqliteType SqliteType.Integer  // Returns "INTEGER"
+    // Boolean field (stored as integer)
+    mapSqliteType SqliteType.Boolean  // Returns "INTEGER"
+
+--------------------------------------------------------------------------------
+MODULE: FractalDb.Transaction
+--------------------------------------------------------------------------------
+
+TYPE: Transaction
+  Represents a database transaction with explicit commit/rollback control.
+
+FUNCTION: create
+  Creates a new transaction on the specified database connection.
+  @param conn: The IDbConnection to create the transaction on.
+  @returns: A new Transaction instance wrapping IDbTransaction.
+  Example:
+    open System.Data
+    open Microsoft.Data.Sqlite
+    // Open connection
+    let conn = new SqliteConnection("Data Source=:memory:")
+    conn.Open()
+    // Create transaction
+
+--------------------------------------------------------------------------------
+MODULE: FractalDb.Transaction.Transaction
+--------------------------------------------------------------------------------
+
+FUNCTION: Commit
+  Commits all changes made during this transaction.
+  Example:
+    use tx = Transaction.create conn
+    // Perform database operations...
+    tx.Commit()  // Make changes permanent
+
+FUNCTION: Rollback
+  Rolls back all changes made during this transaction.
+  Example:
+    use tx = Transaction.create conn
+    try
+    // Perform operations...
+    tx.Commit()
+    with ex ->
+    tx.Rollback()  // Revert changes on error
+    reraise()
+
+--------------------------------------------------------------------------------
+MODULE: FractalDb.Types
+--------------------------------------------------------------------------------
+
+TYPE: Document
+  A document wraps user data with auto-generated metadata.
+
+TYPE: DocumentMeta
+  Metadata added to all documents in the database.
+  Note: This type contains auto-generated fields that FractalDb manages automatically: - Id: A unique identifier (UUID v7) generated when the document is created - CreatedAt: Unix timestamp in milliseconds when the document was first inserted - UpdatedAt: Unix timestamp in milliseconds when the document was last modified
+
+TYPE: IdGenerator
+  Provides functions for generating and validating document identifiers.
+
+TYPE: Timestamp
+  Provides utility functions for working with Unix timestamps.
+  Note: FractalDb stores all timestamps as Unix milliseconds (int64) for consistency and compactness. This module provides conversions between .NET's DateTimeOffset and Unix timestamps, as well as utility functions for timestamp operations.
+
+--------------------------------------------------------------------------------
+MODULE: FractalDb.Types.Document
+--------------------------------------------------------------------------------
+
+PROPERTY: CreatedAt
+  Unix timestamp in milliseconds when the document was created.
+
+PROPERTY: Data
+  The user data stored in this document.
+
+PROPERTY: Id
+  Unique identifier for the document (UUID v7 format).
+
+PROPERTY: UpdatedAt
+  Unix timestamp in milliseconds when the document was last updated.
+
+FUNCTION: create
+  Creates a new document with auto-generated ID and current timestamps.
+  @param data: The user data to wrap in a document.
+  @returns: A new document with generated ID and timestamps set to the current time.
+  Example:
+    type User = { Name: string; Email: string }
+    let doc = Document.create { Name = "Alice"; Email = "alice@example.com" }
+    // doc.Id is auto-generated (e.g., "01234567-89ab-7def-8123-456789abcdef")
+    // doc.CreatedAt and doc.UpdatedAt are set to current timestamp
+    // doc.Data = { Name = "Alice"; Email = "alice@example.com" }
+
+FUNCTION: createWithId
+  Creates a new document with an explicit ID and current timestamps.
+  @param id: The explicit ID to use for the document.
+  @param data: The user data to wrap in a document.
+  @returns: A new document with the specified ID and timestamps set to the current time.
+  Example:
+    type User = { Name: string; Email: string }
+    let customId = "01234567-89ab-7def-8123-456789abcdef"
+    let doc = Document.createWithId customId { Name = "Bob"; Email = "bob@example.com" }
+    // doc.Id = "01234567-89ab-7def-8123-456789abcdef"
+    // doc.CreatedAt and doc.UpdatedAt are set to current timestamp
+
+FUNCTION: map
+  Maps a document's data to a different type while preserving all metadata.
+  @param f: A function that transforms the document data from type 'T to type 'U.
+  @param doc: The document to map.
+  @returns: A new document with transformed data and the same ID, CreatedAt, and UpdatedAt.
+  Example:
+    type User = { Name: string; Email: string; Age: int }
+    type UserSummary = { DisplayName: string; Contact: string }
+    let userDoc = Document.create { Name = "Alice"; Email = "alice@example.com"; Age = 30 }
+    let summaryDoc = Document.map
+    (fun user -> { DisplayName = user.Name; Contact = user.Email })
+    userDoc
+
+FUNCTION: update
+  Updates a document's data using a transformation function, preserving ID and CreatedAt.
+  @param f: A function that transforms the document data.
+  @param doc: The document to update.
+  @returns: A new document with transformed data, the same ID and CreatedAt, and UpdatedAt set to the current time.
+  Example:
+    type User = { Name: string; Email: string; Age: int }
+    let originalDoc = Document.create { Name = "Alice"; Email = "alice@example.com"; Age = 30 }
+    // Increment age by 1
+    let updatedDoc = Document.update (fun user -> { user with Age = user.Age + 1 }) originalDoc
+    // updatedDoc.Id = originalDoc.Id
+    // updatedDoc.Data.Age = 31
+
+--------------------------------------------------------------------------------
+MODULE: FractalDb.Types.DocumentMeta
+--------------------------------------------------------------------------------
+
+PROPERTY: CreatedAt
+  Unix timestamp in milliseconds when the document was created.
+
+PROPERTY: Id
+  Unique identifier for the document (UUID v7 format).
+
+PROPERTY: UpdatedAt
+  Unix timestamp in milliseconds when the document was last updated.
+
+--------------------------------------------------------------------------------
+MODULE: FractalDb.Types.IdGenerator
+--------------------------------------------------------------------------------
+
+FUNCTION: generate
+  Generates a new time-sortable UUID v7 identifier.
+  @returns: A string representation of a UUID v7 in standard format (lowercase with hyphens).
+  Example:
+    let id1 = IdGenerator.generate()
+    // id1 = "01234567-89ab-7def-8123-456789abcdef"
+    let id2 = IdGenerator.generate()
+    // id2 > id1 (lexicographically, since id2 was generated later)
+
+FUNCTION: isEmptyOrDefault
+  Checks if an ID string is empty, null, or represents an empty GUID.
+  @param id: The ID string to check.
+  @returns: true if the ID is null, empty, or equals "00000000-0000-0000-0000-000000000000"; otherwise false .
+  Example:
+    IdGenerator.isEmptyOrDefault ""     // true
+    IdGenerator.isEmptyOrDefault null   // true
+    IdGenerator.isEmptyOrDefault "00000000-0000-0000-0000-000000000000"  // true
+    IdGenerator.isEmptyOrDefault "01234567-89ab-7def-8123-456789abcdef"  // false
+
+FUNCTION: isValid
+  Validates whether a string is a properly formatted GUID.
+  @param id: The string to validate.
+  @returns: true if the string is a valid GUID format; otherwise false .
+  Example:
+    IdGenerator.isValid "01234567-89ab-cdef-0123-456789abcdef"  // true
+    IdGenerator.isValid "0123456789abcdef0123456789abcdef"      // true
+    IdGenerator.isValid "not-a-guid"                            // false
+    IdGenerator.isValid ""                                      // false
+
+--------------------------------------------------------------------------------
+MODULE: FractalDb.Types.Timestamp
+--------------------------------------------------------------------------------
+
+FUNCTION: fromDateTimeOffset
+  Converts a DateTimeOffset to a Unix timestamp in milliseconds.
+  @param dto: The DateTimeOffset to convert.
+  @returns: A Unix timestamp in milliseconds representing the DateTimeOffset.
+  Example:
+    let dto = DateTimeOffset(2024, 1, 1, 0, 0, 0, TimeSpan.Zero)
+    let timestamp = Timestamp.fromDateTimeOffset dto
+    // timestamp = 1704067200000L
+
+FUNCTION: isInRange
+  Checks if a timestamp falls within a specified range (inclusive).
+  @param start: The start of the range (inclusive).
+  @param end': The end of the range (inclusive).
+  @param timestamp: The timestamp to check.
+  @returns: true if the timestamp is within the range; otherwise false .
+  Example:
+    let start = 1704067200000L  // Jan 1, 2024
+    let end' = 1704153600000L   // Jan 2, 2024
+    let ts = 1704110400000L     // Jan 1, 2024 12:00:00
+    Timestamp.isInRange start end' ts  // true
+    Timestamp.isInRange start end' (start - 1L)  // false
+
+FUNCTION: now
+  Gets the current Unix timestamp in milliseconds.
+  @returns: The current UTC time as a Unix timestamp in milliseconds.
+  Example:
+    let timestamp = Timestamp.now()
+    // timestamp = 1704067200000L (example: Jan 1, 2024 00:00:00 UTC)
+
+FUNCTION: toDateTimeOffset
+  Converts a Unix timestamp in milliseconds to a DateTimeOffset.
+  @param timestamp: The Unix timestamp in milliseconds.
+  @returns: A DateTimeOffset representing the timestamp in UTC.
+  Example:
+    let dto = Timestamp.toDateTimeOffset 1704067200000L
+    // dto = 2024-01-01 00:00:00.000 +00:00

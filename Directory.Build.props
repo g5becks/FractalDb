@@ -1,0 +1,14 @@
+<Project>
+    <PropertyGroup>
+        <Authors>TakinProfit</Authors>
+        <Copyright>Copyright 2025</Copyright>
+        <PackageProjectUrl>https://takinprofit.github.io/FractalDb</PackageProjectUrl>
+        <RepositoryUrl>https://github.com/takinprofit/FractalDb</RepositoryUrl>
+        <RepositoryType>git</RepositoryType>
+        <RepositoryBranch>main</RepositoryBranch>
+        <FsDocsLicenseLink>https://github.com/takinprofit/FractalDb/blob/main/LICENSE</FsDocsLicenseLink>
+        <FsDocsReleaseNotesLink>https://github.com/takinprofit/FractalDb/blob/main/CHANGELOG.md</FsDocsReleaseNotesLink>
+        <Description>A lightweight F# document database built on SQLite with LINQ-style query expressions</Description>
+        <PackageTags>fsharp;database;sqlite;document-database;nosql</PackageTags>
+    </PropertyGroup>
+</Project>

@@ -43,3 +43,8 @@ obj/
 *.dll
 *.pdb
 *.cache
+
+# FSharp.Formatting / fsdocs
+.fsdocs/
+output/
+tmp/

@@ -1,68 +1,68 @@
 {
-  "name": "stratadb",
-  "version": "0.3.2",
-  "description": "Type-safe embedded document database for Bun with MongoDB-like queries",
-  "type": "module",
-  "main": "./dist/index.mjs",
-  "module": "./dist/index.mjs",
-  "types": "./dist/index.d.mts",
-  "exports": {
-    ".": {
-      "types": "./dist/index.d.mts",
-      "import": "./dist/index.mjs"
-    }
-  },
-  "files": [
-    "dist",
-    "README.md",
-    "LICENSE"
-  ],
-  "dependencies": {
-    "@standard-schema/spec": "^1.0.0",
-    "deepmerge-ts": "^7.1.5",
-    "fast-safe-stringify": "^2.1.1"
-  },
-  "devDependencies": {
-    "@biomejs/biome": "2.3.6",
-    "@commitlint/cli": "^20.1.0",
-    "@commitlint/config-conventional": "^20.0.0",
-    "@types/bun": "latest",
-    "arktype": "^2.1.27",
-    "lefthook": "^2.0.4",
-    "mitata": "^1.0.34",
-    "tsd": "^0.33.0",
-    "tsdown": "^0.16.6",
-    "type-fest": "^5.2.0",
-    "typescript": "^5.9.3",
-    "ultracite": "6.3.4",
-    "valibot": "^1.1.0",
-    "vitepress": "1.6.3",
-    "vitepress-carbon": "^1.5.0",
-    "zod": "^4.1.12"
-  },
-  "tsd": {
-    "directory": "test/type"
-  },
-  "scripts": {
-    "build": "tsdown",
-    "build:watch": "tsdown --watch",
-    "clean": "rm -rf dist",
-    "test": "bun test",
-    "test:types": "bun run build && bunx tsd",
-    "test:watch": "bun test --watch",
-    "test:coverage": "bun test --coverage",
-    "typecheck": "tsc --noEmit",
-    "lint": "ultracite check",
-    "lint:fix": "ultracite fix",
-    "format": "ultracite fix",
-    "check": "bun run typecheck && bun run lint",
-    "prepare": "bun run check && bun run build",
-    "bench": "bun run bench/query-translation.bench.ts",
-    "bench:crud": "bun run bench/crud-operations.bench.ts",
-    "bench:batch": "bun run bench/batch-throughput.bench.ts",
-    "bench:all": "bun run bench && bun run bench:crud && bun run bench:batch",
-    "docs:dev": "vitepress dev docs",
-    "docs:build": "vitepress build docs",
-    "docs:preview": "vitepress preview docs"
-  }
+	"name": "stratadb",
+	"version": "0.3.2",
+	"description": "Type-safe embedded document database for Bun with MongoDB-like queries",
+	"type": "module",
+	"main": "./dist/index.mjs",
+	"module": "./dist/index.mjs",
+	"types": "./dist/index.d.mts",
+	"exports": {
+		".": {
+			"types": "./dist/index.d.mts",
+			"import": "./dist/index.mjs"
+		}
+	},
+	"files": [
+		"dist",
+		"README.md",
+		"LICENSE"
+	],
+	"dependencies": {
+		"@standard-schema/spec": "^1.0.0",
+		"deepmerge-ts": "^7.1.5",
+		"fast-safe-stringify": "^2.1.1"
+	},
+	"devDependencies": {
+		"@biomejs/biome": "2.3.6",
+		"@commitlint/cli": "^20.1.0",
+		"@commitlint/config-conventional": "^20.0.0",
+		"@types/bun": "latest",
+		"arktype": "^2.1.27",
+		"lefthook": "^2.0.4",
+		"mitata": "^1.0.34",
+		"tsd": "^0.33.0",
+		"tsdown": "^0.16.6",
+		"type-fest": "^5.2.0",
+		"typescript": "^5.9.3",
+		"ultracite": "6.3.4",
+		"valibot": "^1.1.0",
+		"vitepress": "1.6.3",
+		"vitepress-carbon": "^1.5.0",
+		"zod": "^4.1.12"
+	},
+	"tsd": {
+		"directory": "test/type"
+	},
+	"scripts": {
+		"build": "tsdown",
+		"build:watch": "tsdown --watch",
+		"clean": "rm -rf dist",
+		"test": "bun test",
+		"test:types": "bun run build && bunx tsd",
+		"test:watch": "bun test --watch",
+		"test:coverage": "bun test --coverage",
+		"typecheck": "tsc --noEmit",
+		"lint": "ultracite check",
+		"lint:fix": "ultracite fix",
+		"format": "ultracite fix",
+		"check": "bun run typecheck && bun run lint",
+		"prepare": "bun run check && bun run build",
+		"bench": "bun run bench/query-translation.bench.ts",
+		"bench:crud": "bun run bench/crud-operations.bench.ts",
+		"bench:batch": "bun run bench/batch-throughput.bench.ts",
+		"bench:all": "bun run bench && bun run bench:crud && bun run bench:batch",
+		"docs:dev": "vitepress dev docs",
+		"docs:build": "vitepress build docs",
+		"docs:preview": "vitepress preview docs"
+	}
 }

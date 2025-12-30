@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang='en'>
+<head>
+<meta charset='utf-8' />
+<title>FractalDb.Benchmarks.TransactionBenchmarks.TransactionBenchmarks-20251229-221741</title>
+
+<style type="text/css">
+	table { border-collapse: collapse; display: block; width: 100%; overflow: auto; }
+	td, th { padding: 6px 13px; border: 1px solid #ddd; text-align: right; }
+	tr { background-color: #fff; border-top: 1px solid #ccc; }
+	tr:nth-child(even) { background: #f8f8f8; }
+</style>
+</head>
+<body>
+<pre><code>
+BenchmarkDotNet v0.14.0, macOS 26.1 (25B78) [Darwin 25.1.0]
+Apple M3 Pro 2.40GHz, 1 CPU, 11 logical and 11 physical cores
+.NET SDK 10.0.100
+  [Host]     : .NET 10.0.0 (10.0.25.52411), Arm64 RyuJIT AdvSIMD DEBUG
+  Job-NPGNZK : .NET 10.0.0 (10.0.25.52411), Arm64 RyuJIT AdvSIMD
+</code></pre>
+<pre><code>InvocationCount=1  IterationCount=5  UnrollFactor=1  
+WarmupCount=3  
+</code></pre>
+
+<table>
+<thead><tr><th>Method              </th><th>Mean</th><th>Error</th><th>StdDev</th><th>Allocated</th>
+</tr>
+</thead><tbody><tr><td>Transaction_SingleInsert</td><td>495.9 &mu;s</td><td>561.5 &mu;s</td><td>145.83 &mu;s</td><td>-</td>
+</tr><tr><td>Transaction_TwoInserts</td><td>437.9 &mu;s</td><td>201.7 &mu;s</td><td>52.39 &mu;s</td><td>11632 B</td>
+</tr><tr><td>Transaction_FiveInserts</td><td>442.0 &mu;s</td><td>217.3 &mu;s</td><td>56.42 &mu;s</td><td>24792 B</td>
+</tr><tr><td>Transaction_InsertAndQuery</td><td>438.6 &mu;s</td><td>284.6 &mu;s</td><td>73.90 &mu;s</td><td>-</td>
+</tr><tr><td>NoTransaction_SingleInsert</td><td>409.3 &mu;s</td><td>280.7 &mu;s</td><td>72.90 &mu;s</td><td>-</td>
+</tr><tr><td>NoTransaction_TwoInserts</td><td>756.0 &mu;s</td><td>581.1 &mu;s</td><td>150.91 &mu;s</td><td>9888 B</td>
+</tr><tr><td>NoTransaction_FiveInserts</td><td>1,757.5 &mu;s</td><td>521.0 &mu;s</td><td>80.62 &mu;s</td><td>23912 B</td>
+</tr></tbody></table>
+</body>
+</html>

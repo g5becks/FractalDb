@@ -3176,3 +3176,225 @@ module Collection =
         | None ->
             // No validator defined, accept document
             Ok doc
+
+/// <summary>
+/// Instance methods for Collection&lt;'T&gt; providing object-oriented API.
+/// </summary>
+/// <remarks>
+/// These methods delegate to the module functions but provide a more
+/// discoverable API through IntelliSense. Both styles are equivalent:
+/// <code>
+/// // Module function style (pipeline)
+/// users |> Collection.insertOne doc
+///
+/// // Instance method style (object-oriented)
+/// users.InsertOne(doc)
+/// </code>
+/// </remarks>
+type Collection<'T> with
+
+    // ============================================================
+    // INSERT OPERATIONS
+    // ============================================================
+
+    /// <summary>Inserts a document into the collection.</summary>
+    /// <param name="doc">The document to insert.</param>
+    /// <returns>Task with Result containing the inserted document or error.</returns>
+    member this.InsertOne(doc: 'T) : Task<FractalResult<Document<'T>>> =
+        Collection.insertOne doc this
+
+    /// <summary>Inserts multiple documents into the collection.</summary>
+    /// <param name="docs">List of documents to insert.</param>
+    /// <returns>Task with Result containing InsertManyResult or error.</returns>
+    member this.InsertMany(docs: list<'T>) : Task<FractalResult<InsertManyResult<'T>>> =
+        Collection.insertMany docs this
+
+    /// <summary>Inserts multiple documents with ordering control.</summary>
+    /// <param name="docs">List of documents to insert.</param>
+    /// <param name="ordered">If true, stops on first error; if false, continues.</param>
+    /// <returns>Task with Result containing InsertManyResult or error.</returns>
+    member this.InsertMany(docs: list<'T>, ordered: bool) : Task<FractalResult<InsertManyResult<'T>>> =
+        Collection.insertManyWith docs ordered this
+
+    // ============================================================
+    // FIND OPERATIONS
+    // ============================================================
+
+    /// <summary>Finds a document by its ID.</summary>
+    /// <param name="id">The document ID.</param>
+    /// <returns>Task with Some document if found, None otherwise.</returns>
+    member this.FindById(id: string) : Task<option<Document<'T>>> =
+        Collection.findById id this
+
+    /// <summary>Finds the first document matching the filter.</summary>
+    /// <param name="filter">Query filter.</param>
+    /// <returns>Task with Some document if found, None otherwise.</returns>
+    member this.FindOne(filter: Query<'T>) : Task<option<Document<'T>>> =
+        Collection.findOne filter this
+
+    /// <summary>Finds the first document matching the filter with options.</summary>
+    /// <param name="filter">Query filter.</param>
+    /// <param name="options">Query options (sort, limit, etc.).</param>
+    /// <returns>Task with Some document if found, None otherwise.</returns>
+    member this.FindOne(filter: Query<'T>, options: QueryOptions<'T>) : Task<option<Document<'T>>> =
+        Collection.findOneWith filter options this
+
+    /// <summary>Finds all documents matching the filter.</summary>
+    /// <param name="filter">Query filter.</param>
+    /// <returns>Task with list of matching documents.</returns>
+    member this.Find(filter: Query<'T>) : Task<list<Document<'T>>> =
+        Collection.find filter this
+
+    /// <summary>Finds all documents matching the filter with options.</summary>
+    /// <param name="filter">Query filter.</param>
+    /// <param name="options">Query options (sort, limit, etc.).</param>
+    /// <returns>Task with list of matching documents.</returns>
+    member this.Find(filter: Query<'T>, options: QueryOptions<'T>) : Task<list<Document<'T>>> =
+        Collection.findWith filter options this
+
+    /// <summary>Counts documents matching the filter.</summary>
+    /// <param name="filter">Query filter.</param>
+    /// <returns>Task with count of matching documents.</returns>
+    member this.Count(filter: Query<'T>) : Task<int> =
+        Collection.count filter this
+
+    /// <summary>Gets estimated total document count (fast, no filter).</summary>
+    /// <returns>Task with estimated count.</returns>
+    member this.EstimatedCount() : Task<int> =
+        Collection.estimatedCount this
+
+    // ============================================================
+    // SEARCH OPERATIONS
+    // ============================================================
+
+    /// <summary>Full-text search across specified fields.</summary>
+    /// <param name="text">Search text.</param>
+    /// <param name="fields">Fields to search in.</param>
+    /// <returns>Task with list of matching documents.</returns>
+    member this.Search(text: string, fields: list<string>) : Task<list<Document<'T>>> =
+        Collection.search text fields this
+
+    /// <summary>Full-text search with options.</summary>
+    /// <param name="text">Search text.</param>
+    /// <param name="fields">Fields to search in.</param>
+    /// <param name="options">Query options.</param>
+    /// <returns>Task with list of matching documents.</returns>
+    member this.Search(text: string, fields: list<string>, options: QueryOptions<'T>) : Task<list<Document<'T>>> =
+        Collection.searchWith text fields options this
+
+    /// <summary>Gets distinct values for a field.</summary>
+    /// <param name="field">Field name.</param>
+    /// <param name="filter">Query filter.</param>
+    /// <returns>Task with Result containing list of distinct values.</returns>
+    member this.Distinct<'V>(field: string, filter: Query<'T>) : Task<FractalResult<list<'V>>> =
+        Collection.distinct<'T, 'V> field filter this
+
+    // ============================================================
+    // UPDATE OPERATIONS
+    // ============================================================
+
+    /// <summary>Updates a document by ID.</summary>
+    /// <param name="id">Document ID.</param>
+    /// <param name="update">Update function.</param>
+    /// <returns>Task with Result containing Some updated document if found, None otherwise.</returns>
+    member this.UpdateById(id: string, update: 'T -> 'T) : Task<FractalResult<option<Document<'T>>>> =
+        Collection.updateById id update this
+
+    /// <summary>Updates the first document matching the filter.</summary>
+    /// <param name="filter">Query filter.</param>
+    /// <param name="update">Update function.</param>
+    /// <returns>Task with Result containing Some updated document if found, None otherwise.</returns>
+    member this.UpdateOne(filter: Query<'T>, update: 'T -> 'T) : Task<FractalResult<option<Document<'T>>>> =
+        Collection.updateOne filter update this
+
+    /// <summary>Updates the first document matching the filter with upsert option.</summary>
+    /// <param name="filter">Query filter.</param>
+    /// <param name="update">Update function.</param>
+    /// <param name="upsert">If true, inserts if no match found.</param>
+    /// <returns>Task with Result containing Some document if found/created, None otherwise.</returns>
+    member this.UpdateOne(filter: Query<'T>, update: 'T -> 'T, upsert: bool) : Task<FractalResult<option<Document<'T>>>> =
+        Collection.updateOneWith filter update upsert this
+
+    /// <summary>Replaces the first document matching the filter.</summary>
+    /// <param name="filter">Query filter.</param>
+    /// <param name="doc">Replacement document.</param>
+    /// <returns>Task with Result containing Some replaced document if found, None otherwise.</returns>
+    member this.ReplaceOne(filter: Query<'T>, doc: 'T) : Task<FractalResult<option<Document<'T>>>> =
+        Collection.replaceOne filter doc this
+
+    /// <summary>Updates all documents matching the filter.</summary>
+    /// <param name="filter">Query filter.</param>
+    /// <param name="update">Update function.</param>
+    /// <returns>Task with Result containing UpdateResult with match and modify counts.</returns>
+    member this.UpdateMany(filter: Query<'T>, update: 'T -> 'T) : Task<FractalResult<UpdateResult>> =
+        Collection.updateMany filter update this
+
+    // ============================================================
+    // DELETE OPERATIONS
+    // ============================================================
+
+    /// <summary>Deletes a document by ID.</summary>
+    /// <param name="id">Document ID.</param>
+    /// <returns>Task with true if deleted, false if not found.</returns>
+    member this.DeleteById(id: string) : Task<bool> =
+        Collection.deleteById id this
+
+    /// <summary>Deletes the first document matching the filter.</summary>
+    /// <param name="filter">Query filter.</param>
+    /// <returns>Task with true if deleted, false if not found.</returns>
+    member this.DeleteOne(filter: Query<'T>) : Task<bool> =
+        Collection.deleteOne filter this
+
+    /// <summary>Deletes all documents matching the filter.</summary>
+    /// <param name="filter">Query filter.</param>
+    /// <returns>Task with DeleteResult containing deleted count.</returns>
+    member this.DeleteMany(filter: Query<'T>) : Task<DeleteResult> =
+        Collection.deleteMany filter this
+
+    // ============================================================
+    // ATOMIC FIND-AND-MODIFY OPERATIONS
+    // ============================================================
+
+    /// <summary>Atomically finds and deletes a document.</summary>
+    /// <param name="filter">Query filter.</param>
+    /// <returns>Task with Some deleted document if found, None otherwise.</returns>
+    member this.FindOneAndDelete(filter: Query<'T>) : Task<option<Document<'T>>> =
+        Collection.findOneAndDelete filter this
+
+    /// <summary>Atomically finds and deletes a document with options.</summary>
+    /// <param name="filter">Query filter.</param>
+    /// <param name="options">Find options (sort).</param>
+    /// <returns>Task with Some deleted document if found, None otherwise.</returns>
+    member this.FindOneAndDelete(filter: Query<'T>, options: FindOptions) : Task<option<Document<'T>>> =
+        Collection.findOneAndDeleteWith filter options this
+
+    /// <summary>Atomically finds and updates a document.</summary>
+    /// <param name="filter">Query filter.</param>
+    /// <param name="update">Update function.</param>
+    /// <param name="options">Find and modify options.</param>
+    /// <returns>Task with Result containing Some document if found, None otherwise.</returns>
+    member this.FindOneAndUpdate(filter: Query<'T>, update: 'T -> 'T, options: FindAndModifyOptions) : Task<FractalResult<option<Document<'T>>>> =
+        Collection.findOneAndUpdate filter update options this
+
+    /// <summary>Atomically finds and replaces a document.</summary>
+    /// <param name="filter">Query filter.</param>
+    /// <param name="doc">Replacement document.</param>
+    /// <param name="options">Find and modify options.</param>
+    /// <returns>Task with Result containing Some document if found, None otherwise.</returns>
+    member this.FindOneAndReplace(filter: Query<'T>, doc: 'T, options: FindAndModifyOptions) : Task<FractalResult<option<Document<'T>>>> =
+        Collection.findOneAndReplace filter doc options this
+
+    // ============================================================
+    // UTILITY OPERATIONS
+    // ============================================================
+
+    /// <summary>Drops the collection (deletes table).</summary>
+    /// <returns>Task that completes when collection is dropped.</returns>
+    member this.Drop() : Task<unit> =
+        Collection.drop this
+
+    /// <summary>Validates a document against the schema.</summary>
+    /// <param name="doc">Document to validate.</param>
+    /// <returns>Result with validated document or validation error.</returns>
+    member this.Validate(doc: 'T) : FractalResult<'T> =
+        Collection.validate doc this

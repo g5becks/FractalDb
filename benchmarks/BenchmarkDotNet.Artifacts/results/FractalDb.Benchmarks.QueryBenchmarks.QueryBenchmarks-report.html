@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang='en'>
+<head>
+<meta charset='utf-8' />
+<title>FractalDb.Benchmarks.QueryBenchmarks.QueryBenchmarks-20251229-221639</title>
+
+<style type="text/css">
+	table { border-collapse: collapse; display: block; width: 100%; overflow: auto; }
+	td, th { padding: 6px 13px; border: 1px solid #ddd; text-align: right; }
+	tr { background-color: #fff; border-top: 1px solid #ccc; }
+	tr:nth-child(even) { background: #f8f8f8; }
+</style>
+</head>
+<body>
+<pre><code>
+BenchmarkDotNet v0.14.0, macOS 26.1 (25B78) [Darwin 25.1.0]
+Apple M3 Pro 2.40GHz, 1 CPU, 11 logical and 11 physical cores
+.NET SDK 10.0.100
+  [Host]     : .NET 10.0.0 (10.0.25.52411), Arm64 RyuJIT AdvSIMD DEBUG
+  Job-KDGGIQ : .NET 10.0.0 (10.0.25.52411), Arm64 RyuJIT AdvSIMD
+</code></pre>
+<pre><code>IterationCount=5  WarmupCount=3  
+</code></pre>
+
+<table>
+<thead><tr><th>Method                  </th><th>Mean </th><th>Error</th><th>StdDev</th><th>Gen0</th><th>Gen1</th><th>Allocated</th>
+</tr>
+</thead><tbody><tr><td>Query_IndexedField_Equality</td><td>13.84 &mu;s</td><td>0.961 &mu;s</td><td>0.149 &mu;s</td><td>0.4730</td><td>-</td><td>3.97 KB</td>
+</tr><tr><td>Query_NonIndexedField_Equality</td><td>390.82 &mu;s</td><td>40.654 &mu;s</td><td>6.291 &mu;s</td><td>-</td><td>-</td><td>4.2 KB</td>
+</tr><tr><td>Query_Range</td><td>1,068.93 &mu;s</td><td>305.721 &mu;s</td><td>79.395 &mu;s</td><td>31.2500</td><td>7.8125</td><td>263.78 KB</td>
+</tr><tr><td>Query_Complex_Nested</td><td>1,008.09 &mu;s</td><td>73.274 &mu;s</td><td>19.029 &mu;s</td><td>27.3438</td><td>5.8594</td><td>233.87 KB</td>
+</tr><tr><td>Query_Count</td><td>395.86 &mu;s</td><td>28.425 &mu;s</td><td>4.399 &mu;s</td><td>-</td><td>-</td><td>2.26 KB</td>
+</tr><tr><td>Query_WithOptions_Limit</td><td>39.62 &mu;s</td><td>1.387 &mu;s</td><td>0.360 &mu;s</td><td>1.9531</td><td>-</td><td>16.08 KB</td>
+</tr><tr><td>Query_WithOptions_Sort</td><td>1,185.15 &mu;s</td><td>16.303 &mu;s</td><td>4.234 &mu;s</td><td>46.8750</td><td>13.6719</td><td>394.24 KB</td>
+</tr><tr><td>Query_FindAll</td><td>2,538.14 &mu;s</td><td>268.754 &mu;s</td><td>41.590 &mu;s</td><td>140.6250</td><td>70.3125</td><td>1177.96 KB</td>
+</tr></tbody></table>
+</body>
+</html>

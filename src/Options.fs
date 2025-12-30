@@ -74,7 +74,7 @@ type SortDirection =
     /// </code>
     /// </example>
     | Ascending
-    
+
     /// <summary>
     /// Sort from largest to smallest.
     /// </summary>
@@ -160,48 +160,49 @@ type SortDirection =
 /// // 4. Continue until nextCursor is None (end of results)
 /// </code>
 /// </example>
-type CursorSpec = {
-    /// <summary>
-    /// Cursor token for forward pagination (results after this cursor).
-    /// </summary>
-    /// <remarks>
-    /// When set, returns documents that come after the specified cursor
-    /// in the sort order. Typically used for "next page" navigation.
-    ///
-    /// The cursor is an opaque string (usually base64-encoded) that
-    /// encodes the position in the result set. It should be treated as
-    /// an opaque token and not parsed or constructed manually.
-    ///
-    /// Behavior:
-    /// - None: No lower bound (start from beginning)
-    /// - Some cursor: Start results after this position
-    /// - Mutually exclusive with Before (one or none, not both)
-    ///
-    /// SQL translation: WHERE id &gt; decode(cursor)
-    /// </remarks>
-    After: option<string>
-    
-    /// <summary>
-    /// Cursor token for backward pagination (results before this cursor).
-    /// </summary>
-    /// <remarks>
-    /// When set, returns documents that come before the specified cursor
-    /// in the sort order. Typically used for "previous page" navigation.
-    ///
-    /// The cursor is an opaque string (usually base64-encoded) that
-    /// encodes the position in the result set. Results are fetched in
-    /// reverse order and then flipped to maintain correct ordering.
-    ///
-    /// Behavior:
-    /// - None: No upper bound (end at last result)
-    /// - Some cursor: End results before this position
-    /// - Mutually exclusive with After (one or none, not both)
-    ///
-    /// SQL translation: WHERE id &lt; decode(cursor) ORDER BY id DESC
-    /// (then reverse the results)
-    /// </remarks>
-    Before: option<string>
-}
+type CursorSpec =
+    {
+        /// <summary>
+        /// Cursor token for forward pagination (results after this cursor).
+        /// </summary>
+        /// <remarks>
+        /// When set, returns documents that come after the specified cursor
+        /// in the sort order. Typically used for "next page" navigation.
+        ///
+        /// The cursor is an opaque string (usually base64-encoded) that
+        /// encodes the position in the result set. It should be treated as
+        /// an opaque token and not parsed or constructed manually.
+        ///
+        /// Behavior:
+        /// - None: No lower bound (start from beginning)
+        /// - Some cursor: Start results after this position
+        /// - Mutually exclusive with Before (one or none, not both)
+        ///
+        /// SQL translation: WHERE id &gt; decode(cursor)
+        /// </remarks>
+        After: option<string>
+
+        /// <summary>
+        /// Cursor token for backward pagination (results before this cursor).
+        /// </summary>
+        /// <remarks>
+        /// When set, returns documents that come before the specified cursor
+        /// in the sort order. Typically used for "previous page" navigation.
+        ///
+        /// The cursor is an opaque string (usually base64-encoded) that
+        /// encodes the position in the result set. Results are fetched in
+        /// reverse order and then flipped to maintain correct ordering.
+        ///
+        /// Behavior:
+        /// - None: No upper bound (end at last result)
+        /// - Some cursor: End results before this position
+        /// - Mutually exclusive with After (one or none, not both)
+        ///
+        /// SQL translation: WHERE id &lt; decode(cursor) ORDER BY id DESC
+        /// (then reverse the results)
+        /// </remarks>
+        Before: option<string>
+    }
 
 /// <summary>
 /// Full-text search specification for searching across multiple fields.
@@ -217,16 +218,17 @@ type CursorSpec = {
 /// { Text = "database"; Fields = ["title"; "description"]; CaseSensitive = false }
 /// </code>
 /// </example>
-type TextSearchSpec = {
-    /// <summary>Search query text (substring match, wildcards escaped).</summary>
-    Text: string
-    
-    /// <summary>List of field names to search within (OR logic).</summary>
-    Fields: list<string>
-    
-    /// <summary>Whether the search should be case-sensitive.</summary>
-    CaseSensitive: bool
-}
+type TextSearchSpec =
+    {
+        /// <summary>Search query text (substring match, wildcards escaped).</summary>
+        Text: string
+
+        /// <summary>List of field names to search within (OR logic).</summary>
+        Fields: list<string>
+
+        /// <summary>Whether the search should be case-sensitive.</summary>
+        CaseSensitive: bool
+    }
 
 /// <summary>
 /// Query options for controlling result set size, ordering, and field projection.
@@ -243,28 +245,29 @@ type TextSearchSpec = {
 ///   Select = None; Omit = None; Search = None; Cursor = None }
 /// </code>
 /// </example>
-type QueryOptions<'T> = {
-    /// <summary>Sort order: list of (field, direction) tuples.</summary>
-    Sort: list<(string * SortDirection)>
-    
-    /// <summary>Maximum number of results (None = all results).</summary>
-    Limit: option<int>
-    
-    /// <summary>Number of results to skip (offset pagination, O(n)).</summary>
-    Skip: option<int>
-    
-    /// <summary>Include only these fields (whitelist projection).</summary>
-    Select: option<list<string>>
-    
-    /// <summary>Exclude these fields (blacklist projection).</summary>
-    Omit: option<list<string>>
-    
-    /// <summary>Full-text search specification.</summary>
-    Search: option<TextSearchSpec>
-    
-    /// <summary>Cursor-based pagination (O(1), prefer over Skip).</summary>
-    Cursor: option<CursorSpec>
-}
+type QueryOptions<'T> =
+    {
+        /// <summary>Sort order: list of (field, direction) tuples.</summary>
+        Sort: list<(string * SortDirection)>
+
+        /// <summary>Maximum number of results (None = all results).</summary>
+        Limit: option<int>
+
+        /// <summary>Number of results to skip (offset pagination, O(n)).</summary>
+        Skip: option<int>
+
+        /// <summary>Include only these fields (whitelist projection).</summary>
+        Select: option<list<string>>
+
+        /// <summary>Exclude these fields (blacklist projection).</summary>
+        Omit: option<list<string>>
+
+        /// <summary>Full-text search specification.</summary>
+        Search: option<TextSearchSpec>
+
+        /// <summary>Cursor-based pagination (O(1), prefer over Skip).</summary>
+        Cursor: option<CursorSpec>
+    }
 
 /// <summary>
 /// Helper functions for constructing and modifying QueryOptions.
@@ -280,7 +283,7 @@ type QueryOptions<'T> = {
 /// rather than modifying the input.
 /// </remarks>
 module QueryOptions =
-    
+
     /// <summary>
     /// Creates an empty QueryOptions with all fields set to default values.
     /// </summary>
@@ -326,16 +329,15 @@ module QueryOptions =
     /// }
     /// </code>
     /// </example>
-    let empty<'T> : QueryOptions<'T> = {
-        Sort = []
-        Limit = None
-        Skip = None
-        Select = None
-        Omit = None
-        Search = None
-        Cursor = None
-    }
-    
+    let empty<'T> : QueryOptions<'T> =
+        { Sort = []
+          Limit = None
+          Skip = None
+          Select = None
+          Omit = None
+          Search = None
+          Cursor = None }
+
     /// <summary>
     /// Sets the maximum number of results to return.
     /// </summary>
@@ -371,9 +373,8 @@ module QueryOptions =
     /// // Returns results 51-75, sorted by name
     /// </code>
     /// </example>
-    let limit (n: int) (opts: QueryOptions<'T>) : QueryOptions<'T> =
-        { opts with Limit = Some n }
-    
+    let limit (n: int) (opts: QueryOptions<'T>) : QueryOptions<'T> = { opts with Limit = Some n }
+
     /// <summary>
     /// Sets the number of results to skip (offset pagination).
     /// </summary>
@@ -417,9 +418,8 @@ module QueryOptions =
     ///     |&gt; QueryOptions.limit 10
     /// </code>
     /// </example>
-    let skip (n: int) (opts: QueryOptions<'T>) : QueryOptions<'T> =
-        { opts with Skip = Some n }
-    
+    let skip (n: int) (opts: QueryOptions<'T>) : QueryOptions<'T> = { opts with Skip = Some n }
+
     /// <summary>
     /// Adds a sort field with specified direction to the sort order.
     /// </summary>
@@ -472,8 +472,9 @@ module QueryOptions =
     /// </code>
     /// </example>
     let sortBy (field: string) (dir: SortDirection) (opts: QueryOptions<'T>) : QueryOptions<'T> =
-        { opts with Sort = (field, dir) :: opts.Sort }
-    
+        { opts with
+            Sort = opts.Sort @ [ (field, dir) ] }
+
     /// <summary>
     /// Adds a field to sort in ascending order.
     /// </summary>
@@ -508,7 +509,7 @@ module QueryOptions =
     /// </example>
     let sortAsc (field: string) (opts: QueryOptions<'T>) : QueryOptions<'T> =
         sortBy field SortDirection.Ascending opts
-    
+
     /// <summary>
     /// Adds a field to sort in descending order.
     /// </summary>
@@ -544,7 +545,7 @@ module QueryOptions =
     /// </example>
     let sortDesc (field: string) (opts: QueryOptions<'T>) : QueryOptions<'T> =
         sortBy field SortDirection.Descending opts
-    
+
     /// <summary>
     /// Sets the fields to include in results (whitelist projection).
     /// </summary>
@@ -584,9 +585,8 @@ module QueryOptions =
     ///     |&gt; QueryOptions.limit 100
     /// </code>
     /// </example>
-    let select (fields: list<string>) (opts: QueryOptions<'T>) : QueryOptions<'T> =
-        { opts with Select = Some fields }
-    
+    let select (fields: list<string>) (opts: QueryOptions<'T>) : QueryOptions<'T> = { opts with Select = Some fields }
+
     /// <summary>
     /// Sets the fields to exclude from results (blacklist projection).
     /// </summary>
@@ -624,9 +624,8 @@ module QueryOptions =
     ///     |&gt; QueryOptions.omit ["password"; "apiKey"; "internalId"]
     /// </code>
     /// </example>
-    let omit (fields: list<string>) (opts: QueryOptions<'T>) : QueryOptions<'T> =
-        { opts with Omit = Some fields }
-    
+    let omit (fields: list<string>) (opts: QueryOptions<'T>) : QueryOptions<'T> = { opts with Omit = Some fields }
+
     /// <summary>
     /// Sets case-insensitive text search across specified fields.
     /// </summary>
@@ -648,8 +647,13 @@ module QueryOptions =
     /// </code>
     /// </example>
     let search (text: string) (fields: list<string>) (opts: QueryOptions<'T>) : QueryOptions<'T> =
-        { opts with Search = Some { Text = text; Fields = fields; CaseSensitive = false } }
-    
+        { opts with
+            Search =
+                Some
+                    { Text = text
+                      Fields = fields
+                      CaseSensitive = false } }
+
     /// <summary>
     /// Sets case-sensitive text search across specified fields.
     /// </summary>
@@ -670,8 +674,13 @@ module QueryOptions =
     /// </code>
     /// </example>
     let searchCaseSensitive (text: string) (fields: list<string>) (opts: QueryOptions<'T>) : QueryOptions<'T> =
-        { opts with Search = Some { Text = text; Fields = fields; CaseSensitive = true } }
-    
+        { opts with
+            Search =
+                Some
+                    { Text = text
+                      Fields = fields
+                      CaseSensitive = true } }
+
     /// <summary>
     /// Sets cursor for forward pagination (results after the cursor).
     /// </summary>
@@ -692,8 +701,9 @@ module QueryOptions =
     /// </code>
     /// </example>
     let cursorAfter (id: string) (opts: QueryOptions<'T>) : QueryOptions<'T> =
-        { opts with Cursor = Some { After = Some id; Before = None } }
-    
+        { opts with
+            Cursor = Some { After = Some id; Before = None } }
+
     /// <summary>
     /// Sets cursor for backward pagination (results before the cursor).
     /// </summary>
@@ -714,7 +724,5 @@ module QueryOptions =
     /// </code>
     /// </example>
     let cursorBefore (id: string) (opts: QueryOptions<'T>) : QueryOptions<'T> =
-        { opts with Cursor = Some { After = None; Before = Some id } }
-
-
-
+        { opts with
+            Cursor = Some { After = None; Before = Some id } }

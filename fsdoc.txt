@@ -1,0 +1,2071 @@
+
+Getting Started
+From zero to hero: deploying to GitHub Pages
+
+This guide is meant for a typical setup of open-source projects on GitHub.
+We start from a repository without any documentation and aim to end up with a published website on GitHub Pages.
+Install the local tool
+
+If you don't have a dotnet tool manifest, you can create one using dotnet new tool-manifest.
+
+Next, we can install fsdocs-tool using dotnet tool install --local fsdocs-tool.
+It is recommended to install this tool as a local tool because it allows us to update to newer versions of the tool at our own pace.
+Create the docs folder
+
+After we've installed the tool, we can run dotnet fsdocs --help and see the available commands.
+Both build and watch will generate the documentation for a solution and an input folder.
+The default folder for --input is the ./docs folder, relative to the current working directory.
+
+Typically, your project will be structured like this:
+
+/repository-root
+  YourSolution.sln
+  ./docs
+    index.md
+    other-file.md
+  ./src
+    ./Project1/Project1.fsproj
+    ./Project2/Project2.fsproj
+
+It is recommended to have a single solution at the root. In some editors, it is more convenient to open a solution at the root, to easily manipulate any file in the root repository folder.
+When users clone your repository locally, they cannot be confused on how they need to open the project in their IDE.
+
+⚠️ Please avoid putting your solution in the src folder. When we open that solution, it can be more difficult to edit files in the docs folder, as we can sometimes only see the src folder.
+
+That being said, let's create the docs folder and a first Markdown file named index.md.
+When fsdocs runs, it will transform this index.md file to index.html, which will be served at the root.
+
+We can put # Hello world in the markdown file for now.
+
+Having this in place, should already serve the first page when we start the watch command:
+
+    dotnet fsdocs watch
+
+Open http://localhost:8901 and you should see our first page!
+
+🪄 You might notice that there are some images missing. You can add these in the docs folder in the right location.
+Generating API documentation
+
+By default, fsdocs will generate API documentation for the configured --projects.
+When this flag is not specified, fsdocs will look for solutions or projects in the working directory.
+It will filter these found projects, the requirements are:
+
+    Having <OutputType>library</OutputType>
+    Having a binary, so you need to build your project first before the documentation can be generated.
+    Not having <IsTestProject>true</IsTestProject>
+    Having <GenerateDocumentationFile>true</GenerateDocumentationFile>
+
+🪄 If you made some changes in order to adhere to the rules, you may want to remove the .fsdocs/cache file.
+Adding the missing properties
+
+After our initial watch run, you may have noticed that some links aren't working yet.
+License, Releases Notes and Source Repository can be provided by setting MSBuild properties.
+
+You can either add these properties to a single .fsproj file, or more typically, add them to a Directory.Build.props file.
+The simplest Directory.Build.props file:
+
+<Project>
+    <PropertyGroup>
+        <RepositoryUrl>https://github.com/fsprojects/FSharp.AWS.DynamoDB</RepositoryUrl>
+        <FsDocsLicenseLink>https://github.com/fsprojects/FSharp.AWS.DynamoDB/blob/master/License.md</FsDocsLicenseLink>
+        <FsDocsReleaseNotesLink>https://github.com/fsprojects/FSharp.AWS.DynamoDB/blob/master/RELEASE_NOTES.md</FsDocsReleaseNotesLink>
+        <PackageProjectUrl>https://fsprojects.github.io/FSharp.AWS.DynamoDB</PackageProjectUrl>
+    </PropertyGroup>
+</Project>
+
+🪄 If you don't have any release notes yet, you could consider using Ionide.KeepAChangelog.
+
+Running dotnet fsdocs watch will now yield:
+
+  root --> https://github.com/fsprojects/FSharp.AWS.DynamoDB/
+  ...
+  fsdocs-license-link --> https://github.com/fsprojects/FSharp.AWS.DynamoDB/blob/master/License.md
+  fsdocs-release-notes-link --> https://github.com/fsprojects/FSharp.AWS.DynamoDB/blob/master/RELEASE_NOTES.md
+  ...
+  fsdocs-repository-link --> https://github.com/fsprojects/FSharp.AWS.DynamoDB/
+
+⚠️ Again, you might need to remove .fsdocs/cache in order for changes to be picked up!
+
+<PackageProjectUrl> is actually a very important property when you run dotnet fsdocs build.
+build will generate static files for the targeted production environment. In our case, this will be GitHub Pages.
+
+Pages will host your files from https://github.com/user/project on https://user.github.io/project/ by default.
+You can change this by adding a custom domain so we need to be sure that all links and urls will be generated correctly during a build.
+
+Let's now run dotnet fsdocs build.
+
+<PackageProjectUrl> will replace the {{root}} substitution, which is used all over the place in the default template.
+
+⚠️ You want to ensure that the static files in the output folder (after running the build) have the correct links.
+Ignore generated files
+
+Alright, at this point we've made a lot of progress. If you are using git you want to add the following to your .gitignore file.
+
+# FSharp.Formatting
+.fsdocs/
+output/
+tmp/
+
+Ship it!
+
+Once we are satisfied with our documentation, we want to publish it to GitHub Pages. We can use GitHub Actions to deploy our website.
+
+Deploy to Pages from GitHub Actions must be enabled in the repository settings:
+
+Enable deploy from Actions
+
+The typical flow is to publish your documentation after a release or after new commits were added to the default branch.
+Let's create a very basic Action that will deploy our website after pushing to the main:
+
+Create a file .github/workflows/docs.yml:
+
+name: Docs
+
+# Trigger this Action when new code is pushed to the main branch
+on:
+  push:
+    branches:
+      - main
+
+# We need some permissions to publish to Github Pages
+permissions:
+  contents: write
+  pages: write
+  id-token: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      # Checkout the source code
+      - uses: actions/checkout@v4
+      # Setup dotnet, please use a global.json to ensure the right SDK is used!
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v3
+      # Restore the local tools
+      - name: Restore tools
+        run: dotnet tool restore
+      # Build the code for the API documentation
+      - name: Build code
+        run: dotnet build -c Release YourSolution.sln
+      # Generate the documentation files
+      - name: Generate the documentation'
+        run: dotnet fsdocs build --properties Configuration=Release
+      # Upload the static files
+      - name: Upload documentation
+        uses: actions/upload-pages-artifact@v2
+        with:
+          path: ./output
+  
+  # GitHub Actions recommends deploying in a separate job.
+  deploy:
+    runs-on: ubuntu-latest
+    needs: build
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v2
+
+⚠️ Careful yaml is indentation sensitive!
+Next steps
+
+Mission accomplished, right? If everything went well, you should have a published website at this point!
+Here are some next steps you could consider:
+Use fsx file in your documentation
+
+Create documentation using Literate Scripts. A typical flow here is that you load your locate project binary into a script and create examples using the latest code:
+
+#r "../src/Project1/bin/Debug/net6.0/Project1.dll"
+
+open Project1
+
+// Actual consumption of your project!
+let result = SomeType.SomeMethod("foo")
+
+When using the --strict flag in dotnet fsdocs build, your documentation generation will fail if your script contains errors.
+This is useful to ensure your documentation is always in sync with your latest public API!
+Automatically update to newer versions of fsdocs-tool
+
+Using Dependabot you can easily receive new PR's with updates to your dotnet dependencies.
+
+Create a .github/dependabot.yml file with:
+
+version: 2
+updates:
+  # Update to newer version of GitHub Actions
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+
+  # Update to newer NuGet dependencies
+  - package-ecosystem: "nuget"
+    directory: "/"
+    schedule:
+      interval: "daily"
+
+This will automatically create a new PR when there is an update to the fsdocs tool.
+
+⚠️ P️lease be very careful, if you have followed along, we don't have any GitHub Actions right now that run against pull requests!
+It is recommended to have an Action that builds your documentation against any incoming changes.
+You typically want to lint code, run unit tests and perform other useful checks as well!
+
+Example Action, .github/workflows/ci.yml:
+
+name: CI
+
+on: [pull_request]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v3
+    - name: Setup .NET Core
+      uses: actions/setup-dotnet@v3
+    - name: Restore tools
+      run: dotnet tool restore
+    - name: Build
+      run: dotnet build YourSolution.sln
+    - name: Documentation
+      run: dotnet fsdocs build
+
+⚠️ Also, never trust any update to fsdocs blindly, always check the release notes to see if there are any breaking changes.
+
+
+Command line
+
+To use F# Formatting tools via the command line, you can use the fsdocs dotnet tool.
+
+dotnet tool install fsdocs-tool
+dotnet fsdocs [command] [options]
+
+The build command
+
+This command processes a docs directory and generates API docs for projects in the solution according to the rules of API doc generation. The input accepted is described in content.
+
+fsdocs build
+
+The command line options accepted are:
+
+Command Line Option
+	
+
+Description
+
+--input
+	
+
+Input directory of content (default: docs)
+
+--projects
+	
+
+Project files to build API docs for outputs, defaults to all packable projects
+
+--output
+	
+
+Output Directory (default 'output' for 'build' and 'tmp/watch' for 'watch')
+
+--ignoreuncategorized
+	
+
+Disable generation of the 'Other' category in the navigation bar for uncategorized docs
+
+--noapidocs
+	
+
+Disable generation of API docs
+
+--ignoreprojects
+	
+
+Disable project cracking
+
+--eval
+	
+
+Evaluate F# fragments in scripts
+
+--saveimages
+	
+
+Save images referenced in docs
+
+--nolinenumbers
+	
+
+Don't add line numbers, the default is to add line numbers.
+
+--parameters
+	
+
+Additional substitution parameters for templates
+
+--nonpublic
+	
+
+The tool will also generate documentation for non-public members
+
+--nodefaultcontent
+	
+
+Do not copy default content styles, javascript or use default templates
+
+--clean
+	
+
+Clean the output directory
+
+--help
+	
+
+Display this help screen
+
+--version
+	
+
+Display version information
+
+--properties
+	
+
+Provide properties to dotnet msbuild, e.g. --properties Configuration=Release Version=3.4
+
+--fscoptions
+	
+
+Additional arguments passed down as otherflags to the F# compiler when the API is being generated.
+Note that these arguments are trimmed, this is to overcome a limitation in the command line argument processing.
+A typical use-case would be to pass an addition assembly reference.
+Example --fscoptions " -r:MyAssembly.dll"
+
+--strict
+	
+
+Fail if docs are missing or can't be generated
+
+The following command line options are also accepted but it is instead recommended you use settings in your .fsproj project files:
+
+Command Line Option
+	
+
+Description
+
+--sourcefolder
+	
+
+Source folder at time of component build (<FsDocsSourceFolder>)
+
+--sourcerepo
+	
+
+Source repository for github links (<FsDocsSourceRepository>)
+
+--mdcomments
+	
+
+Assume comments in F# code are markdown (<UsesMarkdownComments>)
+
+The command will report on any .fsproj files that it finds, telling you if it decides to skip a particular file and why.
+
+For example, a project will be skipped if:
+
+    The project name contains ".Tests" or "test" (because it looks like a test project)
+
+    The project does not contain
+
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+
+The watch command
+
+This command does the same as fsdocs build but in "watch" mode, waiting for changes. Only the files in the input directory (e.g. docs) are watched. A browser will be launched automatically (unless --nolaunch is specified).
+
+You will need to ensure that the input directory exists, and contains at least index.md, otherwise the browser will report an error (e.g. "Problem loading...", "Connection was reset").
+
+fsdocs watch
+
+Restarting may be necesssary on changes to project files. The same parameters are accepted, plus these:
+
+Command Line Option
+	
+
+Description
+
+--noserver
+	
+
+Do not serve content when watching.
+
+--nolaunch
+	
+
+Do not launch a browser window.
+
+--open
+	
+
+URL extension to launch http://localhost:/%s.
+
+--port
+	
+
+Port to serve content for http://localhost serving.
+Searchable docs
+
+When using the command-line tool a Fuse search index is automatically generated in index.json. A search box is included in the default template via an HTML Dialog element.
+To add search to your own _template.html:
+
+    include an HTML element with id search-btn
+    include a dialog element
+    include fsdocs-search.js script
+
+<button id="search-btn">Open search dialog</button>
+<dialog>
+    <input type="search" placeholder="Search docs" />
+    <div class="results">
+        <ul></ul>
+        <p class="empty">Type something to start searching.</p>
+    </div>
+</dialog>
+<script type="module" src="{`{root}}content/fsdocs-search.js"></script>
+
+
+Literate Scripts
+
+The following example shows most of the features that can be used in a literate F# script file with .fsx extension. Most of the features should be quite self-explanatory:
+
+(**
+# First-level heading
+Some more documentation using `Markdown`.
+*)
+
+let helloWorld() = printfn "Hello world!"
+
+(**
+## Second-level heading
+With some more documentation
+*)
+
+let numbers = [ 0 .. 99 ]
+(*** include-value: numbers ***)
+
+List.sum numbers
+(*** include-it ***)
+
+The F# script files are processed as follows:
+
+    A multi-line comment starting with (** and ending with *) is turned into text and is processed using the F# Markdown processor (which supports standard Markdown commands).
+
+    A single-line comment starting with (*** and ending with ***) is treated as a special command. The command can consist of key, key: value or key=value pairs.
+
+Literate Command
+	
+
+Description
+
+(** ... *)
+	
+
+Markdown
+
+(*** condition: prepare ***)
+	
+
+Utilise a code snippet when analyzing for tooltips or executing for outputs
+
+(*** condition: ipynb ***)
+	
+
+Include a code snippet when making a .ipynb notebook
+
+(*** condition: tex ***)
+	
+
+Include a code snippet when making a .tex output
+
+(*** condition: html ***)
+	
+
+Include a code snippet when making HTML output
+
+(*** hide ***)
+	
+
+Hide the subsequent snippet
+
+(*** raw ***)
+	
+
+The subsequent code is treated as raw text
+Naming and including snippets
+
+The command define defines a named snippet (such as final-sample) and removes the command together with the following F# code block from the main document. The snippet can then be referred to in 'include'. This makes it possible to write documents without the ordering requirements of the F# language.
+
+Literate Command
+	
+
+Description
+
+(*** define: snippet-name ***)
+	
+
+Define a named snippet
+
+(*** include: snippet-name ***)
+	
+
+Include the code of the named snippet
+Naming and including outputs
+
+Literate Command
+	
+
+Description
+
+(*** define-output: output-name ***)
+	
+
+Define a name for the outputs of the preceding snippet
+
+(*** include-output ***)
+	
+
+The console output of the preceding snippet
+
+(*** include-output: output-name ***)
+	
+
+The console output of the snippet (named with define-output)
+
+(*** include-fsi-output ***)
+	
+
+The F# Interactive output of the preceding snippet
+
+(*** include-fsi-output: output-name ***)
+	
+
+The F# Interactive output of the snippet (named with define-output)
+
+(*** include-fsi-merged-output ***)
+	
+
+The merge of console output and F# Interactive output of the preceding snippet
+
+(*** include-fsi-merged-output: output-name ***)
+	
+
+The merge of console output and F# Interactive output of the snippet (named with define-output)
+
+(*** include-it ***)
+	
+
+The formatted result of the preceding snippet
+
+(*** include-it: output-name ***)
+	
+
+The formatted result of the snippet (named with define-output)
+
+(*** include-it-raw ***)
+	
+
+The unformatted result of the preceding snippet
+
+(*** include-it-raw: output-name ***)
+	
+
+The unformatted result of the snippet (named with define-output)
+
+(*** include-value: value-name ***)
+	
+
+The formatted value, an F# identifier name
+Hiding code snippets
+
+The command hide specifies that the following F# code block (until the next comment or command) should be omitted from the output.
+Evaluating and formatting results
+
+The commands to evaluate and format results are explained in evaluation. You must build your documentation with evaluation turned on using --eval.
+Substitutions
+
+Substitutions are applied to content, see content.
+Literate Markdown Documents
+
+For files with .md extension, the entire file is a Markdown document, which may contain F# code snippets (but also other code snippets). As usual, snippets are indented with four spaces. In addition, the snippets can be annotated with special commands. Some of them are demonstrated in the following example:
+
+# First-level heading
+
+    [hide]
+    let print s = printfn "%s" s
+
+Some more documentation using `Markdown`.
+
+    [module=Hello]
+    let helloWorld() = print "Hello world!"
+
+## Second-level heading
+With some more documentation
+
+    [lang=csharp]
+    Console.WriteLine("Hello world!");
+
+When processing the document, all F# snippets are copied to a separate file that is type-checked using the F# compiler (to obtain colours and tooltips). The commands are written on the first line of the named snippet, wrapped in [...]:
+
+    The hide command specifies that the F# snippet should not be included in the final document. This can be used to include code that is needed to type-check the code, but is not visible to the reader.
+
+    The module=Foo command can be used to specify F# module where the snippet is placed. Use this command if you need multiple versions of the same snippet or if you need to separate code from different snippets.
+
+    The lang=foo command specifies the language of the named snippet. If the language is other than fsharp, the snippet is copied to the output as <pre> HTML tag without any processing.
+
+LaTeX in Literate Scripts and Markdown Documents
+
+Literate Scripts may contain LaTeX sections in Markdown using these forms:
+
+    Single line latex starting with $$.
+
+    A block delimited by \begin{equation}...\end{equation} or \begin{align}...\end{align}.
+
+    An indented paragraph starting with $$$. This is F#-literate-specific and corresponds to \begin{equation}...\end{equation}.
+
+For example
+
+$$\frac{x}{y}$$
+
+\begin{equation}
+   \frac{d}{dx} \left. \left( x \left( \left. \frac{d}{dy} x y \; \right|_{y=3} \right) \right) \right|_{x=2}
+\end{equation}
+
+Becomes
+
+\[\frac{x}{y}\]
+
+\[ \frac{d}{dx} \left. \left( x \left( \left. \frac{d}{dy} x y \; \right|_{y=3} \right) \right) \right|_{x=2}\]
+
+The LaTeX will also be used in HTML and iPython notebook outputs.
+Making literate scripts work for different outputs
+
+Literate scripts and markdown can be turned into LaTex, Python Notebooks and F# scripts.
+
+A header may be needed to get the code to load, a typical example is this:
+
+    (*** condition: prepare ***)
+    #nowarn "211"
+    #I "../src/FSharp.Formatting/bin/Release/netstandard2.1"
+    #r "FSharp.Formatting.Common.dll"
+    #r "FSharp.Formatting.Markdown.dll"
+    #r "FSharp.Formatting.CodeFormat.dll"
+    #r "FSharp.Formatting.Literate.dll"
+    (*** condition: fsx ***)
+#if FSX
+    #r "nuget: FSharp.Formatting,1.0.0"
+#endif // FSX
+    (*** condition: ipynb ***)
+#if IPYNB
+    #r "nuget: FSharp.Formatting,1.0.0"
+#endif // IPYNB
+
+Processing literate files programmatically
+
+To process files use the two static methods to turn single documents into HTML as follows using functionality from the Literate type:
+
+open System.IO
+open FSharp.Formatting.Literate
+
+let source = __SOURCE_DIRECTORY__
+let template = Path.Combine(source, "template.html")
+
+let script = Path.Combine(source, "../docs/script.fsx")
+
+Literate.ConvertScriptFile(script, template)
+
+let doc = Path.Combine(source, "../docs/document.md")
+
+Literate.ConvertMarkdownFile(doc, template)
+
+The following sample also uses the optional parameter parameters to specify additional keywords that will be replaced in the template file (this matches the template-project.html file which is included as a sample in the package):
+
+// Load the template & specify project information
+let projTemplate = source + "template-project.html"
+
+let projInfo =
+    [ "fsdocs-authors", "Tomas Petricek"
+      "fsdocs-source-link", "https://github.com/fsprojects/FSharp.Formatting"
+      "fsdocs-collection-name", "F# Formatting" ]
+
+The methods used above (Literate.ConvertScriptFile, Literate.ConvertMarkdownFile) produce HTML output by default, but they can be also used to produce LaTeX output. This is done by setting the output kind. The following example shows how to call the methods to generate LaTeX documents:
+
+let templateTex = Path.Combine(source, "template.tex")
+
+let scriptTex = Path.Combine(source, "../docs/script.fsx")
+
+Literate.ConvertScriptFile(scriptTex, templateTex, outputKind = OutputKind.Latex)
+
+let docTex = Path.Combine(source, "../docs/document.md")
+
+Literate.ConvertMarkdownFile(docTex, templateTex, outputKind = OutputKind.Latex)
+
+The methods used above (ConvertScriptFile, ConvertMarkdownFile) can also produce iPython Notebook output. This is done by setting the named parameter format to OutputKind.Pynb:
+
+// Process script file, Markdown document and a directory
+let scriptPynb = Path.Combine(source, "../docs/script.fsx")
+
+Literate.ConvertScriptFile(scriptPynb, outputKind = OutputKind.Pynb)
+
+let docPynb = Path.Combine(source, "../docs/document.md")
+
+Literate.ConvertMarkdownFile(docPynb, outputKind = OutputKind.Pynb)
+
+All of the three methods discussed in the previous two sections take a number of optional parameters that can be used to tweak how the formatting works
+
+Literate Notebooks
+
+Content may be created using .NET interactive polyglot notebooks as the input file. Notebooks are processed by converting the notebook to a literate .fsx script and then passing the script through the script processing pipeline. Markdown notebook cells are passed through as comments surrounded by (** and *), F# code cells are passed through as code, and non-F# code is passed through as markdown fenced code blocks between (** and *) comment markers.
+
+The fsdocs tool uses dotnet-repl to evaluate polyglot notebooks. You need this tool to evaluate notebooks using dotnet fsdocs [build|watch] --eval. It can be installed into your local tool manifest using the command dotnet tool install dotnet-repl.
+
+F# Formatting tries to faithfully reproduce a notebook's native appearance when generating documents. Notebook cell outputs are passed through unchanged to preserve the notebook's html output. The below snippet demonstrates a notebook's html output for F# records, which differs from the output you would get with the same code inside a literate scripts.
+
+type ContactCard =
+    { Name: string
+      Phone: string
+      ZipCode: string }
+
+// Create a new record
+{ Name = "Alf"; Phone = "(555) 555-5555"; ZipCode = "90210" }
+
+{ Name = "Alf"\n Phone = "(555) 555-5555"\n ZipCode = "90210" }
+Name	
+
+Alf
+
+Phone	
+
+(555) 555-5555
+
+ZipCode	
+
+90210
+
+Creating Content
+
+The "fsdocs" tool allows documentation for a site to be built from content in a docs directory. The expected structure for a docs directory is
+
+docs/**/*.md                  -- markdown with embedded code, converted to html and optionally tex/ipynb
+docs/**/*.fsx                 -- fsx scripts converted to html and optionally tex/ipynb
+docs/**/*                     -- other content, copied over
+docs/**/_template.html        -- optional template, specifies the HTML template for this directory and its contents
+docs/**/_template.tex         -- optionally indicates Latex files should be generated
+docs/**/_template.ipynb       -- optionally indicates F# ipynb files should be generated
+docs/**/_template.fsx         -- optionally indicates F# fsx files should be generated (even from markdown)
+docs/reference/_template.html -- optionally specifies the default template for reference docs
+
+Processing is by these two commands:
+
+dotnet fsdocs build
+dotnet fsdocs watch
+
+The output goes in output/ by default. Processing is recursive, making this a form of static site generation.
+Literate Scripts and Markdown Content
+
+The input directory may contain literate scripts and markdown content.
+Other Content
+
+Content that is not *.fsx or *.md is copied across.
+Default Styling Content
+
+By default additional content such as fsdocs-search.js, fsdocs-tips.js and fsdocs-default.css are included in the content directory of the output. This can be suppressed with --nodefaultcontent or by having your own copy of this content in your content directory.
+Ignored Content
+
+Any file or directory beginning with . is ignored.
+Front matter
+
+Each content file can have an optional frontmatter. This determines the navigation bar title, categorization ordering and meta tags.
+
+For markdown, the format is:
+
+---
+title: Some Title
+category: Some Category
+categoryindex: 2
+index: 3
+description: Some description
+keywords: tag1, tag2, tag3
+---
+
+For F# scripts the frontmatter is in this form:
+
+(**
+---
+title: A Literate Script
+category: Examples
+categoryindex: 2
+index: 1
+description: Some description
+keywords: tag1, tag2, tag3
+---
+*)
+
+All entries are optional. The categoryindex determines the ordering of categories. The index determines the ordering of within each category. The title is used in the navigation bar instead of any title inferred from the document. The description is used in <meta name="description" as part of the {{fsdocs-meta-tags}} substitution. The keywords are also used in a meta tag as part of {{fsdocs-meta-tags}}. Separate them using a ,.
+Link Translation for Inputs
+
+If an input is used in markdown as a target of a markdown direct link, then that is replaced by the output file. For example:
+
+[Some Text](some-file.md)
+
+becomes
+
+[Some Text](some-file.html)
+
+if some-file.md is one of the inputs.
+Multi-language Content
+
+Versions of content in other languages should go in two-letter coded sub-directories, e.g.
+
+docs/ja/...
+docs/de/...
+
+These will be elided from the main table-of-contents and search indexes. (Currently no language-specific table of contents is built, nor language-specific site search indexes).
+Templates and Substitutions
+
+Templates are used for HTML (_template.html), LaTeX (_template.tex), Notebooks (_template.ipynb) and F# script outputs (_template.fsx).
+
+The following substitutions determine the primary (non-styling) content of your site. For example {{fsdocs-content}} is replaced with the generated content in each file.
+
+Substitutions are applied when generating content from HTML templates, IPYNB templates, FSX templates. They are also applied to content apart from Markdown inline code `...`, Markdown LaTeX and generated outputs.
+
+See Styling for information about template parameters and styling beyond the default template.
+
+Substitution name
+	
+
+Generated content
+
+root
+	
+
+<PackageProjectUrl> else / followed by fsdocs-collection-name
+
+fsdocs-collection-name
+	
+
+Name of .sln, single .fsproj or containing directory
+
+fsdocs-content
+	
+
+Main page content
+
+fsdocs-list-of-namespaces
+	
+
+HTML <li> list of namespaces with links
+
+fsdocs-list-of-documents
+	
+
+HTML <li> list of documents with titles and links
+
+fsdocs-page-title
+	
+
+First h1 heading in literate file. Generated for API docs
+
+fsdocs-source
+	
+
+Original literate script or markdown source
+
+fsdocs-source-filename
+	
+
+Name of original input source, relative to the docs root
+
+fsdocs-source-basename
+	
+
+Name of original input source, excluding its extensions, relative to the docs root
+
+fsdocs-tooltips
+	
+
+Generated hidden div elements for tooltips
+
+fsdocs-watch-script
+	
+
+The websocket script used in watch mode to trigger hot reload
+
+fsdocs-previous-page-link
+	
+
+A relative link to the previous page based on the frontmatter index data
+
+fsdocs-next-page-link
+	
+
+A relative link to the next page based on the frontmatter index data
+
+fsdocs-head-extra
+	
+
+Additional html content loaded from the _head.html file if present in the --input folder
+
+fsdocs-body-extra
+	
+
+Additional html content loaded from the _body.html file if present in the --input folder
+
+fsdocs-body-class
+	
+
+A css class value to help distinguish between content and api-docs
+
+fsdocs-meta-tags
+	
+
+A set of additional HTML meta tags, present when description and/or keywords are present in the frontmatter
+
+The following substitutions are extracted from your project files and may or may not be used by the default template:
+
+Substitution name
+	
+
+Value
+
+fsdocs-copyright
+	
+
+<Copyright>
+
+fsdocs-package-project-url
+	
+
+<PackageProjectUrl>
+
+fsdocs-package-license-expression
+	
+
+<PackageLicenseExpression>
+
+fsdocs-package-tags
+	
+
+<PackageTags>
+
+fsdocs-package-version
+	
+
+<Version>
+
+For the fsdocs tool, additional substitutions can be specified using --parameters.
+Cross References to API Docs
+
+Markdown content can contain cross-references to API Docs. Use inline markdown code snippets of the special form `cref:T:MyNamespace.MyType` where T:MyNamespace.MyType is a method, property or type xml doc sig reference, see API Docs. This can include any cross-references resolved by fsdocs.
+
+The generated API documentation includes buttons to copy the XML and Markdown forms of API doc references.
+
+For example, within this project,
+
+    the text `cref:T:FSharp.Formatting.Markdown.MarkdownParagraph` resolves to the link MarkdownParagraph
+
+    the text `cref:T:System.Console` resolves to the link Console
+
+    the text `cref:M:System.Console.WriteLine` resolves to the link Console.WriteLine
+
+    the text `cref:M:System.Console.WriteLine(System.String)` resolves to the link Console.WriteLine
+
+    the text ``cref:T:FSharp.Control.FSharpAsync`1`` resolves to the link Async
+
+    the text `cref:T:FSharp.Control.FSharpAsync` resolves to the link Async
+
+    the text ``cref:T:FSharp.Core.array`1`` resolves to the link array
+
+    the text `cref:T:FSharp.Core.OptionModule` resolves to the link Option
+
+    the text ```cref:M:FSharp.Collections.ListModule.Append``1``` resolves to the link ListModule.Append
+
+    NOTE: These cases act as tests - if the links above do not work, then that indicates a bug or a change in the external link. Please report it.
+
+Determining xmldoc sig references is not simple. The API doc generated pages come with buttons to copy out the XmlDoc signature.
+Generating HTML Output
+
+HTML is generated by default. You can also add a _template.html. This should contain {{fsdocs-content}}, {{fsdocs-tooltips}} and other placeholders. Substitutions are applied to this template. If a file _template.html exists, then it's used as the template for HTML generation for that directory and all sub-content.
+Generating LaTeX output
+
+To generate .tex output for each script and markdown file, add a _template.tex. Substitutions are applied to this template. The file is either empty or contains {{fsdocs-content}} as the key where the body of the document is placed.
+Generating iPython Notebook output
+
+To generate .ipynb output for each script and markdown file, add a _template.ipynb, usually empty. Substitutions are applied to this template.
+
+To add a mybinder badge to your generated notebook, ensure you have a Dockerfile and NuGet.config in your docs directory and use text like this:
+
+[![Binder](https://mybinder.org/badge_logo.svg)](https://mybinder.org/v2/gh/fsprojects/FSharp.Formatting/gh-pages?filepath=literate.ipynb)
+
+Generating Script outputs
+
+To generate .fsx output for each script and markdown file, add a _template.fsx, usually empty. Substitutions are applied to this template. It is either empty or contains {{fsdocs-content}} as the key where the body of the script is placed.
+
+API Documentation Generation
+
+The command-line tool fsdocs can be used to generate documentation for F# libraries with XML comments. The documentation is normally built using fsdocs build and developed using fsdocs watch. For the former the output will be placed in output\reference by default.
+Selected projects
+
+fsdocs automatically selects the projects and "cracks" the project files for information
+
+    Projects with GenerateDocumentationFile and without IsTestProject are selected.
+    If Projects use TargetFrameworks (not TargetFramework, singular) only the first target framework will be used to build the docs.
+
+    <PropertyGroup>
+      <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    </PropertyGroup>
+
+Templates
+
+The HTML is built by instantiating a template. The template used is the first of:
+
+    docs/reference/_template.html
+
+    docs/_template.html
+    The default template
+
+Usually, the same template can be used as for other content.
+Classic XML Doc Comments
+
+XML Doc Comments may use the normal F# and C# XML doc standards.
+
+The tags that form the core of the XML doc specification are:
+
+<c>	<para>	<see>*	<value>
+<code>	<param>*	<seealso>*
+<example>	<paramref>	<summary>
+<exception>*	<permission>*	<typeparam>*
+<include>*	<remarks>	<typeparamref>
+<list>	<inheritdoc>	<returns>
+
+In addition, you may also use the Recommended XML doc extensions for F# documentation tooling.
+
+    <a href = "..."> links
+
+    Arbitrary paragraph-level HTML such as <b> for bold in XML doc text
+
+    <namespacedoc> giving documentation for the enclosing namespace
+
+    <exclude/> to exclude from XML docs
+
+    <category> to give a category for an entity or member. An optional index attribute can be specified to help sort the list of categories.
+
+    \(...\) for inline math and $$...$$ and \[...\]for math environments, see http://docs.mathjax.org. Some escaping of characters (e.g. &lt;, &gt;) may be needed to form valid XML
+
+An example of an XML documentation comment, assuming the code is in the namespace TheNamespace:
+
+/// <summary>
+///   A module
+/// </summary>
+///
+/// <namespacedoc>
+///   <summary>A namespace to remember</summary>
+///
+///   <remarks>More on that</remarks>
+/// </namespacedoc>
+///
+module SomeModule =
+    /// <summary>
+    ///   Some actual comment
+    ///   <para>Another paragraph, see  <see cref="T:TheNamespace.SomeType"/>. </para>
+    /// </summary>
+    ///
+    /// <param name="x">The input</param>
+    ///
+    /// <returns>The output</returns>
+    ///
+    /// <example>
+    ///   Try using
+    ///   <code>
+    ///      open TheNamespace
+    ///      SomeModule.a
+    ///   </code>
+    /// </example>
+    ///
+    /// <category>Foo</category>
+    let someFunction x = 42 + x
+
+/// <summary>
+///   A type, see  <see cref="T:TheNamespace.SomeModule"/> and
+///  <see cref="M:TheNamespace.SomeModule.someFunction"/>.
+/// </summary>
+///
+type SomeType() =
+    member x.P = 1
+
+Like types, members are referred to by xml doc sig. These must currently be precise as the F# compiler doesn't elaborate these references from simpler names:
+
+type Class2() =
+    member this.Property = "more"
+    member this.Method0() = "more"
+    member this.Method1(c: string) = "more"
+    member this.Method2(c: string, o: obj) = "more"
+
+/// <see cref="P:TheNamespace.Class2.Property" />
+/// and <see cref="M:TheNamespace.Class2.OtherMethod0" />
+/// and <see cref="M:TheNamespace.Class2.Method1(System.String)" />
+/// and <see cref="M:TheNamespace.Class2.Method2(System.String,System.Object)" />
+let referringFunction1 () = "result"
+
+Generic types are referred to by .NET compiled name, e.g.
+
+type GenericClass2<'T>() =
+    member this.Property = "more"
+
+    member this.NonGenericMethod(_c: 'T) = "more"
+
+    member this.GenericMethod(_c: 'T, _o: 'U) = "more"
+
+/// See <see cref="T:TheNamespace.GenericClass2`1" />
+/// and <see cref="P:TheNamespace.GenericClass2`1.Property" />
+/// and <see cref="M:TheNamespace.GenericClass2`1.NonGenericMethod(`0)" />
+/// and <see cref="M:TheNamespace.GenericClass2`1.GenericMethod``1(`0,``0)" />
+let referringFunction2 () = "result"
+
+Cross-referencing with <seealso>
+
+Use <seealso cref="..."/> within <summary> to create cross-references.
+
+For example:
+
+module Forest =
+
+    /// <summary>
+    /// Find at most <c>limit</c> foxes in current forest
+    ///
+    /// See also: <seealso cref="M:App.Forest.findSquirrels(System.Int32)"/>
+    /// </summary>
+    let findFoxes (limit : int) = []
+
+    /// <summary>
+    /// Find at most <c>limit</c> squirrels in current forest
+    ///
+    /// See also: <seealso cref="M:App.Forest.findFoxes(System.Int32)"/>
+    /// </summary>
+    let findSquirrels (limit : int) = []
+
+You can find the correct value for cref in the generated .xml documentation file (this will be generated alongside the assembly's .dll`).
+
+You can also omit the cref's arguments, and fsdocs will make an attempt to find the first member that matches.
+
+For example:
+
+    /// See also: <seealso cref="M:App.Forest.findSquirrels"/>
+
+If the member cannot be found, a link to the containing module/type will be used instead.
+Classic XMl Doc Comments: Excluding APIs from the docs
+
+If you want to exclude modules or functions from the API docs, you can use the <exclude/> tag. It needs to be set on a separate triple-slashed line, and can either appear on its own or as part of an existing <summary> (for example, you may wish to hide existing documentation while it's in progress). The <exclude/> tag can be the first or last line in these cases.
+
+Some examples:
+
+/// <exclude/>
+module BottleKids1 =
+    let a = 42
+
+// Ordinary comment
+/// <exclude/>
+module BottleKids2 =
+    let a = 43
+
+/// <exclude/>
+/// BottleKids3 provides improvements over BottleKids2
+module BottleKids3 =
+    let a = 44
+
+/// BottleKids4 implements several new features over BottleKids3
+/// <exclude/>
+module BottleKids4 =
+    let a = 45
+
+/// <exclude/>
+/// <summary>
+/// BottleKids5 is all you'll ever need in terms of bottles or kids.
+/// </summary>
+module BottleKids5 =
+    let a = 46
+
+Note that the comments for BottleKids3 (and BottleKids4) will generate a warning. This is because the <exclude/> tag will be parsed as part of the summary text, and so the documentation generator can't be completely sure you meant to exclude the item, or whether it was a valid part of the documentation. It will assume the exclusion was intended, but you may want to use explicit <summary> tags to remove the warning.
+
+The warning will be of the following format:
+
+Warning: detected "<exclude/>" in text of "<summary>" for "M:YourLib.BottleKids4". Please see https://fsprojects.github.io/FSharp.Formatting/apidocs.html#Classic-XML-Doc-Comments
+
+You will find that [omit] also works, but is considered part of the Markdown syntax and is deprecated for XML Doc comments. This will also produce a warning, such as this:
+
+The use of `[omit]` and other commands in XML comments is deprecated, please use XML extensions, see https://github.com/fsharp/fslang-design/blob/master/tooling/FST-1031-xmldoc-extensions.md
+
+Go to Source links
+
+'fsdocs' normally automatically adds GitHub links to each functions, values and class members for further reference.
+
+This is normally done automatically based on the following settings:
+
+    <RepositoryUrl>https://github.com/...</RepositoryUrl>
+    <RepositoryBranch>...</RepositoryBranch>
+    <RepositoryType>git</RepositoryType>
+
+If your source is not built from the same project where you are building documentation then you may need these settings:
+
+    <FsDocsSourceRepository>...</FsDocsSourceRepository> -- the URL for the root of the source
+    <FsDocsSourceFolder>...</FsDocsSourceFolder>         -- the root soure folder at time of build
+
+It is assumed that sourceRepo and sourceFolder have synchronized contents.
+Markdown Comments
+
+You can use Markdown instead of XML in /// comments. If you do, you should set <UsesMarkdownComments>true</UsesMarkdownComments> in your F# project file.
+
+    Note: Markdown Comments are not supported in all F# IDE tooling.
+
+Adding cross-type links to modules and types in the same assembly
+
+You can automatically add cross-type links to the documentation pages of other modules and types in the same assembly. You can do this in two different ways:
+
+    Add a markdown inline link were the link title is the name of the type you want to link.
+
+    /// This will generate a link to [Foo.Bar] documentation
+
+    Add a Markdown inline code (using back-ticks) where the code is the name of the type you want to link.
+
+    /// This will also generate a link to `Foo.Bar` documentation
+
+You can use either the full name (including namespace and module) or the simple name of a type. If more than one type is found with the same name, the link will not be generated. If a type with the given name is not found in the same assembly, the link will not be generated.
+
+/// Contains two types [Bar] and [Foo.Baz]
+module Foo =
+
+    /// Bar is just an `int` and belongs to module [Foo]
+    type Bar = int
+
+    /// Baz contains a `Foo.Bar` as its `id`
+    type Baz = { id: Bar }
+
+    /// This function operates on `Baz` types.
+    let f (b: Baz) = b.id * 42
+
+/// Referencing [Foo3] will not generate a link as there is no type with the name `Foo3`
+module Foo3 =
+
+    /// This is not the same type as `Foo.Bar`
+    type Bar = double
+
+    /// Using the simple name for [Bar] will fail to create a link because the name is duplicated in
+    /// [Foo.Bar] and in [Foo3.Bar]. In this case, using the full name works.
+    let f2 b = b * 50
+
+Markdown Comments: Excluding APIs from the docs
+
+If you want to exclude modules or functions from the API docs you can use the [omit] tag. It needs to be set on a separate triple-slashed line, but it could be either the first or the last:
+
+Example as last line:
+
+/// Some actual comment
+/// [omit]
+module Bar =
+    let a = 42
+
+Example as the first line:
+
+/// [omit]
+/// Some actual comment
+module Bar2 =
+    let a = 42
+
+Building library documentation programmatically
+
+You can build library documentation programmatically using the functionality in the ApiDocs type. To do this, load the assembly and open the necessary namespaces:
+
+#r "FSharp.Formatting.ApiDocs.dll"
+
+open FSharp.Formatting.ApiDocs
+open System.IO
+
+For example the ApiDocs.GenerateHtml method:
+
+let file = Path.Combine(root, "bin/YourLibrary.dll")
+
+let input = ApiDocInput.FromFile(file)
+
+ApiDocs.GenerateHtml(
+    [ input ],
+    output = Path.Combine(root, "output"),
+    collectionName = "YourLibrary",
+    template = Path.Combine(root, "templates", "template.html"),
+    substitutions = []
+)
+
+Adding extra dependencies
+
+When building a library programmatically, you might require a reference to an additional assembly. You can pass this using the otherFlags argument.
+
+let projectAssembly = Path.Combine(root, "bin/X.dll")
+
+let projectInput = ApiDocInput.FromFile(projectAssembly)
+
+ApiDocs.GenerateHtml(
+    [ projectInput ],
+    output = Path.Combine(root, "output"),
+    collectionName = "Project X",
+    template = Path.Combine(root, "templates", "template.html"),
+    substitutions = [],
+    otherFlags = [ "-r:/root/ProjectY/bin/Debug/net6.0/Y.dll" ]
+)
+
+or use libDirs to include all assemblies from an entire folder. Tip: A combination of <CopyLocalLockFileAssemblies>true</CopyLocalLockFileAssemblies> in the fsproj file and setting libDirs to the compilation output path leads to only one folder with all dependencies referenced. This might be easier, especially for large projects with many dependencies.
+
+ApiDocs.GenerateHtml(
+    [ projectInput ],
+    output = Path.Combine(root, "output"),
+    collectionName = "Project X",
+    template = Path.Combine(root, "templates", "template.html"),
+    substitutions = [],
+    libDirs = [ "ProjectX/bin/Debug/netstandard2.0" ]
+)
+
+Rebasing Links
+
+The root parameter is used for the base of page and image links in the generated documentation. By default, it is derived from the project's <PackageProjectUrl> property.
+
+In some instances, you may wish to override the value for root (perhaps for local testing). To do this, you can use the command-line argument --parameters root <base>.
+
+For example:
+
+dotnet fsdocs build --output public/docs --parameters root ../
+
+
+Embedding script output
+
+For literate F# scripts, you may embed the result of running the script as part of the literate output. This is a feature of the functions discussed in literate programming and it is implemented using the F# Compiler service.
+Including Console Output
+
+To include the Console output use include-output:
+
+let test = 40 + 2
+
+printf "A result is: %d" test
+(*** include-output ***)
+
+The script defines a variable test and then prints it. The console output is included in the output.
+
+To include the a formatted value use include-it:
+
+[ 0 .. 99 ]
+
+(*** include-it ***)
+
+To include the meta output of F# Interactive processing such as type signatures use (*** include-fsi-output ***):
+
+let test = 40 + 3
+
+(*** include-fsi-output ***)
+
+To include both console output and F# Interactive output blended use (*** include-fsi-merged-output ***).
+
+let test = 40 + 4
+(*** include-fsi-merged-output ***)
+
+You can use the same commands with a named snippet:
+
+(*** include-it: test ***)
+(*** include-fsi-output: test ***)
+(*** include-output: test ***)
+
+You can use the include-value command to format a specific value:
+
+let value1 = [ 0 .. 50 ]
+let value2 = [ 51 .. 100 ]
+(*** include-value: value1 ***)
+
+Using AddPrinter and AddHtmlPrinter
+
+You can use fsi.AddPrinter, fsi.AddPrintTransformer and fsi.AddHtmlPrinter to extend the formatting of objects.
+Emitting Raw Text
+
+To emit raw text in F# literate scripts use the following:
+
+(**
+	(*** raw ***)
+	Some raw text.
+*)
+
+which would emit
+
+Some raw text.
+
+directly into the document.
+F# Formatting as a Library: Specifying the Evaluator and Formatting
+
+If using F# Formatting as a library the embedding of F# output requires specifying an additional parameter to the parsing functions discussed in literate programming documentation. Assuming you have all the references in place, you can now create an instance of FsiEvaluator that represents a wrapper for F# interactive and pass it to all the functions that parse script files or process script files:
+
+open FSharp.Formatting.Literate
+open FSharp.Formatting.Literate.Evaluation
+open FSharp.Formatting.Markdown
+
+// Sample literate content
+let content =
+    """
+let a = 10
+(*** include-value:a ***)"""
+
+// Create evaluator and parse script
+let fsi = FsiEvaluator()
+
+let doc = Literate.ParseScriptString(content, fsiEvaluator = fsi)
+
+Literate.ToHtml(doc)
+
+When the fsiEvaluator parameter is specified, the script is evaluated and so you can use additional commands such as include-value. When the evaluator is not specified, it is not created automatically, so the functionality is not available (this way, you won't accidentally run unexpected code!)
+
+If you specify the fsiEvaluator parameter, but don't want a specific snippet to be evaluated (because it might throw an exception, for example), you can use the (*** do-not-eval ***) command.
+
+The constructor of FsiEvaluator takes command line parameters for fsi.exe that can be used to specify, for example, defined symbols and other attributes for F# Interactive.
+
+You can also subscribe to the EvaluationFailed event which is fired whenever the evaluation of an expression fails. You can use that to do tests that verify that all of the code in your documentation executes without errors.
+F# Formatting as a Library: Custom formatting functions
+
+As mentioned earlier, values are formatted using a simple "%A" formatter by default. However, you can specify a formatting function that provides nicer formatting for values of certain types. For example, let's say that we would want to format F# lists such as [1; 2; 3] as HTML ordered lists <ol>.
+
+This can be done by calling FsiEvaluator.RegisterTransformation on the FsiEvaluator instance:
+
+// Create evaluator & register simple formatter for lists
+let fsiEvaluator = FsiEvaluator()
+
+fsiEvaluator.RegisterTransformation(fun (o, ty, _executionCount) ->
+    // If the type of value is an F# list, format it nicely
+    if ty.IsGenericType
+       && ty.GetGenericTypeDefinition() = typedefof<list<_>> then
+        let items =
+            // Get items as objects and create a paragraph for each item
+            [ for it in Seq.cast<obj> (unbox o) -> [ Paragraph([ Literal(it.ToString(), None) ], None) ] ]
+        // Return option value (success) with ordered list
+        Some [ ListBlock(MarkdownListKind.Ordered, items, None) ]
+    else
+        None)
+
+The function is called with two arguments - o is the value to be formatted, and ty is the static type of the value (as inferred by the F# compiler). The sample checks that the type of the value is a list (containing values of any type), and then it casts all values in the list to obj (for simplicity). Then, we generate Markdown blocks representing an ordered list. This means that the code will work for both LaTeX and HTML formatting - but if you only need one, you can simply produce HTML and embed it in InlineHtmlBlock.
+
+To use the new FsiEvaluator, we can use the same style as earlier. This time, we format a simple list containing strings:
+
+let listy =
+    """
+### Formatting demo
+let test = ["one";"two";"three"]
+(*** include-value:test ***)"""
+
+let docOl = Literate.ParseScriptString(listy, fsiEvaluator = fsiEvaluator)
+
+Literate.ToHtml(docOl)
+
+The resulting HTML formatting of the document contains the snippet that defines test, followed by a nicely formatted ordered list:
+
+    Formatting demo
+
+    1: 
+
+    	
+
+    let test = ["one";"two";"three"]
+
+        one
+
+        two
+
+        three
+
+
+
+
+Customization and Styling
+
+When using fsdocs, there are six levels of extra content development and styling.
+
+    Don't do any styling or documentation customization and simply write content. This is by far the simplest option to maintain.
+
+    Add content such as an docs/index.md to customize the front-page content for your generated docs. You can also add content such as docs/reference/fslib.md to give a bespoke landing page for one of your namespaces, e.g. here assumed to be namespace FsLib. This will override any generated content.
+    Customize via Styling Parameters
+    Customize via CSS
+    Customize via a new template
+    Customize by generating your own site using your own code
+
+By default fsdocs does no styling customization and uses the following defaults. These are the settings used to build this site.
+
+    Uses the default template in docs/_template.html
+
+    Uses the default styles in docs/content/fsdocs-default.css.
+
+    Uses no custom styles in docs/content/fsdocs-custom.css.
+    Uses no styling parameters except those extracted from the project files.
+
+For your project, you don't need any of these files. However, you can add them if you wish, though if you adjust them there is no guarantee that your template will continue to work with future versions of F# Formatting.
+Customizing via Styling Parameters
+
+The following content parameters are particularly related to visual styling:
+
+Substitution name
+	
+
+Value (if not overriden by --parameters)
+
+fsdocs-authors
+	
+
+<Authors>
+
+fsdocs-license-link
+	
+
+<FsDocsLicenseLink>
+
+fsdocs-logo-src
+	
+
+<FsDocsLogoSource>
+
+fsdocs-favicon-src
+	
+
+<FsDocsFaviconSource>
+
+fsdocs-logo-link
+	
+
+<FsDocsLogoLink>
+
+fsdocs-release-notes-link
+	
+
+<FsDocsReleaseNotesLink> else <PackageProjectUrl>/blob/master/RELEASE_NOTES.md
+
+fsdocs-repository-link
+	
+
+<RepositoryUrl>
+
+fsdocs-theme
+	
+
+<FsDocsTheme>, must currently be default
+
+These basic entry-level styling parameters can be set in the project file or Directory.Build.props. For example:
+
+<PropertyGroup>
+    <!-- Example ultra-simple styling and generation settings for FsDocs default template-->
+    <PackageLicenseUrl>https://github.com/foo/bar/blob/master/License.txt</PackageLicenseUrl>
+    <PackageProjectUrl>https://foo.github.io/bar/</PackageProjectUrl>
+    <RepositoryUrl>https://github.com/foo/bar/</RepositoryUrl>
+    <FsDocsLogoLink>https://fsharp.org</FsDocsLogoLink>
+    <FsDocsLogoSource>img/logo.png</FsDocsLogoSource>
+    <FsDocsFaviconSource>img/favicon.ico</FsDocsFaviconSource>
+    <FsDocsLicenseLink>https://github.com/foo/bar/blob/master/License.txt</FsDocsLicenseLink>
+    <FsDocsReleaseNotesLink>https://github.com/foo/bar/blob/master/release-notes.md</FsDocsReleaseNotesLink>
+    <FsDocsWarnOnMissingDocs>true</FsDocsWarnOnMissingDocs>
+    <FsDocsTheme>default</FsDocsTheme>
+</PropertyGroup>
+
+As an example, here is a page with alternative styling.
+Customizing via CSS
+
+You can start styling by creating a file docs/content/fsdocs-theme.css and adding entries to it.
+It is loaded by the standard template.
+CSS variables
+
+The default template is heavily based on CSS variables. These can easily be override to customize the look and feel of the default theme.
+A full list of the overrideable variables can be found here.
+
+:root {
+    --text-color: red;
+}
+
+[data-theme=dark] {
+    --text-color: darkred;
+}
+
+Please be aware that the dark mode in the default theme is using the same variables. When you override a variable, it will also be used in dark mode unless redefined in a [data-theme=dark] CSS query.
+CSS classes
+
+The API documentation uses a set of fixed CSS classes:
+
+CSS class
+	
+
+Corresponding Content
+
+.fsdocs-tip
+	
+
+generated tooltips
+
+.fsdocs-xmldoc
+	
+
+generated xmldoc sections
+
+.fsdocs-member-list
+	
+
+generated member lists (tables)
+
+.fsdocs-member-usage
+	
+
+usage in generated member lists
+
+.fsdocs-member-tooltip
+	
+
+tooltips in generated member lists
+
+.fsdocs-member-xmldoc
+	
+
+documentation in generated member lists
+
+.fsdocs-entity-list
+	
+
+generated entity lists
+
+.fsdocs-entity-name
+	
+
+generated entity lists
+
+.fsdocs-entity-xmldoc
+	
+
+documentation in generated entity lists
+
+.fsdocs-exception-list
+	
+
+generated exception lists
+
+.fsdocs-summary
+	
+
+the 'summary' section of an XML doc
+
+.fsdocs-remarks
+	
+
+the 'remarks' section of an XML doc
+
+.fsdocs-params
+	
+
+the 'parameters' section of an XML doc
+
+.fsdocs-param
+	
+
+a 'parameter' section of an XML doc
+
+.fsdocs-param-name
+	
+
+a 'parameter' name of an XML doc
+
+.fsdocs-returns
+	
+
+the 'returns' section of an XML doc
+
+.fsdocs-example
+	
+
+the 'example' section of an XML doc
+
+.fsdocs-note
+	
+
+the 'notes' section of an XML doc
+
+.fsdocs-para
+	
+
+a paragraph of an XML doc
+
+Some generated elements are given specific HTML ids:
+
+HTML element selector
+	
+
+Content
+
+header
+	
+
+The navigation-bar
+
+#fsdocs-main-menu
+	
+
+The main menu on the left side
+
+#content
+	
+
+The generated content
+
+#fsdocs-page-menu
+	
+
+The sub menu on the right side
+
+dialog
+	
+
+The search dialog
+
+dialog input[type=search]
+	
+
+The search box
+
+#fsdocs-logo
+	
+
+The logo
+
+If you write a new theme by CSS styling please contribute it back to FSharp.Formatting.
+Customizing via a new template
+
+You can do advanced styling by creating a new template. Add a file docs/_template.html, likely starting with the existing default template.
+
+    NOTE: To enable hot reload during development with fsdocs watch in a custom _template.html file, make sure to add the single line {{fsdocs-watch-script}} to your <head> tag. NOTE: There is no guarantee that your template will continue to work with future versions of F# Formatting. If you do develop a good template please consider contributing it back to F# Formatting.
+
+Customizing menu items by template
+
+You can add advanced styling to the sidebar generated menu items by creating a new template for it. fsdoc will look for menu templates in the --input folder, which defaults to the docs folder.
+
+To customize the generated menu-item headers, use file _menu_template.html with starting template:
+
+<li class="nav-header">
+    {{fsdocs-menu-header-content}}
+</li>
+{{fsdocs-menu-items}}
+
+Similarly, to customize the individual menu item list, use file _menu-item_template.html with the starting template:
+
+<li class="nav-item"><a href="{{fsdocs-menu-item-link}}" class="nav-link">{{fsdocs-menu-item-content}}</a></li>
+
+Do note that files must be added before running, or won't be generated. In case you want to get a unique identifier for a header or menu item, you can use {{fsdocs-menu-header-id}} and {{fsdocs-menu-item-id}}, respectively.
+Injecting additional html into the default template
+
+Occasionally, you may find the need to make small customizations to the default template, such as adding a Google Analytics snippet or including additional style or script tags. To address this scenario, you can create two files: _head.html and/or _body.html.
+
+The content within these files will serve as replacements for the {{fsdocs-head-extra}} and {{fsdocs-body-extra}} placeholders, which are utilized in the default template.
+Customizing by generating your own site using your own code
+
+The FSharp.Formatting.ApiDocs namespace includes a GenerateModel that captures the results of documentation preparation in ApiDocsModel and allows you to generate your own site using your own code.
+
+    NOTE: The ApiDocsModel API is undergoing change and improvement, and there is no guarantee that your bespoke site generation will continue to work with future versions of F# Formatting. NOTE: The ApiDocsModel currently includes some generated HTML with some specific style tags. In the long term these may be removed from the design of that component.
+
+
+Example: Using Literate Script Content
+
+This file demonstrates how to write literate F# script files (*.fsx) that can be transformed into nice HTML using the literate.fsx script from the F# Formatting package.
+
+As you can see, a comment starting with a double asterisk is treated as part of the document and is transformed using Markdown, which means that you can use:
+
+    Unordered or ordered lists
+    Text formatting including bold and emphasis
+
+And numerous other Markdown features.
+Writing F# code
+
+Code that is not inside the comment will be formatted as a sample snippet.
+
+/// The Hello World of functional languages!
+let rec factorial x =
+    if x = 0 then 1 else x * (factorial (x - 1))
+
+let f10 = factorial 10
+
+Hiding code
+
+If you want to include some code in the source code, but omit it from the output, you can use the hide command.
+
+The value will be defined in the F# code and so you can use it from other (visible) code and get the correct tooltips:
+
+let answer = hidden
+
+Moving code around
+
+Sometimes, it is useful to first explain some code that has to be located at the end of the snippet (perhaps because it uses some definitions discussed in the middle). This can be done using include and define commands.
+
+The following snippet gets the correct tooltips, even though it uses laterFunction:
+
+let sample = laterFunction () |> printfn "Got: %s"
+
+Then, we can explain how laterFunction is defined:
+
+let laterFunction () = "Not very difficult, is it?"
+
+This example covers pretty much all features that are currently implemented in literate.fsx, but feel free to fork the project on GitHub and add more features or report bugs!
+
+Example: Using Markdown Content
+
+This file demonstrates how to write Markdown document with embedded F# snippets that can be transformed into nice HTML using the literate.fsx script from the F# Formatting package.
+
+In this case, the document itself is a valid Markdown and you can use standard Markdown features to format the text:
+
+    Here is an example of an unordered list and...
+    Text formatting including bold and emphasis
+
+For more information, see the Markdown reference.
+Writing F# code
+
+In standard Markdown, you can include code snippets by writing a block indented by four spaces and the code snippet will be turned into a <pre> element. If you do the same using the Literate F# tool, the code is turned into a nicely formatted F# snippet:
+
+/// The Hello World of functional languages!
+let rec factorial x = 
+  if x = 0 then 1 
+  else x * (factorial (x - 1))
+
+let f10 = factorial 10
+
+Hiding code
+
+If you want to include some code in the source code, but omit it from the output, you can use the hide command. You can also use module=... to specify that the snippet should be placed in a separate module (e.g. to avoid duplicate definitions).
+
+The value will be defined in the F# code that is processed and so you can use it from other (visible) code and get correct tooltips:
+
+let answer = Hidden.answer
+
+Including other snippets
+
+When writing literate programs as Markdown documents, you can also include snippets in other languages. These will not be colorized and processed as F# code samples:
+
+Console.WriteLine("Hello world!");
+
+This snippet is turned into a pre element with the lang attribute set to csharp.
+
+Example: Using the Markdown Extensions for LaTeX
+
+To use LaTex extension, you need to add javascript link to MathJax in your template or inside a _head.html file.
+
+<script id="MathJax-script" async src="https://cdn.jsdelivr.net/npm/mathjax@3.0.1/es5/tex-mml-chtml.js"></script>
+
+To use inline LaTex, eclose LaTex code with $:
+. Alternatively, you can also use $$.
+
+To use block LaTex, start a new paragraph, with the first line marked as $$$ (no close $$$):
+
+Use LaTex escape rule:
+
+    Escape $ in inline mode: ,
+    Other escapes:
+    Using < or >: , , , ,
+
+
+
+Example: Styling for Right-Side Navigation Bar
+
+The sidebar can be moved to the right by overwriting the following CSS variables in your fsdocs-theme.css file:
+
+:root {
+    --body-grid-template-columns: minmax(0, 1fr) var(--main-menu-width);
+    --body-grid-template-columns-xl: minmax(0, 1fr) var(--main-menu-width) var(--page-menu-width);
+    --main-menu-grid-column: 2;
+    --main-grid-column: 1;
+}
+
+Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat. Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur. Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum.
+
+Sed ut perspiciatis unde omnis iste natus error sit voluptatem accusantium doloremque laudantium, totam rem aperiam, eaque ipsa quae ab illo inventore veritatis et quasi architecto beatae vitae dicta sunt explicabo. Nemo enim ipsam voluptatem quia voluptas sit aspernatur aut odit aut fugit, sed quia consequuntur magni dolores eos qui ratione voluptatem sequi nesciunt. Neque porro quisquam est, qui dolorem ipsum quia dolor sit amet, consectetur, adipisci velit, sed quia non numquam eius modi tempora incidunt ut labore et dolore magnam aliquam quaerat voluptatem. Ut enim ad minima veniam, quis nostrum exercitationem ullam corporis suscipit laboriosam, nisi ut aliquid ex ea commodi consequatur? Quis autem vel eum iure reprehenderit qui in ea voluptate velit esse quam nihil molestiae consequatur, vel illum qui dolorem eum fugiat quo voluptas nulla pariatur?
+
+
+Code formatting
+
+This page demonstrates how to use FSharp.Formatting.CodeFormat to tokenize F# source code, obtain information about the source code (mainly tooltips from the type-checker) and how to turn the code into a nicely formatted HTML.
+
+First, we need to load the assembly and open the necessary namespaces:
+
+open FSharp.Formatting.CodeFormat
+open System.Reflection
+
+If you want to process multiple snippets, it is a good idea to keep the formatting agent around if possible. The agent needs to load the F# compiler (which needs to load various files itself) and so this takes a long time.
+Processing F# source
+
+The formatting agent provides a CodeFormatAgent.ParseAndCheckSource method (together with an asynchronous version for use from F# and also a version that returns a .NET Task for C#). To call the method, we define a simple F# code as a string:
+
+let source =
+    """
+    let hello () =
+      printfn "Hello world"
+  """
+
+let snippets, diagnostics =
+    CodeFormatter.ParseAndCheckSource("C:\\snippet.fsx", source, None, None, ignore)
+
+When calling the method, you need to specify a file name and the actual content of the script file. The file does not have to physically exist. It is used by the F# compiler to resolve relative references (e.g. #r) and to automatically name the module including all code in the file.
+
+You can also specify additional parameters, such as *.dll references, by passing a third argument with compiler options (e.g. "-r:Foo.dll -r:Bar.dll").
+
+This operation might take some time, so it is a good idea to use an asynchronous variant of the method. It returns two arrays - the first contains F# snippets in the source code and the second contains any errors reported by the compiler. A single source file can include multiple snippets using the same formatting tags as those used on fssnip.net as documented in the about page.
+Working with returned tokens
+
+Each returned snippet is essentially just a collection of lines, and each line consists of a sequence of tokens. The following snippet prints basic information about the tokens of our sample snippet:
+
+// Get the first snippet and obtain list of lines
+let (Snippet (title, lines)) = snippets |> Seq.head
+
+// Iterate over all lines and all tokens on each line
+for (Line (_, tokens)) in lines do
+    for token in tokens do
+        match token with
+        | TokenSpan.Token (kind, code, tip) ->
+            printf "%s" code
+
+            tip
+            |> Option.iter (fun spans -> printfn "%A" spans)
+        | TokenSpan.Omitted _
+        | TokenSpan.Output _
+        | TokenSpan.Error _ -> ()
+
+    printfn ""
+
+The TokenSpan.Token is the most important kind of token. It consists of a kind (identifier, keyword, etc.), the original F# code and tooltip information. The tooltip is further formatted using a simple document format, but we simply print the value using the F# pretty printing, so the result looks as follows:
+
+let hello[Literal "val hello : unit -> unit"; ...] () =
+  printfn[Literal "val printfn : TextWriterFormat<'T> -> 'T"; ...] "Hello world"
+
+The Omitted token is generated if you use the special (*[omit:...]*) command. The Output token is generated if you use the // [fsi:...] command to format output returned by F# interactive. The Error command wraps code that should be underlined with a red squiggle if the code contains an error.
+Generating HTML output
+
+Finally, the CodeFormat type also includes a method CodeFormat.FormatHtml that can be used to generate nice HTML output from an F# snippet. This is used, for example, on F# Snippets. The following example shows how to call it:
+
+let prefix = "fst"
+let html = CodeFormat.FormatHtml(snippets, prefix)
+
+// Print all snippets, in case there is more of them
+for snip in html.Snippets do
+    printfn "%s" snip.Content
+
+// Print HTML code that is generated for ToolTips
+printfn "%s" html.ToolTip
+
+If the input contains multiple snippets separated using the //[snippet:...] comment, e.g.:
+
+1: 
+2: 
+3: 
+4: 
+5: 
+6: 
+7: 
+
+	
+
+// [snippet: First sample]
+printf "The answer is: %A" 42
+// [/snippet]
+// [snippet: Second sample]
+printf "Hello world!"
+// [/snippet]
+
+then the formatter returns multiple HTML blocks. However, the generated tooltips are shared by all snippets (to save space) and so they are returned separately.
+
+Markdown parser
+
+This page demonstrates how to use FSharp.Formatting.Markdown to parse a Markdown document, process the obtained document representation, and how to turn the code into a nicely formatted HTML.
+
+First, we need to load the assembly and open the necessary namespaces:
+
+open FSharp.Formatting.Markdown
+open FSharp.Formatting.Common
+
+Parsing documents
+
+The F# Markdown parser recognizes the standard Markdown syntax and it is not the aim of this tutorial to fully document it. The following snippet creates a simple string containing a document with several elements and then parses it using the Markdown.Parse method:
+
+let document =
+    """
+# F# Hello world
+Hello world in [F#](http://fsharp.net) looks like this:
+
+    printfn "Hello world!"
+
+For more see [fsharp.org][fsorg].
+
+  [fsorg]: http://fsharp.org "The F# organization." """
+
+let parsed = Markdown.Parse(document)
+
+The sample document consists of a first-level heading (written using one of the two alternative styles) followed by a paragraph with a direct link, code snippet and one more paragraph that includes an indirect link. The URLs of indirect links are defined by a separate block as demonstrated on the last line (and they can then be easily used repeatedly from multiple places in the document).
+Working with parsed documents
+
+The F# Markdown processor does not turn the document directly into HTML. Instead, it builds a nice F# data structure that we can use to analyze, transform and process the document. First of all the MarkdownDocument.DefinedLinks property returns all indirect link definitions:
+
+parsed.DefinedLinks
+val it : IDictionary<string,(string * string option)> =
+  dict [("fsorg", ("http://fsharp.org", Some "The F# organization."))]
+
+The document content can be accessed using the MarkdownDocument.Paragraphs property that returns a sequence of paragraphs or other first-level elements (headings, quotes, code snippets, etc.). The following snippet prints the heading of the document:
+
+// Iterate over all the paragraph elements
+for par in parsed.Paragraphs do
+    match par with
+    | Heading (size = 1; body = [ Literal (text = text) ]) ->
+        // Recognize heading that has a simple content
+        // containing just a literal (no other formatting)
+        printfn "%s" text
+    | _ -> ()
+
+You can find more detailed information about the document structure and how to process it in the book F# Deep Dives.
+Processing the document recursively
+
+The library provides active patterns that can be used to easily process the Markdown document recursively. The example in this section shows how to extract all links from the document. To do that, we need to write two recursive functions. One that will process all paragraph-style elements and one that will process all inline formattings (inside paragraphs, headings etc.).
+
+To avoid pattern matching on every single kind of span and every single kind of paragraph, we can use active patterns from the MarkdownPatterns module. These can be use to recognize any paragraph or span that can contain child elements:
+
+/// Returns all links in a specified span node
+let rec collectSpanLinks span =
+    seq {
+        match span with
+        | DirectLink (link = url) -> yield url
+        | IndirectLink (key = key) -> yield fst (parsed.DefinedLinks.[key])
+        | MarkdownPatterns.SpanLeaf _ -> ()
+        | MarkdownPatterns.SpanNode (_, spans) ->
+            for s in spans do
+                yield! collectSpanLinks s
+    }
+
+/// Returns all links in the specified paragraph node
+let rec collectParLinks par =
+    seq {
+        match par with
+        | MarkdownPatterns.ParagraphLeaf _ -> ()
+        | MarkdownPatterns.ParagraphNested (_, pars) ->
+            for ps in pars do
+                for p in ps do
+                    yield! collectParLinks p
+        | MarkdownPatterns.ParagraphSpans (_, spans) ->
+            for s in spans do
+                yield! collectSpanLinks s
+    }
+
+// Collect links in the entire document
+Seq.collect collectParLinks parsed.Paragraphs
+val it : seq<string> =
+  seq ["http://fsharp.net"; "http://fsharp.org"]
+
+The collectSpanLinks function works on individual span elements that contain inline formatting (emphasis, strong) and also links. The DirectLink node from MarkdownSpan represents an inline link like the one pointing to http://fsharp.net while IndirectLink represents a link that uses one of the link definitions. The function simply returns the URL associated with the link.
+
+Some span nodes (like emphasis) can contain other formatting, so we need to recursively process children. This is done by matching against MarkdownPatterns.SpanNodes which is an active pattern that recognizes any node with children. The library also provides a function named MarkdownPatterns.SpanNode that can be used to reconstruct the same node (when you want to transform a document). This is similar to how the ExprShape module for working with F# quotations works.
+
+The function collectParLinks processes paragraphs - a paragraph cannot directly be a link so we just need to process all spans. This time, there are three options. ParagraphLeaf represents a case where the paragraph does not contain any spans (a code block or, for example, a <hr> line); the ParagraphNested case is used for paragraphs that contain other paragraphs (quotation) and ParagraphSpans is used for all other paragraphs that contain normal text - here we call collectSpanLinks on all nested spans.
+Generating HTML output
+
+Finally, the Markdown type also includes a method Markdown.ToHtml that can be used to generate an HTML document from the Markdown input. The following example shows how to call it:
+
+let html = Markdown.ToHtml(parsed)
