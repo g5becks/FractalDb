@@ -316,3 +316,210 @@ type ValidationTests(fixture: ValidationTestFixture) =
             // No validation, so data is accepted as-is
             user |> should equal userWithBadData
         | Error err -> failwith $"Expected Ok (no validation), got Error: {err}"
+
+    /// <summary>
+    /// Test that updateById with transformation resulting in invalid data can be validated.
+    /// </summary>
+    [<Fact>]
+    member _.``updateById with invalid transformation can be validated``() : Task =
+        task {
+            // Arrange - Insert valid user first
+            let validUser =
+                { Name = "Update Test"
+                  Email = "updatetest@example.com"
+                  Age = 30
+                  Active = true }
+
+            let! insertResult = fixture.ValidatedUsers |> Collection.insertOne validUser
+
+            let userId =
+                match insertResult with
+                | Ok doc -> doc.Id
+                | Error err -> failwith $"Setup failed: {err}"
+
+            // Act - Update to set invalid age
+            let invalidTransform (user: ValidatedUser) : ValidatedUser = { user with Age = 200 }
+
+            // Validate the transformed data before updating
+            let transformedUser = invalidTransform validUser
+            let validateResult = fixture.ValidatedUsers |> Collection.validate transformedUser
+
+            // Assert - Validation should fail
+            match validateResult with
+            | Ok _ -> failwith "Expected Validation error, got Ok"
+            | Error(FractalError.Validation(field, message)) ->
+                message |> should haveSubstring "Age 200"
+                message |> should haveSubstring "between 0 and 150"
+            | Error err -> failwith $"Expected Validation error, got different error: {err}"
+
+            // Verify original data is unchanged (update was not performed)
+            let! currentDoc = fixture.ValidatedUsers |> Collection.findById userId
+
+            match currentDoc with
+            | Some doc -> doc.Data.Age |> should equal 30 // Original age
+            | None -> failwith "Document not found"
+        }
+
+    /// <summary>
+    /// Test that replaceOne with invalid data can be validated before replacement.
+    /// </summary>
+    [<Fact>]
+    member _.``replaceOne with invalid data can be validated``() : Task =
+        task {
+            // Arrange - Insert valid user first
+            let validUser =
+                { Name = "Replace Test"
+                  Email = "replacetest@example.com"
+                  Age = 25
+                  Active = true }
+
+            let! insertResult = fixture.ValidatedUsers |> Collection.insertOne validUser
+
+            match insertResult with
+            | Error err -> failwith $"Setup failed: {err}"
+            | Ok _ -> ()
+
+            // Act - Attempt to replace with invalid data
+            let invalidReplacement =
+                { Name = "" // Empty name
+                  Email = "replacetest@example.com"
+                  Age = 25
+                  Active = false }
+
+            // Validate before replacing
+            let validateResult = fixture.ValidatedUsers |> Collection.validate invalidReplacement
+
+            // Assert - Validation should fail
+            match validateResult with
+            | Ok _ -> failwith "Expected Validation error, got Ok"
+            | Error(FractalError.Validation(field, message)) -> message |> should haveSubstring "Name cannot be empty"
+            | Error err -> failwith $"Expected Validation error, got different error: {err}"
+
+            // Verify original data is unchanged (replacement was not performed)
+            let! docs =
+                fixture.ValidatedUsers
+                |> Collection.find (Query.Field("email", FieldOp.Compare(box (CompareOp.Eq "replacetest@example.com"))))
+
+            match docs with
+            | [ doc ] -> doc.Data.Name |> should equal "Replace Test" // Original name
+            | _ -> failwith "Expected exactly one document"
+        }
+
+    /// <summary>
+    /// Test cross-field validation with multiple fields.
+    /// </summary>
+    [<Fact>]
+    member _.``cross-field validation with dependent fields``() : Task =
+        task {
+            // Arrange - Custom validator that checks Name and Email together
+            let crossFieldValidator (user: ValidatedUser) : Result<ValidatedUser, string> =
+                // Rule: If email contains "admin", Name must contain "Admin"
+                if user.Email.Contains("admin") && not (user.Name.Contains("Admin")) then
+                    Error "Users with admin email must have 'Admin' in their name"
+                else
+                    validateUser user // Chain to standard validation
+
+            let crossFieldSchema =
+                { validatedUserSchema with
+                    Validate = Some crossFieldValidator }
+
+            let collection = fixture.Db.Collection<ValidatedUser>("cross_field_users", crossFieldSchema)
+
+            // Act - Valid combination (admin email with Admin in name)
+            let validAdminUser =
+                { Name = "Admin User"
+                  Email = "admin@example.com"
+                  Age = 35
+                  Active = true }
+
+            let validResult = collection |> Collection.validate validAdminUser
+
+            // Assert - Should pass
+            match validResult with
+            | Ok _ -> () // Success
+            | Error err -> failwith $"Expected Ok, got Error: {err}"
+
+            // Act - Invalid combination (admin email without Admin in name)
+            let invalidAdminUser =
+                { Name = "Regular User"
+                  Email = "admin@example.com"
+                  Age = 35
+                  Active = true }
+
+            let invalidResult = collection |> Collection.validate invalidAdminUser
+
+            // Assert - Should fail
+            match invalidResult with
+            | Ok _ -> failwith "Expected Validation error, got Ok"
+            | Error(FractalError.Validation(field, message)) ->
+                message |> should haveSubstring "admin email must have 'Admin' in their name"
+            | Error err -> failwith $"Expected Validation error, got different error: {err}"
+        }
+
+    /// <summary>
+    /// Test that validation correctly reports the first error encountered.
+    /// </summary>
+    [<Fact>]
+    member _.``validation returns first error when multiple violations exist``() : Task =
+        task {
+            // Arrange - User with multiple validation errors
+            let multipleErrorsUser =
+                { Name = "" // Error 1: Empty name
+                  Email = "invalid" // Error 2: Bad email
+                  Age = 200 // Error 3: Age out of range
+                  Active = true }
+
+            // Act
+            let result = fixture.ValidatedUsers |> Collection.validate multipleErrorsUser
+
+            // Assert - Should return first error (empty name)
+            match result with
+            | Ok _ -> failwith "Expected Validation error, got Ok"
+            | Error(FractalError.Validation(field, message)) ->
+                // The validator checks name first, so that error should be returned
+                message |> should haveSubstring "Name cannot be empty"
+            | Error err -> failwith $"Expected Validation error, got different error: {err}"
+        }
+
+    /// <summary>
+    /// Test validation with boundary values (edge cases).
+    /// </summary>
+    [<Fact>]
+    member _.``validation accepts boundary values``() : Task =
+        task {
+            // Arrange - User with edge case values
+            let boundaryUser =
+                { Name = "A" // Single character name (valid)
+                  Email = "a@b.c" // Minimal valid email
+                  Age = 0 // Minimum age
+                  Active = false }
+
+            // Act
+            let result = fixture.ValidatedUsers |> Collection.validate boundaryUser
+
+            // Assert - Should pass
+            match result with
+            | Ok user ->
+                user.Name |> should equal "A"
+                user.Age |> should equal 0
+            | Error err -> failwith $"Expected Ok, got Error: {err}"
+
+            // Test maximum age boundary
+            let maxAgeUser = { boundaryUser with Age = 150 }
+            let maxAgeResult = fixture.ValidatedUsers |> Collection.validate maxAgeUser
+
+            match maxAgeResult with
+            | Ok user -> user.Age |> should equal 150
+            | Error err -> failwith $"Expected Ok, got Error: {err}"
+
+            // Test just over maximum (should fail)
+            let overMaxUser = { boundaryUser with Age = 151 }
+            let overMaxResult = fixture.ValidatedUsers |> Collection.validate overMaxUser
+
+            match overMaxResult with
+            | Ok _ -> failwith "Expected Validation error for age 151, got Ok"
+            | Error(FractalError.Validation(field, message)) ->
+                message |> should haveSubstring "Age 151"
+                message |> should haveSubstring "between 0 and 150"
+            | Error err -> failwith $"Expected Validation error, got different error: {err}"
+        }
