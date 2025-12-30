@@ -24,7 +24,7 @@ let myQuery = query {
     where (doc.Field = value)
 }
 
-let! results = collection |> Collection.executeQuery myQuery
+let! results = collection |> Collection.exec myQuery
 ```
 
 ### Simple Filter
@@ -312,6 +312,8 @@ let cities = query {
 
 ### Get All Matching Documents
 
+Query expressions are executed using `Collection.exec`:
+
 ```fsharp
 task {
     let myQuery = query {
@@ -319,39 +321,45 @@ task {
         where (user.Active = true)
         sortBy user.Name
     }
-    let! results = users |> Collection.executeQuery myQuery
+    
+    // Execute query expression
+    let! results = users |> Collection.exec myQuery
     for doc in results do
         printfn "%s" doc.Data.Name
 }
 ```
 
-### Count Matching Documents
+You can also use the instance method:
 
 ```fsharp
-task {
-    let activeQuery = query {
-        for user in users do
-        where (user.Active = true)
-    }
-    let! count = users |> Collection.count activeQuery
-    printfn "Active users: %d" count
-}
+let! results = users.Exec(myQuery)
 ```
 
-### Find One Document
+### Working with Query Filters
+
+For operations like `count` and `findOne`, you need to use the Query module API instead of query expressions:
 
 ```fsharp
+open FractalDb
+
 task {
-    let emailQuery = query {
-        for user in users do
-        where (user.Email = "alice@example.com")
-    }
-    let! user = users |> Collection.findOne emailQuery
+    // Count with Query module filter
+    let activeFilter = 
+        Query.Field("active", FieldOp.Compare(box (CompareOp.Eq true)))
+    let! count = users |> Collection.count activeFilter
+    printfn "Active users: %d" count
+    
+    // FindOne with Query module filter  
+    let emailFilter = 
+        Query.Field("email", FieldOp.Compare(box (CompareOp.Eq "alice@example.com")))
+    let! user = users |> Collection.findOne emailFilter
     match user with
     | Some doc -> printfn "Found: %s" doc.Data.Name
     | None -> printfn "Not found"
 }
 ```
+
+**Note**: Currently, only `Collection.exec` supports query expressions. Other operations like `count` and `findOne` require Query module filters.
 
 ## Complete Examples
 

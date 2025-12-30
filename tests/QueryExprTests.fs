@@ -898,3 +898,168 @@ type QueryExprTests(fixture: QueryExprTestFixture) =
             | Query.Or innerQueries -> innerQueries |> should haveLength 2
             | _ -> failwith "Expected Or"
         | _ -> failwith "Expected Query.And at top level"
+
+    // ═══════════════════════════════════════════════════════════════
+    // Collection.exec Tests - Query Expression Execution
+    // ═══════════════════════════════════════════════════════════════
+
+    [<Fact>]
+    member _.``Collection.exec returns all documents when no filter specified``() =
+        task {
+            let queryExpr =
+                query {
+                    for user in users do
+                        ()
+                }
+
+            let! results = users |> Collection.exec queryExpr
+
+            results |> should haveLength 3
+        }
+
+    [<Fact>]
+    member _.``Collection.exec with where clause filters correctly``() =
+        task {
+            let queryExpr =
+                query {
+                    for user in users do
+                        where (user.Active = true)
+                }
+
+            let! results = users |> Collection.exec queryExpr
+
+            results |> should haveLength 2
+
+            results |> List.forall (fun doc -> doc.Data.Active) |> should equal true
+
+            results
+            |> List.map (fun doc -> doc.Data.Name)
+            |> List.sort
+            |> should equal [ "Alice"; "Bob" ]
+        }
+
+    [<Fact>]
+    member _.``Collection.exec with multiple where clauses combines with AND``() =
+        task {
+            let queryExpr =
+                query {
+                    for user in users do
+                        where (user.Active = true)
+                        where (user.Age >= 30L)
+                }
+
+            let! results = users |> Collection.exec queryExpr
+
+            results |> should haveLength 1
+            results.[0].Data.Name |> should equal "Bob"
+            results.[0].Data.Age |> should equal 30L
+        }
+
+    [<Fact>]
+    member _.``Collection.exec with sortBy sorts ascending``() =
+        task {
+            let queryExpr =
+                query {
+                    for user in users do
+                        sortBy user.Age
+                }
+
+            let! results = users |> Collection.exec queryExpr
+
+            results |> should haveLength 3
+
+            let ages = results |> List.map (fun doc -> doc.Data.Age)
+
+            ages |> should equal [ 25L; 30L; 35L ]
+        }
+
+    [<Fact>]
+    member _.``Collection.exec with sortByDescending sorts descending``() =
+        task {
+            let queryExpr =
+                query {
+                    for user in users do
+                        sortByDescending user.Age
+                }
+
+            let! results = users |> Collection.exec queryExpr
+
+            results |> should haveLength 3
+
+            let ages = results |> List.map (fun doc -> doc.Data.Age)
+
+            ages |> should equal [ 35L; 30L; 25L ]
+        }
+
+    [<Fact>]
+    member _.``Collection.exec with take limits results``() =
+        task {
+            let queryExpr =
+                query {
+                    for user in users do
+                        take 2
+                }
+
+            let! results = users |> Collection.exec queryExpr
+
+            results |> should haveLength 2
+        }
+
+    [<Fact>]
+    member _.``Collection.exec with skip and take for pagination``() =
+        task {
+            let queryExpr =
+                query {
+                    for user in users do
+                        sortBy user.Age
+                        skip 1
+                        take 1
+                }
+
+            let! results = users |> Collection.exec queryExpr
+
+            results |> should haveLength 1
+            results.[0].Data.Age |> should equal 30L
+        }
+
+    [<Fact>]
+    member _.``Collection.exec with complex query works end-to-end``() =
+        task {
+            let queryExpr =
+                query {
+                    for user in users do
+                        where (user.Age >= 25L)
+                        sortByDescending user.Age
+                        skip 1
+                        take 1
+                }
+
+            let! results = users |> Collection.exec queryExpr
+
+            results |> should haveLength 1
+            results.[0].Data.Name |> should equal "Bob"
+            results.[0].Data.Age |> should equal 30L
+        }
+
+    [<Fact>]
+    member _.``Collection.Exec instance method works same as module function``() =
+        task {
+            let queryExpr =
+                query {
+                    for user in users do
+                        where (user.Active = true)
+                        sortBy user.Name
+                }
+
+            let! moduleResults = users |> Collection.exec queryExpr
+            let! instanceResults = users.Exec(queryExpr)
+
+            moduleResults |> should haveLength 2
+            instanceResults |> should haveLength 2
+
+            let moduleNames = moduleResults |> List.map (fun doc -> doc.Data.Name)
+
+            let instanceNames = instanceResults |> List.map (fun doc -> doc.Data.Name)
+
+            moduleNames |> should equal instanceNames
+        }

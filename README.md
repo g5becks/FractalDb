@@ -67,7 +67,7 @@ task {
     // ...
 }
 
-// Query with filters
+// Query with filters (using Query module)
 task {
     let queryFilter = Query.And [
         Query.Field("age", FieldOp.Compare(box (CompareOp.Gte 18)))
@@ -76,6 +76,24 @@ task {
     
     let! adults = users |> Collection.find queryFilter
     for user in adults do
+        printfn "%s (%d)" user.Data.Name user.Data.Age
+}
+
+// Or use LINQ-style query { } expressions
+task {
+    let adultQuery = query {
+        for user in users do
+        where (user.Age >= 18)
+        where (user.Active = true)
+        sortBy user.Name
+        take 10
+    }
+
+    // Execute with Collection.exec or .Exec() method
+    let! results = users |> Collection.exec adultQuery
+    // or: let! results = users.Exec(adultQuery)
+    
+    for user in results do
         printfn "%s (%d)" user.Data.Name user.Data.Age
 }
 

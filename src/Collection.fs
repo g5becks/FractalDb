@@ -777,6 +777,82 @@ module Collection =
         Task.FromResult(result)
 
     /// <summary>
+    /// Executes a translated query expression from the query { } computation expression.
+    /// </summary>
+    /// <param name="translatedQuery">The TranslatedQuery returned from query { } expression.</param>
+    /// <param name="collection">The collection to execute the query against.</param>
+    /// <returns>
+    /// Task containing list of matching documents (empty list if no matches).
+    /// </returns>
+    /// <remarks>
+    /// exec bridges the gap between query { } computation expressions and Collection.find.
+    /// It extracts the filter and options from TranslatedQuery and executes them.
+    ///
+    /// The query { } expression provides LINQ-style syntax:
+    /// - where clauses → Query&lt;'T&gt; filter
+    /// - sortBy/sortByDescending/thenBy → OrderBy list
+    /// - skip → Skip pagination
+    /// - take → Take limit
+    /// - select → Projection (currently returns full documents)
+    ///
+    /// Performance:
+    /// - Same as findWith (uses indexes, supports pagination)
+    /// - No overhead from computation expression translation
+    /// - Translated at query construction time, not execution time
+    /// </remarks>
+    /// <example>
+    /// <code>
+    /// open FractalDb.QueryExpr
+    ///
+    /// // Build query with computation expression
+    /// let myQuery = query {
+    ///     for user in users do
+    ///     where (user.Age >= 18)
+    ///     where (user.Active = true)
+    ///     sortBy user.Name
+    ///     take 10
+    /// }
+    ///
+    /// // Execute the query
+    /// let! results = users |> Collection.exec myQuery
+    /// for user in results do
+    ///     printfn "%s (%d)" user.Data.Name user.Data.Age
+    ///
+    /// // Or inline
+    /// let! results =
+    ///     users |> Collection.exec (query {
+    ///         for user in users do
+    ///         where (user.Age >= 18)
+    ///         sortByDescending user.Age
+    ///     })
+    /// </code>
+    /// </example>
+    let exec
+        (translatedQuery: FractalDb.QueryExpr.TranslatedQuery<'T>)
+        (collection: Collection<'T>)
+        : Task<list<Document<'T>>> =
+        // Extract the filter (Where clause), defaulting to Empty if none
+        let filter = translatedQuery.Where |> Option.defaultValue Query.Empty
+
+        // Convert QueryExpr.SortDirection to Options.SortDirection
+        let convertSortDir (dir: FractalDb.QueryExpr.SortDirection) : SortDirection =
+            match dir with
+            | FractalDb.QueryExpr.SortDirection.Asc -> SortDirection.Ascending
+            | FractalDb.QueryExpr.SortDirection.Desc -> SortDirection.Descending
+
+        // Build QueryOptions from the TranslatedQuery components
+        let options =
+            { QueryOptions.empty<'T> with
+                Sort =
+                    translatedQuery.OrderBy
+                    |> List.map (fun (field, dir) -> (field, convertSortDir dir))
+                Skip = translatedQuery.Skip
+                Limit = translatedQuery.Take }
+
+        // Execute using findWith
+        findWith filter options collection
+
+    /// <summary>
     /// Counts the number of documents matching the specified filter.
     /// </summary>
     /// <param name="filter">The query filter to match documents against.</param>
@@ -3200,14 +3276,12 @@ type Collection<'T> with
     /// <summary>Inserts a document into the collection.</summary>
     /// <param name="doc">The document to insert.</param>
     /// <returns>Task with Result containing the inserted document or error.</returns>
-    member this.InsertOne(doc: 'T) : Task<FractalResult<Document<'T>>> =
-        Collection.insertOne doc this
+    member this.InsertOne(doc: 'T) : Task<FractalResult<Document<'T>>> = Collection.insertOne doc this
 
     /// <summary>Inserts multiple documents into the collection.</summary>
     /// <param name="docs">List of documents to insert.</param>
     /// <returns>Task with Result containing InsertManyResult or error.</returns>
-    member this.InsertMany(docs: list<'T>) : Task<FractalResult<InsertManyResult<'T>>> =
-        Collection.insertMany docs this
+    member this.InsertMany(docs: list<'T>) : Task<FractalResult<InsertManyResult<'T>>> = Collection.insertMany docs this
 
     /// <summary>Inserts multiple documents with ordering control.</summary>
     /// <param name="docs">List of documents to insert.</param>
@@ -3223,14 +3297,12 @@ type Collection<'T> with
     /// <summary>Finds a document by its ID.</summary>
     /// <param name="id">The document ID.</param>
     /// <returns>Task with Some document if found, None otherwise.</returns>
-    member this.FindById(id: string) : Task<option<Document<'T>>> =
-        Collection.findById id this
+    member this.FindById(id: string) : Task<option<Document<'T>>> = Collection.findById id this
 
     /// <summary>Finds the first document matching the filter.</summary>
     /// <param name="filter">Query filter.</param>
     /// <returns>Task with Some document if found, None otherwise.</returns>
-    member this.FindOne(filter: Query<'T>) : Task<option<Document<'T>>> =
-        Collection.findOne filter this
+    member this.FindOne(filter: Query<'T>) : Task<option<Document<'T>>> = Collection.findOne filter this
 
     /// <summary>Finds the first document matching the filter with options.</summary>
     /// <param name="filter">Query filter.</param>
@@ -3242,8 +3314,7 @@ type Collection<'T> with
     /// <summary>Finds all documents matching the filter.</summary>
     /// <param name="filter">Query filter.</param>
     /// <returns>Task with list of matching documents.</returns>
-    member this.Find(filter: Query<'T>) : Task<list<Document<'T>>> =
-        Collection.find filter this
+    member this.Find(filter: Query<'T>) : Task<list<Document<'T>>> = Collection.find filter this
 
     /// <summary>Finds all documents matching the filter with options.</summary>
     /// <param name="filter">Query filter.</param>
@@ -3252,16 +3323,31 @@ type Collection<'T> with
     member this.Find(filter: Query<'T>, options: QueryOptions<'T>) : Task<list<Document<'T>>> =
         Collection.findWith filter options this
 
+    /// <summary>Executes a query expression from query { } computation expression.</summary>
+    /// <param name="translatedQuery">The TranslatedQuery from query { } expression.</param>
+    /// <returns>Task with list of matching documents.</returns>
+    /// <example>
+    /// <code>
+    /// let myQuery = query {
+    ///     for user in users do
+    ///     where (user.Age >= 18)
+    ///     sortBy user.Name
+    ///     take 10
+    /// }
+    /// let! results = users.Exec(myQuery)
+    /// </code>
+    /// </example>
+    member this.Exec(translatedQuery: FractalDb.QueryExpr.TranslatedQuery<'T>) : Task<list<Document<'T>>> =
+        Collection.exec translatedQuery this
+
     /// <summary>Counts documents matching the filter.</summary>
     /// <param name="filter">Query filter.</param>
     /// <returns>Task with count of matching documents.</returns>
-    member this.Count(filter: Query<'T>) : Task<int> =
-        Collection.count filter this
+    member this.Count(filter: Query<'T>) : Task<int> = Collection.count filter this
 
     /// <summary>Gets estimated total document count (fast, no filter).</summary>
     /// <returns>Task with estimated count.</returns>
-    member this.EstimatedCount() : Task<int> =
-        Collection.estimatedCount this
+    member this.EstimatedCount() : Task<int> = Collection.estimatedCount this
 
     // ============================================================
     // SEARCH OPERATIONS
@@ -3312,7 +3398,9 @@ type Collection<'T> with
     /// <param name="update">Update function.</param>
     /// <param name="upsert">If true, inserts if no match found.</param>
     /// <returns>Task with Result containing Some document if found/created, None otherwise.</returns>
-    member this.UpdateOne(filter: Query<'T>, update: 'T -> 'T, upsert: bool) : Task<FractalResult<option<Document<'T>>>> =
+    member this.UpdateOne
+        (filter: Query<'T>, update: 'T -> 'T, upsert: bool)
+        : Task<FractalResult<option<Document<'T>>>> =
         Collection.updateOneWith filter update upsert this
 
     /// <summary>Replaces the first document matching the filter.</summary>
@@ -3336,20 +3424,17 @@ type Collection<'T> with
     /// <summary>Deletes a document by ID.</summary>
     /// <param name="id">Document ID.</param>
     /// <returns>Task with true if deleted, false if not found.</returns>
-    member this.DeleteById(id: string) : Task<bool> =
-        Collection.deleteById id this
+    member this.DeleteById(id: string) : Task<bool> = Collection.deleteById id this
 
     /// <summary>Deletes the first document matching the filter.</summary>
     /// <param name="filter">Query filter.</param>
     /// <returns>Task with true if deleted, false if not found.</returns>
-    member this.DeleteOne(filter: Query<'T>) : Task<bool> =
-        Collection.deleteOne filter this
+    member this.DeleteOne(filter: Query<'T>) : Task<bool> = Collection.deleteOne filter this
 
     /// <summary>Deletes all documents matching the filter.</summary>
     /// <param name="filter">Query filter.</param>
     /// <returns>Task with DeleteResult containing deleted count.</returns>
-    member this.DeleteMany(filter: Query<'T>) : Task<DeleteResult> =
-        Collection.deleteMany filter this
+    member this.DeleteMany(filter: Query<'T>) : Task<DeleteResult> = Collection.deleteMany filter this
 
     // ============================================================
     // ATOMIC FIND-AND-MODIFY OPERATIONS
@@ -3373,7 +3458,9 @@ type Collection<'T> with
     /// <param name="update">Update function.</param>
     /// <param name="options">Find and modify options.</param>
     /// <returns>Task with Result containing Some document if found, None otherwise.</returns>
-    member this.FindOneAndUpdate(filter: Query<'T>, update: 'T -> 'T, options: FindAndModifyOptions) : Task<FractalResult<option<Document<'T>>>> =
+    member this.FindOneAndUpdate
+        (filter: Query<'T>, update: 'T -> 'T, options: FindAndModifyOptions)
+        : Task<FractalResult<option<Document<'T>>>> =
         Collection.findOneAndUpdate filter update options this
 
     /// <summary>Atomically finds and replaces a document.</summary>
@@ -3381,7 +3468,9 @@ type Collection<'T> with
     /// <param name="doc">Replacement document.</param>
     /// <param name="options">Find and modify options.</param>
     /// <returns>Task with Result containing Some document if found, None otherwise.</returns>
-    member this.FindOneAndReplace(filter: Query<'T>, doc: 'T, options: FindAndModifyOptions) : Task<FractalResult<option<Document<'T>>>> =
+    member this.FindOneAndReplace
+        (filter: Query<'T>, doc: 'T, options: FindAndModifyOptions)
+        : Task<FractalResult<option<Document<'T>>>> =
         Collection.findOneAndReplace filter doc options this
 
     // ============================================================
@@ -3390,11 +3479,9 @@ type Collection<'T> with
 
     /// <summary>Drops the collection (deletes table).</summary>
     /// <returns>Task that completes when collection is dropped.</returns>
-    member this.Drop() : Task<unit> =
-        Collection.drop this
+    member this.Drop() : Task<unit> = Collection.drop this
 
     /// <summary>Validates a document against the schema.</summary>
     /// <param name="doc">Document to validate.</param>
     /// <returns>Result with validated document or validation error.</returns>
-    member this.Validate(doc: 'T) : FractalResult<'T> =
-        Collection.validate doc this
+    member this.Validate(doc: 'T) : FractalResult<'T> = Collection.validate doc this
