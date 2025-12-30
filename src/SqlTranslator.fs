@@ -582,12 +582,10 @@ type SqlTranslator<'T>(schema: FractalDb.Schema.SchemaDef<'T>, enableCache: bool
                 TranslatorResult.create $"{jsonArrayLengthSql} = {paramName}" [ (paramName, box length) ]
 
             | FractalDb.Operators.ArrayOp.ElemMatch _query ->
-                // Stub - complex array element queries not yet implemented
-                TranslatorResult.create "1=1" []
+                raise (System.NotImplementedException "ArrayOp.ElemMatch is not yet implemented")
 
             | FractalDb.Operators.ArrayOp.Index(_index, _query) ->
-                // Stub - indexed element queries not yet implemented
-                TranslatorResult.create "1=1" []
+                raise (System.NotImplementedException "ArrayOp.Index is not yet implemented")
 
         | :? FractalDb.Operators.ArrayOp<int> as op ->
             match op with
@@ -617,9 +615,11 @@ type SqlTranslator<'T>(schema: FractalDb.Schema.SchemaDef<'T>, enableCache: bool
                 let jsonArrayLengthSql = jsonFuncSql "json_array_length"
                 TranslatorResult.create $"{jsonArrayLengthSql} = {paramName}" [ (paramName, box length) ]
 
-            | FractalDb.Operators.ArrayOp.ElemMatch _query -> TranslatorResult.create "1=1" []
+            | FractalDb.Operators.ArrayOp.ElemMatch _query ->
+                raise (System.NotImplementedException "ArrayOp.ElemMatch is not yet implemented")
 
-            | FractalDb.Operators.ArrayOp.Index(_index, _query) -> TranslatorResult.create "1=1" []
+            | FractalDb.Operators.ArrayOp.Index(_index, _query) ->
+                raise (System.NotImplementedException "ArrayOp.Index is not yet implemented")
 
         | _ ->
             // Handle ArrayOp types where the element type doesn't matter (like Size)
