@@ -7,6 +7,9 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <Compile Include="InsertBenchmarks.fs" />
+    <Compile Include="QueryBenchmarks.fs" />
+    <Compile Include="TransactionBenchmarks.fs" />
     <Compile Include="Program.fs" />
   </ItemGroup>
 
