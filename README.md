@@ -67,28 +67,16 @@ task {
     // ...
 }
 
-// Query with LINQ-style expressions
+// Query with filters
 task {
-    let adultQuery = query {
-        for user in users do
-        where (user.Age >= 18)
-        where (user.Active = true)
-        sortBy user.Name
-        take 10
-    }
-
-    // Execute the query
-    let! results = users |> Collection.executeQuery adultQuery
-    for user in results do
+    let queryFilter = Query.And [
+        Query.Field("age", FieldOp.Compare(box (CompareOp.Gte 18)))
+        Query.Field("active", FieldOp.Compare(box (CompareOp.Eq true)))
+    ]
+    
+    let! adults = users |> Collection.find queryFilter
+    for user in adults do
         printfn "%s (%d)" user.Data.Name user.Data.Age
-}
-
-// Complex queries
-let searchQuery = query {
-    for user in users do
-    where (user.Email.Contains("@gmail.com") || user.Email.EndsWith("@company.com"))
-    where (user.Age >= 21 && user.Age <= 65)
-    sortByDescending user.Age
 }
 
 // Transactions
