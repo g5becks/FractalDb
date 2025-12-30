@@ -28,6 +28,7 @@
     <Compile Include="ValidationTests.fs" />
     <Compile Include="PropertyTests.fs" />
     <Compile Include="QueryOptionsTests.fs" />
+    <Compile Include="DatabaseLifecycleTests.fs" />
     <Compile Include="Tests.fs" />
     <Compile Include="Program.fs" />
   </ItemGroup>
