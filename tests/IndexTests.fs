@@ -464,3 +464,166 @@ let ``Compound index maintains field order`` () =
         | None ->
             failwith "Index SQL not found"
     }
+
+// ═══════════════════════════════════════════════════════════════
+// Nested Field Index Tests (Generated Column Behavior)
+// ═══════════════════════════════════════════════════════════════
+
+type UserWithAddress = {
+    Name: string
+    Email: string
+    Address: {| City: string; ZipCode: string; Country: string |}
+}
+
+type UserWithDeepNesting = {
+    Name: string
+    Profile: {| Settings: {| Preferences: {| Theme: string |} |} |}
+}
+
+[<Fact>]
+let ``Nested field index creates generated column`` () =
+    task {
+        let db = createTestDb()
+        
+        let schema = {
+            Fields = [
+                { Name = "city"; Path = Some "$.address.city"; SqlType = SqliteType.Text
+                  Indexed = true; Unique = false; Nullable = false }
+            ]
+            Indexes = []
+            Timestamps = false
+            Validate = None
+        }
+        
+        let collection = db.Collection<UserWithAddress>("users_with_city_index", schema)
+        
+        // Check that index was created
+        let exists = indexExists db "idx_users_with_city_index_city"
+        exists |> should be True
+        
+        // Verify index SQL references the generated column (_city), not jsonb_extract
+        let sqlOpt = getIndexSql db "idx_users_with_city_index_city"
+        match sqlOpt with
+        | Some sql ->
+            // Should reference generated column name
+            sql |> should haveSubstring "_city"
+            // Should NOT contain inline jsonb_extract (uses generated column instead)
+            sql |> should not' (haveSubstring "jsonb_extract")
+        | None ->
+            failwith "Index SQL not found"
+        
+        // Verify index is functional
+        let user = {
+            Name = "Test User"
+            Email = "test@example.com"
+            Address = {| City = "Portland"; ZipCode = "97201"; Country = "USA" |}
+        }
+        let! result = collection |> Collection.insertOne user
+        
+        match result with
+        | Ok _ -> ()
+        | Error err -> failwith $"Insert should succeed: {err.Message}"
+    }
+
+[<Fact>]
+let ``Deep nested path index creates generated column`` () =
+    task {
+        let db = createTestDb()
+        
+        let schema = {
+            Fields = [
+                { Name = "theme"; Path = Some "$.profile.settings.preferences.theme"; SqlType = SqliteType.Text
+                  Indexed = true; Unique = false; Nullable = false }
+            ]
+            Indexes = []
+            Timestamps = false
+            Validate = None
+        }
+        
+        let collection = db.Collection<UserWithDeepNesting>("users_deep_nested", schema)
+        
+        // Check that index was created
+        let exists = indexExists db "idx_users_deep_nested_theme"
+        exists |> should be True
+        
+        // Verify index SQL references the generated column
+        let sqlOpt = getIndexSql db "idx_users_deep_nested_theme"
+        match sqlOpt with
+        | Some sql ->
+            // Should reference generated column name (_theme)
+            sql |> should haveSubstring "_theme"
+            // Generated column approach, not inline extraction
+            sql |> should not' (haveSubstring "jsonb_extract")
+        | None ->
+            failwith "Index SQL not found"
+        
+        // Verify index works with deep nesting
+        let user = {
+            Name = "Deep User"
+            Profile = {| Settings = {| Preferences = {| Theme = "dark" |} |} |}
+        }
+        let! result = collection |> Collection.insertOne user
+        
+        match result with
+        | Ok _ -> ()
+        | Error err -> failwith $"Insert should succeed: {err.Message}"
+    }
+
+[<Fact>]
+let ``Composite index with nested and regular fields`` () =
+    task {
+        let db = createTestDb()
+        
+        let schema = {
+            Fields = [
+                { Name = "name"; Path = None; SqlType = SqliteType.Text
+                  Indexed = true; Unique = false; Nullable = false }
+                { Name = "city"; Path = Some "$.address.city"; SqlType = SqliteType.Text
+                  Indexed = true; Unique = false; Nullable = false }
+            ]
+            Indexes = [
+                { Name = "idx_name_city"; Fields = ["name"; "city"]; Unique = false }
+            ]
+            Timestamps = false
+            Validate = None
+        }
+        
+        let collection = db.Collection<UserWithAddress>("users_mixed_composite", schema)
+        
+        // Check that composite index was created
+        let exists = indexExists db "idx_name_city"
+        exists |> should be True
+        
+        // Verify index SQL includes both fields
+        let sqlOpt = getIndexSql db "idx_name_city"
+        match sqlOpt with
+        | Some sql ->
+            // Should reference both the regular field and the generated column
+            sql |> should haveSubstring "_name"
+            sql |> should haveSubstring "_city"
+            // Field order should be maintained (name before city)
+            let namePos = sql.IndexOf("_name")
+            let cityPos = sql.IndexOf("_city")
+            (namePos < cityPos) |> should be True
+        | None ->
+            failwith "Index SQL not found"
+        
+        // Verify composite index is functional
+        let user1 = {
+            Name = "Alice"
+            Email = "alice@example.com"
+            Address = {| City = "Seattle"; ZipCode = "98101"; Country = "USA" |}
+        }
+        let user2 = {
+            Name = "Bob"
+            Email = "bob@example.com"
+            Address = {| City = "Seattle"; ZipCode = "98102"; Country = "USA" |}
+        }
+        
+        let! result1 = collection |> Collection.insertOne user1
+        let! result2 = collection |> Collection.insertOne user2
+        
+        match result1, result2 with
+        | Ok _, Ok _ -> ()
+        | _ -> failwith "Inserts should succeed"
+    }
