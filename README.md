@@ -79,7 +79,7 @@ task {
         printfn "%s (%d)" user.Data.Name user.Data.Age
 }
 
-// Or use LINQ-style query { } expressions
+// Or use LINQ-style query { } expressions with fluent API
 task {
     let adultQuery = query {
         for user in users do
@@ -89,10 +89,73 @@ task {
         take 10
     }
 
-    // Execute with Collection.exec or .Exec() method
-    let! results = users |> Collection.exec adultQuery
-    // or: let! results = users.Exec(adultQuery)
+    // Execute with fluent .exec() method
+    let! results = adultQuery.exec(users)
+    // or: let! results = users |> Collection.exec adultQuery  // Module function still works
     
+    for user in results do
+        printfn "%s (%d)" user.Data.Name user.Data.Age
+}
+
+// Query Composition - build queries progressively using three styles
+
+// Option 1: <+> Operator (combines queries)
+task {
+    // Define reusable query parts
+    let filters = query {
+        for user in users do
+        where (user.Age >= 18)
+        where (user.Active = true)
+    }
+    
+    let sorting = query {
+        for user in users do
+        sortBy user.Name
+    }
+    
+    let paging = query {
+        for user in users do
+        skip 10
+        take 20
+    }
+    
+    // Compose using <+> operator
+    let composedQuery = filters <+> sorting <+> paging
+    let! results = composedQuery.exec(users)
+    
+    for user in results do
+        printfn "%s (%d)" user.Data.Name user.Data.Age
+}
+
+// Option 2: Fluent API (method chaining)
+task {
+    let baseQuery = query { for user in users do where (user.Age >= 18) }
+
+    let! results =
+        baseQuery
+            .where(Query.Field("active", FieldOp.Compare (box (CompareOp.Eq true))))
+            .orderBy("name", SortDirection.Asc)
+            .skip(10)
+            .limit(20)
+            .exec(users)
+
+    for user in results do
+        printfn "%s (%d)" user.Data.Name user.Data.Age
+}
+
+// Option 3: Pipeline API (|> operators) - F# idiomatic
+task {
+    let baseQuery = query { for user in users do where (user.Age >= 18) }
+
+    let composedQuery =
+        baseQuery
+        |> QueryOps.where (Query.Field("active", FieldOp.Compare (box (CompareOp.Eq true))))
+        |> QueryOps.orderBy "name" SortDirection.Asc
+        |> QueryOps.skip 10
+        |> QueryOps.limit 20
+
+    let! results = composedQuery.exec(users)
+
     for user in results do
         printfn "%s (%d)" user.Data.Name user.Data.Age
 }
@@ -294,6 +357,96 @@ let emails = query {
 | `x.Field.Contains("text")` | String contains |
 | `x.Field.StartsWith("pre")` | String starts with |
 | `x.Field.EndsWith("suf")` | String ends with |
+
+## Query Composition
+
+FractalDb supports three styles for composing queries progressively:
+
+### Style 1: `<+>` Operator (Declarative)
+
+The `<+>` operator combines separate query expressions into a single query. This is useful for defining reusable query parts:
+
+```fsharp
+// Define reusable query components
+let activeFilter = query {
+    for user in users do
+    where (user.Active = true)
+}
+
+let adultFilter = query {
+    for user in users do
+    where (user.Age >= 18)
+}
+
+let nameSorting = query {
+    for user in users do
+    sortBy user.Name
+}
+
+let pagination = query {
+    for user in users do
+    skip 10
+    take 20
+}
+
+// Combine using <+> operator
+let fullQuery = activeFilter <+> adultFilter <+> nameSorting <+> pagination
+let! results = fullQuery.exec(users)
+```
+
+**When to use:** Building queries from reusable components, composing filters from different sources.
+
+### Style 2: Fluent API (Method Chaining)
+
+Use fluent methods on `TranslatedQuery` for progressive query building:
+
+```fsharp
+let! results =
+    query { for user in users do where (user.Age >= 18) }
+        .where(Query.Field("active", FieldOp.Compare (box (CompareOp.Eq true))))
+        .orderBy("name", SortDirection.Asc)
+        .skip(10)
+        .limit(20)
+        .exec(users)
+```
+
+**When to use:** Building queries inline, method chaining style.
+
+### Style 3: QueryOps Pipeline (F# Idiomatic)
+
+Use the `QueryOps` module with F# pipe operators for functional composition:
+
+```fsharp
+open FractalDb.QueryOps
+
+let query =
+    query { for user in users do where (user.Age >= 18) }
+    |> QueryOps.where (Query.Field("active", FieldOp.Compare (box (CompareOp.Eq true))))
+    |> QueryOps.orderBy "name" SortDirection.Asc
+    |> QueryOps.skip 10
+    |> QueryOps.limit 20
+
+let! results = query.exec(users)
+```
+
+**When to use:** Functional pipelines, F# idiomatic code, building query transformations.
+
+### QueryOps Functions
+
+| Function | Signature | Description |
+|----------|-----------|-------------|
+| `where` | `Query<'T> -> TranslatedQuery<'T> -> TranslatedQuery<'T>` | Add filter (AND) |
+| `orderBy` | `string -> SortDirection -> TranslatedQuery<'T> -> TranslatedQuery<'T>` | Add sorting |
+| `skip` | `int -> TranslatedQuery<'T> -> TranslatedQuery<'T>` | Set skip count |
+| `limit` | `int -> TranslatedQuery<'T> -> TranslatedQuery<'T>` | Set result limit |
+
+### Composition Rules
+
+- **Where clauses** are combined with AND
+- **OrderBy clauses** are appended (for secondary sorting)
+- **Skip/Take** - the last one wins
+- **Projection** - the last one wins
+- All three styles can be mixed in the same codebase
 
 ## Transactions
 

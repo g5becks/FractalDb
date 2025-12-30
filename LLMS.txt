@@ -16,8 +16,11 @@ grep "^MODULE:" LLMS.txt              # Find all modules
 grep "^TYPE:" LLMS.txt                # Find all types
 grep "^FUNCTION:" LLMS.txt            # Find all functions (from XML docs)
 grep "^INSTANCE:" LLMS.txt            # Find instance method signatures
+grep "^OPERATOR:" LLMS.txt            # Find operators
+grep "^RULE:" LLMS.txt                # Find composition rules
 grep -A5 "InsertOne" LLMS.txt         # Find specific API with context
 grep -i "transaction" LLMS.txt        # Search for any term
+grep -i "composition" LLMS.txt        # Find query composition docs
 ```
 
 Documented items:
@@ -198,7 +201,8 @@ let myQuery = query {
     sortBy user.Name
     take 10
 }
-let! results = users |> Collection.executeQuery myQuery
+let! results = myQuery.exec(users)
+// or: let! results = users |> Collection.exec myQuery
 ```
 
 ### OPERATIONS
@@ -318,6 +322,207 @@ user.Profile.Settings.Theme = "dark"
 ```
 
 ================================================================================
+## QUERY COMPOSITION
+================================================================================
+
+FractalDb supports THREE styles for composing queries progressively:
+
+### STYLE 1: <+> OPERATOR (Declarative Composition)
+
+OPERATOR: <+>
+Combine separate query expressions into a single query.
+```fsharp
+let filters = query {
+    for user in users do
+    where (user.Active = true)
+    where (user.Age >= 18)
+}
+
+let sorting = query {
+    for user in users do
+    sortBy user.Name
+}
+
+let paging = query {
+    for user in users do
+    skip 10
+    take 20
+}
+
+// Compose using <+> operator
+let fullQuery = filters <+> sorting <+> paging
+let! results = fullQuery.exec(users)
+```
+
+USE CASES:
+- Building reusable query components
+- Composing filters from different sources
+- Modular query construction
+- Conditional query building
+
+CONDITIONAL COMPOSITION:
+```fsharp
+let baseQuery = query { for user in users do where (user.Active = true) }
+
+let finalQuery =
+    if includeAdults then
+        baseQuery <+> query { for user in users do where (user.Age >= 18) }
+    else
+        baseQuery
+
+let! results = finalQuery.exec(users)
+```
+
+### STYLE 2: FLUENT API (Method Chaining)
+
+FLUENT: query.where(predicate)
+Add filter to query (ANDed with existing filters).
+```fsharp
+let baseQuery = query { for u in users do where (u.Age >= 18) }
+let! results =
+    baseQuery
+        .where(Query.Field("active", FieldOp.Compare(box (CompareOp.Eq true))))
+        .orderBy("name", SortDirection.Asc)
+        .skip(10)
+        .limit(20)
+        .exec(users)
+```
+
+FLUENT: query.orderBy(field, direction)
+Add sorting to query (can chain multiple for secondary sorting).
+```fsharp
+let! results = baseQuery.orderBy("name", SortDirection.Asc).orderBy("age", SortDirection.Desc).exec(users)
+```
+
+FLUENT: query.skip(n)
+Set pagination offset.
+```fsharp
+let! results = baseQuery.skip(20).exec(users)
+```
+
+FLUENT: query.limit(n)
+Set maximum results.
+```fsharp
+let! results = baseQuery.limit(10).exec(users)
+```
+
+FLUENT: query.exec(collection)
+Execute the query.
+```fsharp
+let! results = myQuery.exec(users)
+```
+
+### STYLE 3: QUERYOPS PIPELINE (F# Idiomatic)
+
+MODULE: QueryOps
+Pipeline-style functions for functional composition.
+
+FUNCTION: QueryOps.where
+Signature: Query<'T> -> TranslatedQuery<'T> -> TranslatedQuery<'T>
+Add filter predicate (AND).
+```fsharp
+open FractalDb.QueryOps
+
+let query =
+    query { for user in users do where (user.Age >= 18) }
+    |> QueryOps.where (Query.Field("active", FieldOp.Compare (box (CompareOp.Eq true))))
+```
+
+FUNCTION: QueryOps.orderBy
+Signature: string -> SortDirection -> TranslatedQuery<'T> -> TranslatedQuery<'T>
+Add sort specification.
+```fsharp
+let query =
+    baseQuery
+    |> QueryOps.orderBy "name" SortDirection.Asc
+    |> QueryOps.orderBy "age" SortDirection.Desc  // Secondary sort
+```
+
+FUNCTION: QueryOps.skip
+Signature: int -> TranslatedQuery<'T> -> TranslatedQuery<'T>
+Set skip count for pagination.
+```fsharp
+let query = baseQuery |> QueryOps.skip 20
+```
+
+FUNCTION: QueryOps.limit
+Signature: int -> TranslatedQuery<'T> -> TranslatedQuery<'T>
+Set maximum result count.
+```fsharp
+let query = baseQuery |> QueryOps.limit 10
+```
+
+CUSTOM TRANSFORMATIONS:
+```fsharp
+// Define reusable query transformations
+let addAdminFilter query =
+    query |> QueryOps.where (Query.Field("role", FieldOp.Compare (box (CompareOp.Eq "admin"))))
+
+let addPagination pageNum pageSize query =
+    query
+    |> QueryOps.skip ((pageNum - 1) * pageSize)
+    |> QueryOps.limit pageSize
+
+// Use in pipeline
+let! results =
+    query { for user in users do where (user.Active = true) }
+    |> addAdminFilter
+    |> QueryOps.orderBy "name" SortDirection.Asc
+    |> addPagination 3 10  // Page 3, 10 items
+    |> fun q -> q.exec(users)
+```
+
+### COMPOSITION RULES
+
+RULE 1: Where clauses combine with AND
+```fsharp
+let q1 = query { for u in users do where (u.Age >= 18) }
+let q2 = query { for u in users do where (u.Active = true) }
+let combined = q1 <+> q2  // WHERE age >= 18 AND active = true
+```
+
+RULE 2: OrderBy clauses append (multi-level sorting)
+```fsharp
+let q1 = query { for u in users do sortBy u.Name }
+let q2 = query { for u in users do sortByDescending u.Age }
+let combined = q1 <+> q2  // ORDER BY name ASC, age DESC
+```
+
+RULE 3: Skip and Take - last one wins
+```fsharp
+let q1 = query { for u in users do skip 10; take 20 }
+let q2 = query { for u in users do skip 5; take 10 }
+let combined = q1 <+> q2  // Uses: skip 5, take 10
+```
+
+RULE 4: Projection - last one wins
+```fsharp
+let q1 = query { for u in users do select u.Name }
+let q2 = query { for u in users do select u.Email }
+let combined = q1 <+> q2  // Projects: Email
+```
+
+RULE 5: All styles can be mixed
+```fsharp
+let query =
+    (baseQuery <+> filters)  // <+> operator
+        .orderBy("name", SortDirection.Asc)  // Fluent
+    |> QueryOps.skip 10  // Pipeline
+    |> QueryOps.limit 20
+```
+
+### STYLE COMPARISON
+
+| Style          | Best For                      | Advantages                           |
+|----------------|-------------------------------|--------------------------------------|
+| <+> Operator   | Reusable components           | Declarative, modular, testable       |
+| Fluent API     | Inline queries                | Familiar to OOP, good IntelliSense   |
+| Pipeline API   | Functional style              | F# idiomatic, composable             |
+
+RECOMMENDATION: Use <+> for reusable components, pipeline API for functional code,
+fluent API for quick inline queries.
+
+================================================================================
 ## COLLECTION OPERATIONS
 ================================================================================
 
@@ -397,11 +602,12 @@ let! docs = users.Find(Query.Empty)
 // or: let! docs = users |> Collection.find Query.Empty
 ```
 
-MODULE: Collection.executeQuery query users
+MODULE: Collection.exec query users
 Execute query expression.
 ```fsharp
 let q = query { for u in users do where (u.Active = true) take 10 }
-let! results = users |> Collection.executeQuery q
+let! results = q.exec(users)
+// or: let! results = users |> Collection.exec q
 ```
 
 INSTANCE: users.Count(filter)
@@ -769,7 +975,7 @@ task {
         sortBy user.Name
         take 10
     }
-    let! results = users |> Collection.executeQuery q
+    let! results = q.exec(users)
     for user in results do
         printfn "%s (%d)" user.Data.Name user.Data.Age
 }

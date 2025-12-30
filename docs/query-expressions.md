@@ -24,7 +24,8 @@ let myQuery = query {
     where (doc.Field = value)
 }
 
-let! results = collection |> Collection.exec myQuery
+// Execute with fluent API
+let! results = myQuery.exec(collection)
 ```
 
 ### Simple Filter
@@ -35,6 +36,9 @@ let activeQuery = query {
     for user in users do
     where (user.Active = true)
 }
+
+// Execute
+let! results = activeQuery.exec(users)
 ```
 
 ### Multiple Filters (AND)
@@ -312,7 +316,7 @@ let cities = query {
 
 ### Get All Matching Documents
 
-Query expressions are executed using `Collection.exec`:
+Query expressions are executed using the fluent `.exec()` method on the query result:
 
 ```fsharp
 task {
@@ -322,18 +326,237 @@ task {
         sortBy user.Name
     }
     
-    // Execute query expression
-    let! results = users |> Collection.exec myQuery
+    // Execute query expression with fluent API
+    let! results = myQuery.exec(users)
     for doc in results do
         printfn "%s" doc.Data.Name
 }
 ```
 
-You can also use the instance method:
+You can also use the module function (pipe-style):
 
 ```fsharp
-let! results = users.Exec(myQuery)
+let! results = users |> Collection.exec myQuery
 ```
+
+### Composable Queries
+
+Queries are composable - you can progressively build them using three different styles. All styles produce the same result but offer different ergonomics for different scenarios.
+
+#### Style 1: `<+>` Operator (Declarative Composition)
+
+The `<+>` operator combines separate query expressions into a single query. This is ideal for building reusable query components:
+
+```fsharp
+open FractalDb.QueryExpr
+
+task {
+    // Define reusable query parts
+    let activeFilter = query {
+        for user in users do
+        where (user.Active = true)
+    }
+    
+    let adultFilter = query {
+        for user in users do
+        where (user.Age >= 18)
+    }
+    
+    let nameSorting = query {
+        for user in users do
+        sortBy user.Name
+    }
+    
+    let pagination = query {
+        for user in users do
+        skip 10
+        take 20
+    }
+    
+    // Combine using <+> operator
+    let fullQuery = activeFilter <+> adultFilter <+> nameSorting <+> pagination
+    let! results = fullQuery.exec(users)
+    
+    for doc in results do
+        printfn "%s (%d)" doc.Data.Name doc.Data.Age
+}
+```
+
+**Use cases:**
+- Building queries from reusable components
+- Combining filters from different sources
+- Modular query construction
+- Conditional query building
+
+```fsharp
+// Conditional query composition
+let baseQuery = query { for user in users do where (user.Active = true) }
+
+let finalQuery =
+    if includeAdults then
+        baseQuery <+> query { for user in users do where (user.Age >= 18) }
+    else
+        baseQuery
+
+let! results = finalQuery.exec(users)
+```
+
+#### Style 2: Fluent API (Method Chaining)
+
+#### Style 2: Fluent API (Method Chaining)
+
+Use fluent methods on `TranslatedQuery` for inline query building with method chaining:
+
+```fsharp
+task {
+    // Start with base query
+    let baseQuery = query { for user in users do where (user.Age >= 18) }
+
+    // Build query progressively with fluent API
+    let! results =
+        baseQuery
+            .where(Query.Field("active", FieldOp.Compare (box (CompareOp.Eq true))))
+            .where(Query.Field("verified", FieldOp.Compare (box (CompareOp.Eq true))))
+            .orderBy("createdAt", SortDirection.Desc)
+            .skip(20)
+            .limit(10)  // Page 3, 10 per page
+            .exec(users)
+
+    for doc in results do
+        printfn "%s" doc.Data.Name
+}
+```
+
+**Use cases:**
+- Inline query building
+- Object-oriented style
+- Method chaining patterns
+- Quick one-off queries
+
+**Available Fluent Methods:**
+- `.where(predicate)` - Add filter (ANDed with existing filters)
+- `.orderBy(field, direction)` - Add sorting (can chain multiple)
+- `.skip(n)` - Set pagination offset
+- `.limit(n)` - Set maximum results
+- `.exec(collection)` - Execute the query
+
+#### Style 3: Pipeline API (F# Idiomatic)
+
+For a more F#-idiomatic style, use the `QueryOps` module with pipeline operators:
+
+```fsharp
+open FractalDb.QueryExpr
+
+task {
+    // Start with base query
+    let baseQuery = query { for user in users do where (user.Age >= 18) }
+
+    // Build query with pipeline operators
+    let composedQuery =
+        baseQuery
+        |> QueryOps.where (Query.Field("active", FieldOp.Compare (box (CompareOp.Eq true))))
+        |> QueryOps.orderBy "name" SortDirection.Asc
+        |> QueryOps.skip 20
+        |> QueryOps.limit 10  // Page 3, 10 per page
+
+    let! results = composedQuery.exec(users)
+
+    for doc in results do
+        printfn "%s" doc.Data.Name
+}
+```
+
+**Use cases:**
+- Functional pipelines
+- F# idiomatic code style
+- Building query transformations
+- Composing with other pipeline operations
+
+**Available Pipeline Functions:**
+
+| Function | Signature | Description |
+|----------|-----------|-------------|
+| `QueryOps.where` | `Query<'T> -> TranslatedQuery<'T> -> TranslatedQuery<'T>` | Add filter predicate (AND) |
+| `QueryOps.orderBy` | `string -> SortDirection -> TranslatedQuery<'T> -> TranslatedQuery<'T>` | Add sort specification |
+| `QueryOps.skip` | `int -> TranslatedQuery<'T> -> TranslatedQuery<'T>` | Set skip count for pagination |
+| `QueryOps.limit` | `int -> TranslatedQuery<'T> -> TranslatedQuery<'T>` | Set maximum result count |
+
+**Pipeline Example with Custom Transformations:**
+
+```fsharp
+// Define a custom query transformation
+let addAdminFilter query =
+    query |> QueryOps.where (Query.Field("role", FieldOp.Compare (box (CompareOp.Eq "admin"))))
+
+let addPagination pageNum pageSize query =
+    query
+    |> QueryOps.skip ((pageNum - 1) * pageSize)
+    |> QueryOps.limit pageSize
+
+// Use in pipeline
+task {
+    let! results =
+        query { for user in users do where (user.Active = true) }
+        |> addAdminFilter
+        |> QueryOps.orderBy "name" SortDirection.Asc
+        |> addPagination 3 10  // Page 3, 10 items per page
+        |> fun q -> q.exec(users)
+    
+    for doc in results do
+        printfn "%s" doc.Data.Name
+}
+```
+
+#### Composition Rules
+
+When composing queries, the following rules apply:
+
+1. **Where clauses** are combined with AND logic
+   ```fsharp
+   let q1 = query { for u in users do where (u.Age >= 18) }
+   let q2 = query { for u in users do where (u.Active = true) }
+   let combined = q1 <+> q2  // WHERE age >= 18 AND active = true
+   ```
+
+2. **OrderBy clauses** are appended (for multi-level sorting)
+   ```fsharp
+   let q1 = query { for u in users do sortBy u.Name }
+   let q2 = query { for u in users do sortByDescending u.Age }
+   let combined = q1 <+> q2  // ORDER BY name ASC, age DESC
+   ```
+
+3. **Skip and Take** - the last one wins
+   ```fsharp
+   let q1 = query { for u in users do skip 10; take 20 }
+   let q2 = query { for u in users do skip 5; take 10 }
+   let combined = q1 <+> q2  // Uses: skip 5, take 10
+   ```
+
+4. **Projection** - the last one wins
+   ```fsharp
+   let q1 = query { for u in users do select u.Name }
+   let q2 = query { for u in users do select u.Email }
+   let combined = q1 <+> q2  // Projects: Email
+   ```
+
+5. **All styles can be mixed**
+   ```fsharp
+   let query =
+       (baseQuery <+> filters)  // <+> operator
+           .orderBy("name", SortDirection.Asc)  // Fluent
+       |> QueryOps.skip 10  // Pipeline
+       |> QueryOps.limit 20
+   ```
+
+#### Choosing a Style
+
+| Style | Best For | Advantages |
+|-------|----------|------------|
+| `<+>` Operator | Reusable components, conditional composition | Declarative, modular, easy to test parts |
+| Fluent API | Inline queries, method chaining | Familiar to OOP developers, good IntelliSense |
+| Pipeline API | Functional style, transformations | F# idiomatic, composable with other functions |
+
+**Recommendation:** Use `<+>` for building reusable query components, pipeline API for functional code, and fluent API for quick inline queries.
 
 ### Working with Query Filters
 
@@ -359,7 +582,7 @@ task {
 }
 ```
 
-**Note**: Currently, only `Collection.exec` supports query expressions. Other operations like `count` and `findOne` require Query module filters.
+**Note**: Currently, only `Collection.exec` and `.exec()` support query expressions. Other operations like `count` and `findOne` require Query module filters.
 
 ## Complete Examples
 

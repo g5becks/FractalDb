@@ -785,3 +785,9 @@ type FractalDb = FractalDb.Database.FractalDb
 // - FractalDb.Transact: provides transaction builder as extension method
 //
 // No re-export needed here to avoid module name conflicts.
+
+// =============================================================================
+// Query Operations (from QueryExpr.fs)
+// =============================================================================
+
+module QueryOps = FractalDb.QueryExpr.QueryOps

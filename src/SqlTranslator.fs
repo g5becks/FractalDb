@@ -392,6 +392,52 @@ type SqlTranslator<'T>(schema: FractalDb.Schema.SchemaDef<'T>, enableCache: bool
                     let paramNames = paramPairs |> List.map fst |> String.concat ", "
                     TranslatorResult.create $"{fieldSql} NOT IN ({paramNames})" paramPairs
 
+        // Handle CompareOp<obj> - created by QueryTranslator when value type is obj
+        | :? FractalDb.Operators.CompareOp<obj> as op ->
+            match op with
+            | FractalDb.Operators.CompareOp.Eq value ->
+                let paramName = this.NextParam()
+                TranslatorResult.create $"{fieldSql} = {paramName}" [ (paramName, value) ]
+            | FractalDb.Operators.CompareOp.Ne value ->
+                let paramName = this.NextParam()
+                TranslatorResult.create $"{fieldSql} != {paramName}" [ (paramName, value) ]
+            | FractalDb.Operators.CompareOp.Gt value ->
+                let paramName = this.NextParam()
+                TranslatorResult.create $"{fieldSql} > {paramName}" [ (paramName, value) ]
+            | FractalDb.Operators.CompareOp.Gte value ->
+                let paramName = this.NextParam()
+                TranslatorResult.create $"{fieldSql} >= {paramName}" [ (paramName, value) ]
+            | FractalDb.Operators.CompareOp.Lt value ->
+                let paramName = this.NextParam()
+                TranslatorResult.create $"{fieldSql} < {paramName}" [ (paramName, value) ]
+            | FractalDb.Operators.CompareOp.Lte value ->
+                let paramName = this.NextParam()
+                TranslatorResult.create $"{fieldSql} <= {paramName}" [ (paramName, value) ]
+            | FractalDb.Operators.CompareOp.In values ->
+                if List.isEmpty values then
+                    TranslatorResult.create "0=1" []
+                else
+                    let paramPairs =
+                        values
+                        |> List.map (fun v ->
+                            let paramName = this.NextParam()
+                            (paramName, v))
+
+                    let paramNames = paramPairs |> List.map fst |> String.concat ", "
+                    TranslatorResult.create $"{fieldSql} IN ({paramNames})" paramPairs
+            | FractalDb.Operators.CompareOp.NotIn values ->
+                if List.isEmpty values then
+                    TranslatorResult.create "1=1" []
+                else
+                    let paramPairs =
+                        values
+                        |> List.map (fun v ->
+                            let paramName = this.NextParam()
+                            (paramName, v))
+
+                    let paramNames = paramPairs |> List.map fst |> String.concat ", "
+                    TranslatorResult.create $"{fieldSql} NOT IN ({paramNames})" paramPairs
+
         | _ ->
             // Unsupported type - return empty (will match nothing in practice)
             TranslatorResult.create "0=1" []
@@ -581,11 +627,24 @@ type SqlTranslator<'T>(schema: FractalDb.Schema.SchemaDef<'T>, enableCache: bool
                 let jsonArrayLengthSql = jsonFuncSql "json_array_length"
                 TranslatorResult.create $"{jsonArrayLengthSql} = {paramName}" [ (paramName, box length) ]
 
-            | FractalDb.Operators.ArrayOp.ElemMatch _query ->
-                raise (System.NotImplementedException "ArrayOp.ElemMatch is not yet implemented")
+            | FractalDb.Operators.ArrayOp.ElemMatch query ->
+                // ElemMatch: at least one array element matches the nested query
+                // SQL: EXISTS(SELECT 1 FROM json_each(field) WHERE <nested query on value>)
+                // For object elements, field references become json_extract(value, '$.fieldname')
 
-            | FractalDb.Operators.ArrayOp.Index(_index, _query) ->
-                raise (System.NotImplementedException "ArrayOp.Index is not yet implemented")
+                let jsonEachSql = jsonFuncSql "json_each"
+
+                // Translate the nested query, adjusting field references to work with 'value' column
+                let nestedResult = this.TranslateQueryForArrayElement(query)
+
+                let sql = $"EXISTS(SELECT 1 FROM {jsonEachSql} WHERE {nestedResult.Sql})"
+                TranslatorResult.create sql nestedResult.Parameters
+
+            | FractalDb.Operators.ArrayOp.Index(index, query) ->
+                // Index: element at specific index matches the nested query
+                // SQL: Extract element at index and apply query to it
+                let nestedResult = this.TranslateQueryForIndexedElement(index, fieldSql, query)
+                nestedResult
 
         | :? FractalDb.Operators.ArrayOp<int> as op ->
             match op with
@@ -615,11 +674,24 @@ type SqlTranslator<'T>(schema: FractalDb.Schema.SchemaDef<'T>, enableCache: bool
                 let jsonArrayLengthSql = jsonFuncSql "json_array_length"
                 TranslatorResult.create $"{jsonArrayLengthSql} = {paramName}" [ (paramName, box length) ]
 
-            | FractalDb.Operators.ArrayOp.ElemMatch _query ->
-                raise (System.NotImplementedException "ArrayOp.ElemMatch is not yet implemented")
+            | FractalDb.Operators.ArrayOp.ElemMatch query ->
+                // ElemMatch: at least one array element matches the nested query
+                // SQL: EXISTS(SELECT 1 FROM json_each(field) WHERE <nested query on value>)
+                // For object elements, field references become json_extract(value, '$.fieldname')
 
-            | FractalDb.Operators.ArrayOp.Index(_index, _query) ->
-                raise (System.NotImplementedException "ArrayOp.Index is not yet implemented")
+                let jsonEachSql = jsonFuncSql "json_each"
+
+                // Translate the nested query, adjusting field references to work with 'value' column
+                let nestedResult = this.TranslateQueryForArrayElement(query)
+
+                let sql = $"EXISTS(SELECT 1 FROM {jsonEachSql} WHERE {nestedResult.Sql})"
+                TranslatorResult.create sql nestedResult.Parameters
+
+            | FractalDb.Operators.ArrayOp.Index(index, query) ->
+                // Index: element at specific index matches the nested query
+                // SQL: Extract element at index and apply query to it
+                let nestedResult = this.TranslateQueryForIndexedElement(index, fieldSql, query)
+                nestedResult
 
         | _ ->
             // Handle ArrayOp types where the element type doesn't matter (like Size)
@@ -643,6 +715,22 @@ type SqlTranslator<'T>(schema: FractalDb.Schema.SchemaDef<'T>, enableCache: bool
                     let paramName = this.NextParam()
                     let jsonArrayLengthSql = jsonFuncSql "json_array_length"
                     TranslatorResult.create $"{jsonArrayLengthSql} = {paramName}" [ (paramName, box length) ]
+
+                | "ElemMatch" when fields.Length = 1 ->
+                    // ElemMatch case - extract the query and translate it
+                    let query = fields.[0]
+                    let jsonEachSql = jsonFuncSql "json_each"
+                    let nestedResult = this.TranslateQueryForArrayElement(query)
+                    let sql = $"EXISTS(SELECT 1 FROM {jsonEachSql} WHERE {nestedResult.Sql})"
+                    TranslatorResult.create sql nestedResult.Parameters
+
+                | "Index" when fields.Length = 2 ->
+                    // Index case - the tuple is stored as two separate fields
+                    let index = fields.[0] :?> int
+                    let query = fields.[1]
+                    let nestedResult = this.TranslateQueryForIndexedElement(index, fieldSql, query)
+                    nestedResult
+
                 | _ ->
                     // Other unsupported cases
                     TranslatorResult.create "1=1" []
@@ -742,6 +830,227 @@ type SqlTranslator<'T>(schema: FractalDb.Schema.SchemaDef<'T>, enableCache: bool
         | FractalDb.Operators.FieldOp.Exist existsOp ->
             // Delegate to existence operator handler
             this.TranslateExist(fieldSql, existsOp)
+
+    /// <summary>
+    /// Translates a Query expression for array elements within json_each() context.
+    /// </summary>
+    ///
+    /// <param name="query">The Query to translate (typed for array element).</param>
+    ///
+    /// <returns>
+    /// A TranslatorResult with field references adjusted for the 'value' column.
+    /// </returns>
+    ///
+    /// <remarks>
+    /// This method is used by ArrayOp.ElemMatch and ArrayOp.Index to translate queries
+    /// that operate on array elements. Field references are transformed to use
+    /// json_extract(value, '$.fieldname') where 'value' is the column from json_each().
+    ///
+    /// The query parameter has type Query&lt;'TElement&gt; (the array element type),
+    /// which may differ from the document type 'T'. We handle this by pattern matching
+    /// on the untyped Query structure and manually translating each case.
+    /// </remarks>
+    ///
+    /// <example>
+    /// <code>
+    /// // Query: Query.Field ("status", FieldOp.Compare (box (CompareOp.Eq "active")))
+    /// // Normal translation: "_status = @p0" or "jsonb_extract(body, '$.status') = @p0"
+    /// // Array element translation: "json_extract(value, '$.status') = @p0"
+    /// </code>
+    /// </example>
+    member private this.TranslateQueryForArrayElement(query: obj) : TranslatorResult =
+        // Helper to resolve field names in array element context
+        let resolveArrayElementField (fieldName: string) : string = $"json_extract(value, '$.{fieldName}')"
+
+        // Use reflection to handle Query<'T> for any 'T
+        let queryType = query.GetType()
+
+        // Check if this is an F# union type (Query discriminated union)
+        if Microsoft.FSharp.Reflection.FSharpType.IsUnion(queryType) then
+            // Get the union case and fields
+            let (unionCase, fields) =
+                Microsoft.FSharp.Reflection.FSharpValue.GetUnionFields(query, queryType)
+
+            match unionCase.Name with
+            | "Empty" -> TranslatorResult.empty
+
+            | "Field" when fields.Length = 2 ->
+                // Field case: (fieldName: string, op: FieldOp)
+                let fieldName = fields.[0] :?> string
+                let op = fields.[1] // This is a FieldOp
+                let fieldSql = resolveArrayElementField fieldName
+                this.TranslateFieldOp(fieldSql, op :?> FractalDb.Operators.FieldOp)
+
+            | "And" when fields.Length = 1 ->
+                // And case: list<Query<'T>>
+                let queries = fields.[0] :?> System.Collections.IEnumerable
+                let queryList = queries |> Seq.cast<obj> |> Seq.toList
+                let results = queryList |> List.map this.TranslateQueryForArrayElement
+                let sqlParts = results |> List.map (fun r -> r.Sql)
+                let allParams = results |> List.collect (fun r -> r.Parameters)
+                let combinedSql = sqlParts |> String.concat " AND "
+                TranslatorResult.create $"({combinedSql})" allParams
+
+            | "Or" when fields.Length = 1 ->
+                // Or case: list<Query<'T>>
+                let queries = fields.[0] :?> System.Collections.IEnumerable
+                let queryList = queries |> Seq.cast<obj> |> Seq.toList
+                let results = queryList |> List.map this.TranslateQueryForArrayElement
+                let sqlParts = results |> List.map (fun r -> r.Sql)
+                let allParams = results |> List.collect (fun r -> r.Parameters)
+                let combinedSql = sqlParts |> String.concat " OR "
+                TranslatorResult.create $"({combinedSql})" allParams
+
+            | "Nor" when fields.Length = 1 ->
+                // Nor case: list<Query<'T>>
+                let queries = fields.[0] :?> System.Collections.IEnumerable
+                let queryList = queries |> Seq.cast<obj> |> Seq.toList
+                let results = queryList |> List.map this.TranslateQueryForArrayElement
+                let sqlParts = results |> List.map (fun r -> r.Sql)
+                let allParams = results |> List.collect (fun r -> r.Parameters)
+                let combinedSql = sqlParts |> String.concat " OR "
+                TranslatorResult.create $"NOT ({combinedSql})" allParams
+
+            | "Not" when fields.Length = 1 ->
+                // Not case: Query<'T>
+                let innerQuery = fields.[0]
+                let result = this.TranslateQueryForArrayElement(innerQuery)
+                TranslatorResult.create $"NOT ({result.Sql})" result.Parameters
+
+            | _ ->
+                // Unknown case - return match-all
+                TranslatorResult.empty
+        else
+            // Not a union type - return match-all
+            TranslatorResult.empty
+
+    /// <summary>
+    /// Translates a Query expression for a specific indexed array element.
+    /// </summary>
+    ///
+    /// <param name="index">The array index (0-based).</param>
+    /// <param name="arrayFieldSql">The SQL expression for the array field.</param>
+    /// <param name="query">The Query to translate (typed for array element).</param>
+    ///
+    /// <returns>
+    /// A TranslatorResult with field references adjusted for the indexed element.
+    /// </returns>
+    ///
+    /// <remarks>
+    /// This method is used by ArrayOp.Index to translate queries that operate on a specific
+    /// array element at a given index. Field references are transformed to use
+    /// json_extract(arrayField, '$[index].fieldname').
+    ///
+    /// Unlike ElemMatch which uses EXISTS and json_each to check any element,
+    /// Index directly accesses a specific element using array bracket notation.
+    /// </remarks>
+    ///
+    /// <example>
+    /// <code>
+    /// // Query: ArrayOp.Index(0, Query.Field("status", FieldOp.Compare(box (CompareOp.Eq "first"))))
+    /// // With arrayFieldSql = "jsonb_extract(body, '$.items')"
+    /// // Result: "json_extract(jsonb_extract(body, '$.items'), '$[0].status') = @p0"
+    /// // Simplified to: "json_extract(body, '$.items[0].status') = @p0"
+    /// </code>
+    /// </example>
+    member private this.TranslateQueryForIndexedElement
+        (index: int, arrayFieldSql: string, query: obj)
+        : TranslatorResult =
+        // Helper to resolve field names in indexed element context
+        let resolveIndexedElementField (fieldName: string) : string =
+            // Build path with array index and field access
+            if arrayFieldSql.StartsWith("jsonb_extract(body, '$.") then
+                // Extract the array path
+                let startIdx = "jsonb_extract(body, '$.".Length
+                let endIdx = arrayFieldSql.IndexOf("')", startIdx)
+                let arrayPath = arrayFieldSql.Substring(startIdx, endIdx - startIdx)
+
+                // If fieldName is empty, we're accessing the element itself (primitive array)
+                if System.String.IsNullOrEmpty(fieldName) then
+                    $"json_extract(body, '$.{arrayPath}[{index}]')"
+                else
+                    $"json_extract(body, '$.{arrayPath}[{index}].{fieldName}')"
+            else if
+                // Indexed field or metadata - use nested json_extract
+                System.String.IsNullOrEmpty(fieldName)
+            then
+                $"json_extract({arrayFieldSql}, '$[{index}]')"
+            else
+                $"json_extract({arrayFieldSql}, '$[{index}].{fieldName}')"
+
+        // Use reflection to handle Query<'T> for any 'T
+        let queryType = query.GetType()
+
+        // Check if this is an F# union type (Query discriminated union)
+        if Microsoft.FSharp.Reflection.FSharpType.IsUnion(queryType) then
+            // Get the union case and fields
+            let (unionCase, fields) =
+                Microsoft.FSharp.Reflection.FSharpValue.GetUnionFields(query, queryType)
+
+            match unionCase.Name with
+            | "Empty" -> TranslatorResult.empty
+
+            | "Field" when fields.Length = 2 ->
+                // Field case: (fieldName: string, op: FieldOp)
+                let fieldName = fields.[0] :?> string
+                let op = fields.[1] // This is a FieldOp
+                let fieldSql = resolveIndexedElementField fieldName
+                this.TranslateFieldOp(fieldSql, op :?> FractalDb.Operators.FieldOp)
+
+            | "And" when fields.Length = 1 ->
+                // And case: list<Query<'T>>
+                let queries = fields.[0] :?> System.Collections.IEnumerable
+                let queryList = queries |> Seq.cast<obj> |> Seq.toList
+
+                let results =
+                    queryList
+                    |> List.map (fun q -> this.TranslateQueryForIndexedElement(index, arrayFieldSql, q))
+
+                let sqlParts = results |> List.map (fun r -> r.Sql)
+                let allParams = results |> List.collect (fun r -> r.Parameters)
+                let combinedSql = sqlParts |> String.concat " AND "
+                TranslatorResult.create $"({combinedSql})" allParams
+
+            | "Or" when fields.Length = 1 ->
+                // Or case: list<Query<'T>>
+                let queries = fields.[0] :?> System.Collections.IEnumerable
+                let queryList = queries |> Seq.cast<obj> |> Seq.toList
+
+                let results =
+                    queryList
+                    |> List.map (fun q -> this.TranslateQueryForIndexedElement(index, arrayFieldSql, q))
+
+                let sqlParts = results |> List.map (fun r -> r.Sql)
+                let allParams = results |> List.collect (fun r -> r.Parameters)
+                let combinedSql = sqlParts |> String.concat " OR "
+                TranslatorResult.create $"({combinedSql})" allParams
+
+            | "Nor" when fields.Length = 1 ->
+                // Nor case: list<Query<'T>>
+                let queries = fields.[0] :?> System.Collections.IEnumerable
+                let queryList = queries |> Seq.cast<obj> |> Seq.toList
+
+                let results =
+                    queryList
+                    |> List.map (fun q -> this.TranslateQueryForIndexedElement(index, arrayFieldSql, q))
+
+                let sqlParts = results |> List.map (fun r -> r.Sql)
+                let allParams = results |> List.collect (fun r -> r.Parameters)
+                let combinedSql = sqlParts |> String.concat " OR "
+                TranslatorResult.create $"NOT ({combinedSql})" allParams
+
+            | "Not" when fields.Length = 1 ->
+                // Not case: Query<'T>
+                let innerQuery = fields.[0]
+                let result = this.TranslateQueryForIndexedElement(index, arrayFieldSql, innerQuery)
+                TranslatorResult.create $"NOT ({result.Sql})" result.Parameters
+
+            | _ ->
+                // Unknown case - return match-all
+                TranslatorResult.empty
+        else
+            // Not a union type - return match-all
+            TranslatorResult.empty
 
     /// <summary>
     /// Recursively translates a Query expression to SQL.
@@ -1006,12 +1315,17 @@ type SqlTranslator<'T>(schema: FractalDb.Schema.SchemaDef<'T>, enableCache: bool
             clauses <- clauses @ [ orderByClause ]
 
         // LIMIT clause
-        match options.Limit with
-        | Some limitValue ->
+        // Note: SQLite requires LIMIT when using OFFSET, so if Skip is set but Limit isn't,
+        // we use LIMIT -1 which means "no limit" in SQLite
+        match options.Limit, options.Skip with
+        | Some limitValue, _ ->
             let paramName = nextOptionParam ()
             clauses <- clauses @ [ $" LIMIT {paramName}" ]
             parameters <- parameters @ [ (paramName, box limitValue) ]
-        | None -> ()
+        | None, Some _ ->
+            // SQLite requires LIMIT with OFFSET - use -1 for unlimited
+            clauses <- clauses @ [ " LIMIT -1" ]
+        | None, None -> ()
 
         // OFFSET clause (Skip)
         match options.Skip with

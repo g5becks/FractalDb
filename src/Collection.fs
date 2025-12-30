@@ -21,6 +21,7 @@ open System
 open System.Data
 open System.Threading.Tasks
 open Donald
+open FSharp.Control
 open Microsoft.Data.Sqlite
 open FractalDb.Types
 open FractalDb.Errors
@@ -478,29 +479,31 @@ module Collection =
             $"SELECT _id, json(body) as body, createdAt, updatedAt 
                     FROM {collection.Name} WHERE _id = @id"
 
-        let dbResult =
-            collection.Connection
-            |> Db.newCommand sql
-            |> Db.setParams [ "id", SqlType.String id ]
-            |> Db.querySingle (fun rd ->
-                rd.ReadString "_id", rd.ReadString "body", rd.ReadInt64 "createdAt", rd.ReadInt64 "updatedAt")
+        task {
+            let! dbResult =
+                collection.Connection
+                |> Db.newCommand sql
+                |> Db.setParams [ "id", SqlType.String id ]
+                |> Db.Async.querySingle (fun rd ->
+                    rd.ReadString "_id", rd.ReadString "body", rd.ReadInt64 "createdAt", rd.ReadInt64 "updatedAt")
 
-        let result =
-            match dbResult with
-            | Some(docId, bodyJson, createdAt, updatedAt) ->
-                // Deserialize JSON body to 'T (can throw exception)
-                let data = deserialize<'T> bodyJson
+            let result =
+                match dbResult with
+                | Some(docId, bodyJson, createdAt, updatedAt) ->
+                    // Deserialize JSON body to 'T (can throw exception)
+                    let data = deserialize<'T> bodyJson
 
-                Some
-                    { Id = docId
-                      Data = data
-                      CreatedAt = createdAt
-                      UpdatedAt = updatedAt }
-            | None ->
-                // Document not found
-                None
+                    Some
+                        { Id = docId
+                          Data = data
+                          CreatedAt = createdAt
+                          UpdatedAt = updatedAt }
+                | None ->
+                    // Document not found
+                    None
 
-        Task.FromResult(result)
+            return result
+        }
 
     /// <summary>
     /// Helper function to deserialize a row tuple into a Document&lt;'T&gt;.
@@ -564,19 +567,21 @@ module Collection =
         let params' =
             translated.Parameters |> List.map (fun (name, value) -> name, toSqlType value)
 
-        let dbResult =
-            collection.Connection
-            |> Db.newCommand sql
-            |> Db.setParams params'
-            |> Db.querySingle (fun rd ->
-                rd.ReadString "_id", rd.ReadString "body", rd.ReadInt64 "createdAt", rd.ReadInt64 "updatedAt")
+        task {
+            let! dbResult =
+                collection.Connection
+                |> Db.newCommand sql
+                |> Db.setParams params'
+                |> Db.Async.querySingle (fun rd ->
+                    rd.ReadString "_id", rd.ReadString "body", rd.ReadInt64 "createdAt", rd.ReadInt64 "updatedAt")
 
-        let result =
-            match dbResult with
-            | Some rowData -> Some(rowToDocument rowData)
-            | None -> None
+            let result =
+                match dbResult with
+                | Some rowData -> Some(rowToDocument rowData)
+                | None -> None
 
-        Task.FromResult(result)
+            return result
+        }
 
     /// <summary>
     /// Finds the first document matching a filter with query options (sort, limit, skip).
@@ -629,19 +634,21 @@ module Collection =
             (translated.Parameters |> List.map (fun (name, value) -> name, toSqlType value))
             @ (optionsParams |> List.map (fun (name, value) -> name, toSqlType value))
 
-        let dbResult =
-            collection.Connection
-            |> Db.newCommand sql
-            |> Db.setParams allParams
-            |> Db.querySingle (fun rd ->
-                rd.ReadString "_id", rd.ReadString "body", rd.ReadInt64 "createdAt", rd.ReadInt64 "updatedAt")
+        task {
+            let! dbResult =
+                collection.Connection
+                |> Db.newCommand sql
+                |> Db.setParams allParams
+                |> Db.Async.querySingle (fun rd ->
+                    rd.ReadString "_id", rd.ReadString "body", rd.ReadInt64 "createdAt", rd.ReadInt64 "updatedAt")
 
-        let result =
-            match dbResult with
-            | Some rowData -> Some(rowToDocument rowData)
-            | None -> None
+            let result =
+                match dbResult with
+                | Some rowData -> Some(rowToDocument rowData)
+                | None -> None
 
-        Task.FromResult(result)
+            return result
+        }
 
     /// <summary>
     /// Finds all documents matching a filter query.
@@ -692,16 +699,18 @@ module Collection =
         let params' =
             translated.Parameters |> List.map (fun (name, value) -> name, toSqlType value)
 
-        let dbResult =
-            collection.Connection
-            |> Db.newCommand sql
-            |> Db.setParams params'
-            |> Db.query (fun rd ->
-                rd.ReadString "_id", rd.ReadString "body", rd.ReadInt64 "createdAt", rd.ReadInt64 "updatedAt")
+        task {
+            let! dbResult =
+                collection.Connection
+                |> Db.newCommand sql
+                |> Db.setParams params'
+                |> Db.Async.query (fun rd ->
+                    rd.ReadString "_id", rd.ReadString "body", rd.ReadInt64 "createdAt", rd.ReadInt64 "updatedAt")
 
-        let result = dbResult |> List.map rowToDocument
+            let result = dbResult |> List.map rowToDocument
 
-        Task.FromResult(result)
+            return result
+        }
 
     /// <summary>
     /// Finds all documents matching a filter with query options (sort, limit, skip).
@@ -765,16 +774,18 @@ module Collection =
             (translated.Parameters |> List.map (fun (name, value) -> name, toSqlType value))
             @ (optionsParams |> List.map (fun (name, value) -> name, toSqlType value))
 
-        let dbResult =
-            collection.Connection
-            |> Db.newCommand sql
-            |> Db.setParams allParams
-            |> Db.query (fun rd ->
-                rd.ReadString "_id", rd.ReadString "body", rd.ReadInt64 "createdAt", rd.ReadInt64 "updatedAt")
+        task {
+            let! dbResult =
+                collection.Connection
+                |> Db.newCommand sql
+                |> Db.setParams allParams
+                |> Db.Async.query (fun rd ->
+                    rd.ReadString "_id", rd.ReadString "body", rd.ReadInt64 "createdAt", rd.ReadInt64 "updatedAt")
 
-        let result = dbResult |> List.map rowToDocument
+            let result = dbResult |> List.map rowToDocument
 
-        Task.FromResult(result)
+            return result
+        }
 
     /// <summary>
     /// Executes a translated query expression from the query { } computation expression.
@@ -1055,16 +1066,18 @@ module Collection =
         let params' =
             fields |> List.mapi (fun i _ -> $"search{i}", SqlType.String searchPattern)
 
-        let dbResult =
-            collection.Connection
-            |> Db.newCommand sql
-            |> Db.setParams params'
-            |> Db.query (fun rd ->
-                rd.ReadString "_id", rd.ReadString "body", rd.ReadInt64 "createdAt", rd.ReadInt64 "updatedAt")
+        task {
+            let! dbResult =
+                collection.Connection
+                |> Db.newCommand sql
+                |> Db.setParams params'
+                |> Db.Async.query (fun rd ->
+                    rd.ReadString "_id", rd.ReadString "body", rd.ReadInt64 "createdAt", rd.ReadInt64 "updatedAt")
 
-        let result = dbResult |> List.map rowToDocument
+            let result = dbResult |> List.map rowToDocument
 
-        Task.FromResult(result)
+            return result
+        }
 
     /// <summary>
     /// Searches for documents with QueryOptions support for sorting, pagination, etc.
@@ -1150,16 +1163,18 @@ module Collection =
             searchParams
             @ (optionsParams |> List.map (fun (name, value) -> name, toSqlType value))
 
-        let dbResult =
-            collection.Connection
-            |> Db.newCommand sql
-            |> Db.setParams allParams
-            |> Db.query (fun rd ->
-                rd.ReadString "_id", rd.ReadString "body", rd.ReadInt64 "createdAt", rd.ReadInt64 "updatedAt")
+        task {
+            let! dbResult =
+                collection.Connection
+                |> Db.newCommand sql
+                |> Db.setParams allParams
+                |> Db.Async.query (fun rd ->
+                    rd.ReadString "_id", rd.ReadString "body", rd.ReadInt64 "createdAt", rd.ReadInt64 "updatedAt")
 
-        let result = dbResult |> List.map rowToDocument
+            let result = dbResult |> List.map rowToDocument
 
-        Task.FromResult(result)
+            return result
+        }
 
     /// <summary>
     /// Returns distinct values for a specified field, optionally filtered by a query.
@@ -1261,11 +1276,11 @@ module Collection =
                 let params' =
                     translated.Parameters |> List.map (fun (name, value) -> name, toSqlType value)
 
-                let dbResult =
+                let! dbResult =
                     collection.Connection
                     |> Db.newCommand sql
                     |> Db.setParams params'
-                    |> Db.query (fun rd -> rd.ReadString "value")
+                    |> Db.Async.query (fun rd -> rd.ReadString "value")
 
                 // Deserialize each JSON value to type 'V, filtering out nulls
                 let values =
@@ -3323,23 +3338,6 @@ type Collection<'T> with
     member this.Find(filter: Query<'T>, options: QueryOptions<'T>) : Task<list<Document<'T>>> =
         Collection.findWith filter options this
 
-    /// <summary>Executes a query expression from query { } computation expression.</summary>
-    /// <param name="translatedQuery">The TranslatedQuery from query { } expression.</param>
-    /// <returns>Task with list of matching documents.</returns>
-    /// <example>
-    /// <code>
-    /// let myQuery = query {
-    ///     for user in users do
-    ///     where (user.Age >= 18)
-    ///     sortBy user.Name
-    ///     take 10
-    /// }
-    /// let! results = users.Exec(myQuery)
-    /// </code>
-    /// </example>
-    member this.Exec(translatedQuery: FractalDb.QueryExpr.TranslatedQuery<'T>) : Task<list<Document<'T>>> =
-        Collection.exec translatedQuery this
-
     /// <summary>Counts documents matching the filter.</summary>
     /// <param name="filter">Query filter.</param>
     /// <returns>Task with count of matching documents.</returns>
@@ -3485,3 +3483,54 @@ type Collection<'T> with
     /// <param name="doc">Document to validate.</param>
     /// <returns>Result with validated document or validation error.</returns>
     member this.Validate(doc: 'T) : FractalResult<'T> = Collection.validate doc this
+
+// ============================================================
+// TranslatedQuery<'T> EXTENSION - Adds execution capability
+// ============================================================
+
+/// <summary>
+/// Type extension for TranslatedQuery to enable fluent execution API.
+/// </summary>
+/// <remarks>
+/// This extension adds the exec method to TranslatedQuery, allowing queries
+/// to be executed directly on the query object itself:
+/// <code>
+/// query {
+///     for user in users do
+///     where (user.Age >= 18)
+/// }
+/// |> fun q -> q.exec(users)
+/// </code>
+///
+/// This is implemented as a type extension to avoid circular dependencies
+/// between QueryExpr.fs and Collection.fs modules.
+/// </remarks>
+type FractalDb.QueryExpr.TranslatedQuery<'T> with
+    /// <summary>
+    /// Executes this query against the provided collection.
+    /// </summary>
+    /// <param name="collection">The collection to execute the query against.</param>
+    /// <returns>Task with list of documents matching the query.</returns>
+    /// <remarks>
+    /// This method enables a fluent, composable query API:
+    /// <code>
+    /// // Basic execution
+    /// let! results =
+    ///     query {
+    ///         for user in users do
+    ///         where (user.Age >= 18)
+    ///     }
+    ///     |> fun q -> q.exec(users)
+    ///
+    /// // Composition with additional filters
+    /// let! results =
+    ///     query { for user in users do () }
+    ///     |> fun q -> q.where(Query.Field("active", FieldOp.Compare (box (CompareOp.Eq true))))
+    ///                  .orderBy("name", QueryExpr.SortDirection.Asc)
+    ///                  .limit(10)
+    ///                  .exec(users)
+    /// </code>
+    ///
+    /// The query is converted to QueryOptions and executed via Collection.exec.
+    /// </remarks>
+    member this.exec(collection: Collection<'T>) : Task<list<Document<'T>>> = Collection.exec this collection

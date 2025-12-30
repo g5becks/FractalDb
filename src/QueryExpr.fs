@@ -361,6 +361,317 @@ type TranslatedQuery<'T> =
         Projection: Projection
     }
 
+
+
+    /// <summary>
+    /// Adds a where clause to the query, combining with existing predicates using AND.
+    /// </summary>
+    ///
+    /// <param name="predicate">The filter predicate to add.</param>
+    ///
+    /// <returns>A new TranslatedQuery with the additional filter.</returns>
+    ///
+    /// <remarks>
+    /// This method enables query composition by returning a new TranslatedQuery.
+    /// Multiple where calls are combined with Query.And.
+    ///
+    /// This allows building queries progressively:
+    /// <code>
+    /// let baseQuery = query { for user in users do () }
+    /// let activeQuery = baseQuery.where(Query.Field("active", FieldOp.Compare(box (CompareOp.Eq true))))
+    /// let adultQuery = activeQuery.where(Query.Field("age", FieldOp.Compare(box (CompareOp.Gte 18))))
+    /// </code>
+    /// </remarks>
+    member this.where(predicate: Query<'T>) : TranslatedQuery<'T> =
+        let { Where = currentWhere } = this // Destructure to access the field
+
+        let newWhere =
+            match currentWhere with
+            | None -> Some predicate
+            | Some existing -> Some(Query.And [ existing; predicate ])
+
+        { this with Where = newWhere }
+
+    /// <summary>
+    /// Sets or adds an order by clause to the query.
+    /// </summary>
+    ///
+    /// <param name="field">The field name to sort by.</param>
+    /// <param name="direction">The sort direction (Asc or Desc).</param>
+    ///
+    /// <returns>A new TranslatedQuery with the sorting specification.</returns>
+    ///
+    /// <remarks>
+    /// This method appends to existing OrderBy specifications, enabling multi-field sorting.
+    ///
+    /// <code>
+    /// let sorted = baseQuery
+    ///     .orderBy("status", SortDirection.Asc)
+    ///     .orderBy("createdAt", SortDirection.Desc)
+    /// </code>
+    /// </remarks>
+    member this.orderBy(field: string, direction: SortDirection) : TranslatedQuery<'T> =
+        let { OrderBy = currentOrderBy } = this // Destructure to access the field
+
+        { this with
+            OrderBy = currentOrderBy @ [ (field, direction) ] }
+
+    /// <summary>
+    /// Sets the number of documents to skip (pagination offset).
+    /// </summary>
+    ///
+    /// <param name="count">Number of documents to skip.</param>
+    ///
+    /// <returns>A new TranslatedQuery with the skip value.</returns>
+    ///
+    /// <remarks>
+    /// Used for pagination. Replaces any existing Skip value.
+    ///
+    /// <code>
+    /// let page2 = baseQuery.skip(20).limit(10)  // Skip first 20, take next 10
+    /// </code>
+    /// </remarks>
+    member this.skip(count: int) : TranslatedQuery<'T> = { this with Skip = Some count }
+
+    /// <summary>
+    /// Sets the maximum number of documents to return.
+    /// </summary>
+    ///
+    /// <param name="count">Maximum number of documents to return.</param>
+    ///
+    /// <returns>A new TranslatedQuery with the limit value.</returns>
+    ///
+    /// <remarks>
+    /// Used for pagination and limiting result sets. Replaces any existing Take/limit value.
+    ///
+    /// <code>
+    /// let limited = baseQuery.limit(10)  // Return at most 10 documents
+    /// </code>
+    /// </remarks>
+    member this.limit(count: int) : TranslatedQuery<'T> = { this with Take = Some count }
+
+    /// <summary>
+    /// Composes this query with another, merging their components.
+    /// </summary>
+    ///
+    /// <param name="other">The query to compose with.</param>
+    ///
+    /// <returns>A new TranslatedQuery combining both queries.</returns>
+    ///
+    /// <remarks>
+    /// Composition rules:
+    /// - Where: Combined with AND (both filters must match)
+    /// - OrderBy: Appended (this query's sorts come first)
+    /// - Skip: Later value wins (other's Skip if set, else this)
+    /// - Take: Later value wins (other's Take if set, else this)
+    /// - Projection: Later non-default wins
+    ///
+    /// This enables building queries from reusable parts:
+    /// <code>
+    /// let filters = query { for u in users do where (u.Active = true) }
+    /// let sorting = query { for u in users do sortBy u.Name }
+    /// let paging = query { for u in users do skip 10; take 20 }
+    ///
+    /// let combined = filters.compose(sorting).compose(paging)
+    /// </code>
+    /// </remarks>
+    member this.compose(other: TranslatedQuery<'T>) : TranslatedQuery<'T> =
+        let { Where = w1
+              OrderBy = o1
+              Skip = s1
+              Take = t1
+              Projection = p1 } =
+            this
+
+        let { Where = w2
+              OrderBy = o2
+              Skip = s2
+              Take = t2
+              Projection = p2 } =
+            other
+
+        // Merge Where clauses with AND
+        let mergedWhere =
+            match w1, w2 with
+            | None, None -> None
+            | Some w, None -> Some w
+            | None, Some w -> Some w
+            | Some a, Some b -> Some(Query.And [ a; b ])
+
+        // Append OrderBy lists
+        let mergedOrderBy = o1 @ o2
+
+        // Later value wins for Skip/Take
+        let mergedSkip =
+            match s2 with
+            | Some _ -> s2
+            | None -> s1
+
+        let mergedTake =
+            match t2 with
+            | Some _ -> t2
+            | None -> t1
+
+        // Later non-default projection wins
+        let mergedProjection =
+            match p2 with
+            | SelectAll -> p1
+            | _ -> p2
+
+        { Source = this.Source
+          Where = mergedWhere
+          OrderBy = mergedOrderBy
+          Skip = mergedSkip
+          Take = mergedTake
+          Projection = mergedProjection }
+
+    /// <summary>
+    /// Composes two queries using the &lt;+&gt; operator.
+    /// </summary>
+    ///
+    /// <example>
+    /// <code>
+    /// let filters = query { for u in users do where (u.Active = true) }
+    /// let sorting = query { for u in users do sortBy u.Name }
+    /// let paging = query { for u in users do skip 10; take 20 }
+    ///
+    /// let combined = filters &lt;+&gt; sorting &lt;+&gt; paging
+    /// let! results = combined.exec(users)
+    /// </code>
+    /// </example>
+    static member (<+>)(left: TranslatedQuery<'T>, right: TranslatedQuery<'T>) : TranslatedQuery<'T> =
+        left.compose (right)
+
+/// <summary>
+/// Pipeline-style functions for composing queries using |> operator.
+/// </summary>
+///
+/// <remarks>
+/// This module provides F#-idiomatic functions for query composition using
+/// the pipe operator. Each function takes a TranslatedQuery and returns a
+/// new TranslatedQuery with the modification applied.
+///
+/// <para><strong>Usage Pattern:</strong></para>
+/// <code>
+/// query { for user in users do where (user.Age >= 18) }
+/// |> QueryOps.orderBy "name" SortDirection.Asc
+/// |> QueryOps.skip 10
+/// |> QueryOps.limit 20
+/// |> Collection.exec users
+/// </code>
+///
+/// These functions are equivalent to the fluent methods on TranslatedQuery
+/// but designed for pipeline-style composition.
+/// </remarks>
+[<RequireQualifiedAccess>]
+module QueryOps =
+
+    /// <summary>
+    /// Adds a filter predicate to the query, combining with AND.
+    /// </summary>
+    ///
+    /// <param name="predicate">The filter predicate to add.</param>
+    /// <param name="query">The query to modify.</param>
+    ///
+    /// <example>
+    /// <code>
+    /// baseQuery
+    /// |> QueryOps.where (Query.Field("active", FieldOp.Compare(box (CompareOp.Eq true))))
+    /// </code>
+    /// </example>
+    let where (predicate: Query<'T>) (query: TranslatedQuery<'T>) : TranslatedQuery<'T> = query.where (predicate)
+
+    /// <summary>
+    /// Adds or appends a sort specification to the query.
+    /// </summary>
+    ///
+    /// <param name="field">The field name to sort by.</param>
+    /// <param name="direction">The sort direction (Asc or Desc).</param>
+    /// <param name="query">The query to modify.</param>
+    ///
+    /// <example>
+    /// <code>
+    /// baseQuery
+    /// |> QueryOps.orderBy "name" SortDirection.Asc
+    /// |> QueryOps.orderBy "age" SortDirection.Desc  // Secondary sort
+    /// </code>
+    /// </example>
+    let orderBy (field: string) (direction: SortDirection) (query: TranslatedQuery<'T>) : TranslatedQuery<'T> =
+        query.orderBy (field, direction)
+
+    /// <summary>
+    /// Sets the number of documents to skip (pagination offset).
+    /// </summary>
+    ///
+    /// <param name="count">Number of documents to skip.</param>
+    /// <param name="query">The query to modify.</param>
+    ///
+    /// <example>
+    /// <code>
+    /// baseQuery |> QueryOps.skip 20 |> QueryOps.limit 10  // Page 3, size 10
+    /// </code>
+    /// </example>
+    let skip (count: int) (query: TranslatedQuery<'T>) : TranslatedQuery<'T> = query.skip (count)
+
+    /// <summary>
+    /// Sets the maximum number of documents to return.
+    /// </summary>
+    ///
+    /// <param name="count">Maximum documents to return.</param>
+    /// <param name="query">The query to modify.</param>
+    ///
+    /// <example>
+    /// <code>
+    /// baseQuery |> QueryOps.limit 10
+    /// </code>
+    /// </example>
+    let limit (count: int) (query: TranslatedQuery<'T>) : TranslatedQuery<'T> = query.limit (count)
+
+    /// <summary>
+    /// Composes two queries into a single query, merging their clauses.
+    /// </summary>
+    ///
+    /// <param name="right">The query to compose with (applied second).</param>
+    /// <param name="left">The base query (applied first).</param>
+    /// <returns>A new query with merged clauses from both queries.</returns>
+    ///
+    /// <remarks>
+    /// <para>
+    /// Composition rules:
+    /// </para>
+    /// <list type="bullet">
+    /// <item><description>Where clauses are combined with AND logic</description></item>
+    /// <item><description>OrderBy clauses are appended (for multi-level sorting)</description></item>
+    /// <item><description>Skip and Take use the right query's values (last wins)</description></item>
+    /// <item><description>Projection uses the right query's value (last wins)</description></item>
+    /// </list>
+    /// <para>
+    /// This function is equivalent to the &lt;+&gt; operator but designed for pipeline composition.
+    /// </para>
+    /// </remarks>
+    ///
+    /// <example>
+    /// <code>
+    /// // Pipeline style composition
+    /// let baseQuery = query { for user in users do where (user.Active = true) }
+    /// let sortQuery = query { for user in users do sortBy user.Name }
+    /// let pagingQuery = query { for user in users do skip 10; take 20 }
+    ///
+    /// let fullQuery =
+    ///     baseQuery
+    ///     |> QueryOps.compose sortQuery
+    ///     |> QueryOps.compose pagingQuery
+    ///
+    /// let! results = fullQuery.exec(users)
+    /// </code>
+    ///
+    /// <code>
+    /// // Equivalent to using &lt;+&gt; operator
+    /// let fullQuery = baseQuery &lt;+&gt; sortQuery &lt;+&gt; pagingQuery
+    /// </code>
+    /// </example>
+    let compose (right: TranslatedQuery<'T>) (left: TranslatedQuery<'T>) : TranslatedQuery<'T> = left.compose (right)
+
 /// <summary>
 /// Computation expression builder for LINQ-style queries using F# quotations.
 /// </summary>
@@ -558,6 +869,21 @@ type QueryBuilder() =
     /// </code>
     /// </example>
     member _.Yield(value: 'T) : TranslatedQuery<'T> = Unchecked.defaultof<_>
+
+    /// <summary>
+    /// Provides a zero/default value for empty query bodies.
+    /// </summary>
+    ///
+    /// <remarks>
+    /// Required for query expressions with empty bodies like:
+    /// <code>
+    /// query { for user in users do () }
+    /// </code>
+    ///
+    /// This member is NEVER EXECUTED - it exists only for type checking.
+    /// The quotation captures the empty body and QueryTranslator handles it.
+    /// </remarks>
+    member _.Zero() : TranslatedQuery<'T> = Unchecked.defaultof<_>
 
     /// <summary>
     /// Captures the query expression as an F# quotation for analysis.
@@ -2774,8 +3100,10 @@ module internal QueryTranslator =
                 let q = loop source query
                 let condition = translatePredicate predicate
 
+                let { Where = existingWhere } = q // Destructure to access field
+
                 let combined =
-                    match q.Where with
+                    match existingWhere with
                     | None -> condition
                     | Some existing -> Query.And [ existing; condition ]
 
@@ -2786,33 +3114,37 @@ module internal QueryTranslator =
             | Call(Some _, mi, [ source; selector ]) when isQueryBuilderMethod mi "SortBy" ->
                 let q = loop source query
                 let field = extractPropertyName selector
+                let { OrderBy = currentOrderBy } = q // Destructure to access field
 
                 { q with
-                    OrderBy = q.OrderBy @ [ (field, SortDirection.Asc) ] }
+                    OrderBy = currentOrderBy @ [ (field, SortDirection.Asc) ] }
 
             // sortByDescending field
             | Call(Some _, mi, [ source; selector ]) when isQueryBuilderMethod mi "SortByDescending" ->
                 let q = loop source query
                 let field = extractPropertyName selector
+                let { OrderBy = currentOrderBy } = q // Destructure to access field
 
                 { q with
-                    OrderBy = q.OrderBy @ [ (field, SortDirection.Desc) ] }
+                    OrderBy = currentOrderBy @ [ (field, SortDirection.Desc) ] }
 
             // thenBy field (secondary sort)
             | Call(Some _, mi, [ source; selector ]) when isQueryBuilderMethod mi "ThenBy" ->
                 let q = loop source query
                 let field = extractPropertyName selector
+                let { OrderBy = currentOrderBy } = q // Destructure to access field
 
                 { q with
-                    OrderBy = q.OrderBy @ [ (field, SortDirection.Asc) ] }
+                    OrderBy = currentOrderBy @ [ (field, SortDirection.Asc) ] }
 
             // thenByDescending field (secondary sort descending)
             | Call(Some _, mi, [ source; selector ]) when isQueryBuilderMethod mi "ThenByDescending" ->
                 let q = loop source query
                 let field = extractPropertyName selector
+                let { OrderBy = currentOrderBy } = q // Destructure to access field
 
                 { q with
-                    OrderBy = q.OrderBy @ [ (field, SortDirection.Desc) ] }
+                    OrderBy = currentOrderBy @ [ (field, SortDirection.Desc) ] }
 
             // take n
             | Call(Some _, mi, [ source; Value(count, _) ]) when isQueryBuilderMethod mi "Take" ->

@@ -9,8 +9,9 @@ open Xunit
 open FsUnit.Xunit
 open FractalDb.Types
 open FractalDb.Schema
-open FractalDb.OperatorsExpr
 open FractalDb.Operators
+open FractalDb.QueryExpr
+open FractalDb.QueryExpr.QueryBuilderInstance
 open FractalDb.Collection
 open FractalDb.Database
 
@@ -900,11 +901,11 @@ type QueryExprTests(fixture: QueryExprTestFixture) =
         | _ -> failwith "Expected Query.And at top level"
 
     // ═══════════════════════════════════════════════════════════════
-    // Collection.exec Tests - Query Expression Execution
+    // Collection.exec and TranslatedQuery.exec Tests
     // ═══════════════════════════════════════════════════════════════
 
     [<Fact>]
-    member _.``Collection.exec returns all documents when no filter specified``() =
+    member _.``TranslatedQuery.exec returns all documents when no filter specified``() =
         task {
             let queryExpr =
                 query {
@@ -912,13 +913,13 @@ type QueryExprTests(fixture: QueryExprTestFixture) =
                         ()
                 }
 
-            let! results = users |> Collection.exec queryExpr
+            let! results = queryExpr.exec (users)
 
             results |> should haveLength 3
         }
 
     [<Fact>]
-    member _.``Collection.exec with where clause filters correctly``() =
+    member _.``TranslatedQuery.exec with where clause filters correctly``() =
         task {
             let queryExpr =
                 query {
@@ -926,7 +927,7 @@ type QueryExprTests(fixture: QueryExprTestFixture) =
                         where (user.Active = true)
                 }
 
-            let! results = users |> Collection.exec queryExpr
+            let! results = queryExpr.exec (users)
 
             results |> should haveLength 2
 
@@ -939,7 +940,7 @@ type QueryExprTests(fixture: QueryExprTestFixture) =
         }
 
     [<Fact>]
-    member _.``Collection.exec with multiple where clauses combines with AND``() =
+    member _.``TranslatedQuery.exec with multiple where clauses combines with AND``() =
         task {
             let queryExpr =
                 query {
@@ -948,7 +949,7 @@ type QueryExprTests(fixture: QueryExprTestFixture) =
                         where (user.Age >= 30L)
                 }
 
-            let! results = users |> Collection.exec queryExpr
+            let! results = queryExpr.exec (users)
 
             results |> should haveLength 1
             results.[0].Data.Name |> should equal "Bob"
@@ -956,7 +957,7 @@ type QueryExprTests(fixture: QueryExprTestFixture) =
         }
 
     [<Fact>]
-    member _.``Collection.exec with sortBy sorts ascending``() =
+    member _.``TranslatedQuery.exec with sortBy sorts ascending``() =
         task {
             let queryExpr =
                 query {
@@ -964,7 +965,7 @@ type QueryExprTests(fixture: QueryExprTestFixture) =
                         sortBy user.Age
                 }
 
-            let! results = users |> Collection.exec queryExpr
+            let! results = queryExpr.exec (users)
 
             results |> should haveLength 3
 
@@ -974,7 +975,7 @@ type QueryExprTests(fixture: QueryExprTestFixture) =
         }
 
     [<Fact>]
-    member _.``Collection.exec with sortByDescending sorts descending``() =
+    member _.``TranslatedQuery.exec with sortByDescending sorts descending``() =
         task {
             let queryExpr =
                 query {
@@ -982,7 +983,7 @@ type QueryExprTests(fixture: QueryExprTestFixture) =
                         sortByDescending user.Age
                 }
 
-            let! results = users |> Collection.exec queryExpr
+            let! results = queryExpr.exec (users)
 
             results |> should haveLength 3
 
@@ -992,7 +993,7 @@ type QueryExprTests(fixture: QueryExprTestFixture) =
         }
 
     [<Fact>]
-    member _.``Collection.exec with take limits results``() =
+    member _.``TranslatedQuery.exec with take limits results``() =
         task {
             let queryExpr =
                 query {
@@ -1000,13 +1001,13 @@ type QueryExprTests(fixture: QueryExprTestFixture) =
                         take 2
                 }
 
-            let! results = users |> Collection.exec queryExpr
+            let! results = queryExpr.exec (users)
 
             results |> should haveLength 2
         }
 
     [<Fact>]
-    member _.``Collection.exec with skip and take for pagination``() =
+    member _.``TranslatedQuery.exec with skip and take for pagination``() =
         task {
             let queryExpr =
                 query {
@@ -1016,14 +1017,14 @@ type QueryExprTests(fixture: QueryExprTestFixture) =
                         take 1
                 }
 
-            let! results = users |> Collection.exec queryExpr
+            let! results = queryExpr.exec (users)
 
             results |> should haveLength 1
             results.[0].Data.Age |> should equal 30L
         }
 
     [<Fact>]
-    member _.``Collection.exec with complex query works end-to-end``() =
+    member _.``TranslatedQuery.exec with complex query works end-to-end``() =
         task {
             let queryExpr =
                 query {
@@ -1034,7 +1035,7 @@ type QueryExprTests(fixture: QueryExprTestFixture) =
                         take 1
                 }
 
-            let! results = users |> Collection.exec queryExpr
+            let! results = queryExpr.exec (users)
 
             results |> should haveLength 1
             results.[0].Data.Name |> should equal "Bob"
@@ -1042,7 +1043,7 @@ type QueryExprTests(fixture: QueryExprTestFixture) =
         }
 
     [<Fact>]
-    member _.``Collection.Exec instance method works same as module function``() =
+    member _.``TranslatedQuery.exec method and Collection.exec function produce same results``() =
         task {
             let queryExpr =
                 query {
@@ -1052,14 +1053,731 @@ type QueryExprTests(fixture: QueryExprTestFixture) =
                 }
 
             let! moduleResults = users |> Collection.exec queryExpr
-            let! instanceResults = users.Exec(queryExpr)
+            let! fluentResults = queryExpr.exec (users)
 
             moduleResults |> should haveLength 2
-            instanceResults |> should haveLength 2
+            fluentResults |> should haveLength 2
 
             let moduleNames = moduleResults |> List.map (fun doc -> doc.Data.Name)
 
-            let instanceNames = instanceResults |> List.map (fun doc -> doc.Data.Name)
+            let fluentNames = fluentResults |> List.map (fun doc -> doc.Data.Name)
 
-            moduleNames |> should equal instanceNames
+            moduleNames |> should equal fluentNames
+        }
+
+    // ═══════════════════════════════════════════════════════════════
+    // TranslatedQuery Composition Method Tests
+    // ═══════════════════════════════════════════════════════════════
+
+    [<Fact>]
+    member _.``where() adds filter to empty query``() =
+        task {
+            let baseQuery =
+                query {
+                    for user in users do
+                        ()
+                }
+
+            let filter = Query.Field("active", FieldOp.Compare(box (CompareOp.Eq true)))
+
+            let! results = baseQuery.where(filter).exec (users)
+
+            results |> should haveLength 2
+            results |> List.forall (fun doc -> doc.Data.Active) |> should equal true
+        }
+
+    [<Fact>]
+    member _.``where() combines multiple filters with AND``() =
+        task {
+            let baseQuery =
+                query {
+                    for user in users do
+                        ()
+                }
+
+            let filter1 = Query.Field("active", FieldOp.Compare(box (CompareOp.Eq true)))
+            let filter2 = Query.Field("age", FieldOp.Compare(box (CompareOp.Gte 30L)))
+
+            let! results = baseQuery.where(filter1).where(filter2).exec (users)
+
+            results |> should haveLength 1
+            results.[0].Data.Name |> should equal "Bob"
+            results.[0].Data.Age |> should equal 30L
+            results.[0].Data.Active |> should equal true
+        }
+
+    [<Fact>]
+    member _.``where() preserves existing query expression filters``() =
+        task {
+            let queryWithFilter =
+                query {
+                    for user in users do
+                        where (user.Age >= 25L)
+                }
+
+            let additionalFilter =
+                Query.Field("active", FieldOp.Compare(box (CompareOp.Eq true)))
+
+            let! results = queryWithFilter.where(additionalFilter).exec (users)
+
+            // Should have Age >= 25 AND Active = true
+            results |> should haveLength 2
+
+            results
+            |> List.forall (fun doc -> doc.Data.Age >= 25L && doc.Data.Active)
+            |> should equal true
+        }
+
+    [<Fact>]
+    member _.``where() can be chained multiple times``() =
+        task {
+            let baseQuery =
+                query {
+                    for user in users do
+                        ()
+                }
+
+            // Filters: active=true AND age>=25 AND age<=30
+            // Data: Alice(25,true), Bob(30,true), Charlie(35,false)
+            // Expected: Alice and Bob both match
+            let! results =
+                baseQuery
+                    .where(Query.Field("active", FieldOp.Compare(box (CompareOp.Eq true))))
+                    .where(Query.Field("age", FieldOp.Compare(box (CompareOp.Gte 25L))))
+                    .where(Query.Field("age", FieldOp.Compare(box (CompareOp.Lte 30L))))
+                    .exec (users)
+
+            results |> should haveLength 2
+            let names = results |> List.map (fun doc -> doc.Data.Name) |> List.sort
+            names |> should equal [ "Alice"; "Bob" ]
+        }
+
+    [<Fact>]
+    member _.``orderBy() adds sorting to empty query``() =
+        task {
+            let baseQuery =
+                query {
+                    for user in users do
+                        ()
+                }
+
+            let! results = baseQuery.orderBy("age", FractalDb.QueryExpr.SortDirection.Asc).exec (users)
+
+            results |> should haveLength 3
+            let ages = results |> List.map (fun doc -> doc.Data.Age)
+            ages |> should equal [ 25L; 30L; 35L ]
+        }
+
+    [<Fact>]
+    member _.``orderBy() can sort descending``() =
+        task {
+            let baseQuery =
+                query {
+                    for user in users do
+                        ()
+                }
+
+            let! results = baseQuery.orderBy("age", FractalDb.QueryExpr.SortDirection.Desc).exec (users)
+
+            results |> should haveLength 3
+            let ages = results |> List.map (fun doc -> doc.Data.Age)
+            ages |> should equal [ 35L; 30L; 25L ]
+        }
+
+    [<Fact>]
+    member _.``orderBy() can be chained for multi-field sorting``() =
+        task {
+            // Insert users with same age to test secondary sort
+            let! insertResult =
+                users
+                |> Collection.insertOne
+                    { Name = "Zack"
+                      Email = "zack@test.com"
+                      Age = 30L
+                      Active = true }
+
+            try
+                let baseQuery =
+                    query {
+                        for user in users do
+                            ()
+                    }
+
+                let! results =
+                    baseQuery
+                        .orderBy("age", FractalDb.QueryExpr.SortDirection.Asc)
+                        .orderBy("name", FractalDb.QueryExpr.SortDirection.Asc)
+                        .exec (users)
+
+                results |> should not' (be Empty)
+                // Age 30: Bob, Zack (alphabetical)
+                let age30Users = results |> List.filter (fun doc -> doc.Data.Age = 30L)
+                age30Users |> should haveLength 2
+                age30Users.[0].Data.Name |> should equal "Bob"
+                age30Users.[1].Data.Name |> should equal "Zack"
+            finally
+                // Clean up: delete Zack to avoid polluting other tests
+                match insertResult with
+                | Ok doc ->
+                    users
+                    |> Collection.deleteById doc.Id
+                    |> Async.AwaitTask
+                    |> Async.RunSynchronously
+                    |> ignore
+                | Error _ -> ()
+        }
+
+    [<Fact>]
+    member _.``orderBy() preserves existing query expression sorting``() =
+        task {
+            let queryWithSort: TranslatedQuery<TestUser> =
+                query {
+                    for user in users do
+                        sortBy user.Name
+                }
+
+            // Adding orderBy should append to existing sorts
+            let! results = queryWithSort.orderBy("age", FractalDb.QueryExpr.SortDirection.Desc).exec (users)
+
+            results |> should haveLength 3
+            // Should be sorted by Name first, then Age desc
+            let names = results |> List.map (fun doc -> doc.Data.Name)
+            names.[0] |> should equal "Alice"
+        }
+
+    [<Fact>]
+    member _.``skip() sets pagination offset``() =
+        task {
+            let baseQuery =
+                query {
+                    for user in users do
+                        sortBy user.Age
+                }
+
+            let! results = baseQuery.skip(1).exec (users)
+
+            results |> should haveLength 2
+            results.[0].Data.Age |> should equal 30L
+            results.[1].Data.Age |> should equal 35L
+        }
+
+    [<Fact>]
+    member _.``skip() replaces existing skip value``() =
+        task {
+            let queryWithSkip =
+                query {
+                    for user in users do
+                        sortBy user.Age
+                        skip 2
+                }
+
+            // Should replace skip 2 with skip 1
+            let! results = queryWithSkip.skip(1).exec (users)
+
+            results |> should haveLength 2
+            results.[0].Data.Age |> should equal 30L
+        }
+
+    [<Fact>]
+    member _.``skip() with zero returns all results``() =
+        task {
+            let baseQuery =
+                query {
+                    for user in users do
+                        ()
+                }
+
+            let! results = baseQuery.skip(0).exec (users)
+
+            results |> should haveLength 3
+        }
+
+    [<Fact>]
+    member _.``skip() beyond result count returns empty``() =
+        task {
+            let baseQuery =
+                query {
+                    for user in users do
+                        ()
+                }
+
+            let! results = baseQuery.skip(100).exec (users)
+
+            results |> should be Empty
+        }
+
+    [<Fact>]
+    member _.``limit() sets maximum result count``() =
+        task {
+            let baseQuery =
+                query {
+                    for user in users do
+                        sortBy user.Age
+                }
+
+            let! results = baseQuery.limit(2).exec (users)
+
+            results |> should haveLength 2
+            results.[0].Data.Age |> should equal 25L
+            results.[1].Data.Age |> should equal 30L
+        }
+
+    [<Fact>]
+    member _.``limit() replaces existing take value``() =
+        task {
+            let queryWithTake =
+                query {
+                    for user in users do
+                        sortBy user.Age
+                        take 1
+                }
+
+            // Should replace take 1 with limit 2
+            let! results = queryWithTake.limit(2).exec (users)
+
+            results |> should haveLength 2
+        }
+
+    [<Fact>]
+    member _.``limit() with zero returns empty``() =
+        task {
+            let baseQuery =
+                query {
+                    for user in users do
+                        ()
+                }
+
+            let! results = baseQuery.limit(0).exec (users)
+
+            results |> should be Empty
+        }
+
+    [<Fact>]
+    member _.``limit() larger than result count returns all results``() =
+        task {
+            let baseQuery =
+                query {
+                    for user in users do
+                        ()
+                }
+
+            let! results = baseQuery.limit(100).exec (users)
+
+            results |> should haveLength 3
+        }
+
+    [<Fact>]
+    member _.``skip() and limit() work together for pagination``() =
+        task {
+            let baseQuery =
+                query {
+                    for user in users do
+                        sortBy user.Age
+                }
+
+            // Page 2, size 1
+            let! results = baseQuery.skip(1).limit(1).exec (users)
+
+            results |> should haveLength 1
+            results.[0].Data.Age |> should equal 30L
+        }
+
+    [<Fact>]
+    member _.``All composition methods can be chained together``() =
+        task {
+            let baseQuery =
+                query {
+                    for user in users do
+                        ()
+                }
+
+            let! results =
+                baseQuery
+                    .where(Query.Field("active", FieldOp.Compare(box (CompareOp.Eq true))))
+                    .orderBy("age", FractalDb.QueryExpr.SortDirection.Desc)
+                    .skip(0)
+                    .limit(1)
+                    .exec (users)
+
+            results |> should haveLength 1
+            results.[0].Data.Name |> should equal "Bob"
+            results.[0].Data.Age |> should equal 30L
+            results.[0].Data.Active |> should equal true
+        }
+
+    [<Fact>]
+    member _.``Composition methods return new TranslatedQuery instances``() =
+        task {
+            let baseQuery =
+                query {
+                    for user in users do
+                        ()
+                }
+
+            let filter = Query.Field("active", FieldOp.Compare(box (CompareOp.Eq true)))
+
+            let query1 = baseQuery.where (filter)
+            let query2 = query1.skip (1)
+
+            // Original should be unchanged
+            let! baseResults = baseQuery.exec (users)
+            baseResults |> should haveLength 3
+
+            // query1 should have filter
+            let! query1Results = query1.exec (users)
+            query1Results |> should haveLength 2
+
+            // query2 should have filter + skip
+            let! query2Results = query2.exec (users)
+            query2Results |> should haveLength 1
+        }
+
+    [<Fact>]
+    member _.``Composition methods work with query expressions``() =
+        task {
+            let queryExpr =
+                query {
+                    for user in users do
+                        where (user.Age >= 25L)
+                        sortBy user.Name
+                }
+
+            // Extend with composition
+            let! results =
+                queryExpr.where(Query.Field("active", FieldOp.Compare(box (CompareOp.Eq true)))).limit(1).exec (users)
+
+            results |> should haveLength 1
+            results.[0].Data.Active |> should equal true
+            results.[0].Data.Age |> should be (greaterThanOrEqualTo 25L)
+        }
+
+    // ═══════════════════════════════════════════════════════════════
+    // QueryOps Pipeline Module Tests
+    // ═══════════════════════════════════════════════════════════════
+
+    [<Fact>]
+    member _.``QueryOps.where adds filter with pipeline``() =
+        task {
+            let baseQuery =
+                query {
+                    for user in users do
+                        ()
+                }
+
+            let filter = Query.Field("active", FieldOp.Compare(box (CompareOp.Eq true)))
+
+            let composedQuery = baseQuery |> QueryOps.where filter
+
+            let! results = composedQuery.exec (users)
+
+            results |> should haveLength 2
+            results |> List.forall (fun doc -> doc.Data.Active) |> should equal true
+        }
+
+    [<Fact>]
+    member _.``QueryOps.orderBy sorts with pipeline``() =
+        task {
+            let baseQuery =
+                query {
+                    for user in users do
+                        ()
+                }
+
+            let composedQuery = baseQuery |> QueryOps.orderBy "age" SortDirection.Desc
+
+            let! results = composedQuery.exec (users)
+
+            results |> should haveLength 3
+            let ages = results |> List.map (fun doc -> doc.Data.Age)
+            ages |> should equal [ 35L; 30L; 25L ]
+        }
+
+    [<Fact>]
+    member _.``QueryOps.skip and limit paginate with pipeline``() =
+        task {
+            let baseQuery =
+                query {
+                    for user in users do
+                        sortBy user.Age
+                }
+
+            let composedQuery = baseQuery |> QueryOps.skip 1 |> QueryOps.limit 1
+
+            let! results = composedQuery.exec (users)
+
+            results |> should haveLength 1
+            results.[0].Data.Age |> should equal 30L
+        }
+
+    [<Fact>]
+    member _.``QueryOps functions can be chained with pipeline``() =
+        task {
+            let baseQuery =
+                query {
+                    for user in users do
+                        ()
+                }
+
+            let activeFilter = Query.Field("active", FieldOp.Compare(box (CompareOp.Eq true)))
+
+            let composedQuery =
+                baseQuery
+                |> QueryOps.where activeFilter
+                |> QueryOps.orderBy "age" SortDirection.Desc
+                |> QueryOps.skip 0
+                |> QueryOps.limit 1
+
+            let! results = composedQuery.exec (users)
+
+            results |> should haveLength 1
+            results.[0].Data.Name |> should equal "Bob"
+            results.[0].Data.Age |> should equal 30L
+        }
+
+    [<Fact>]
+    member _.``QueryOps and fluent methods produce same results``() =
+        task {
+            let baseQuery =
+                query {
+                    for user in users do
+                        ()
+                }
+
+            let filter = Query.Field("active", FieldOp.Compare(box (CompareOp.Eq true)))
+
+            // Pipeline style
+            let pipelineQuery =
+                baseQuery
+                |> QueryOps.where filter
+                |> QueryOps.orderBy "name" SortDirection.Asc
+                |> QueryOps.limit 1
+
+            let! pipelineResults = pipelineQuery.exec (users)
+
+            // Fluent style
+            let! fluentResults = baseQuery.where(filter).orderBy("name", SortDirection.Asc).limit(1).exec (users)
+
+            pipelineResults |> should haveLength 1
+            fluentResults |> should haveLength 1
+            pipelineResults.[0].Data.Name |> should equal fluentResults.[0].Data.Name
+        }
+
+    // ═══════════════════════════════════════════════════════════════
+    // Query Expression Composition Tests (<+> operator)
+    // ═══════════════════════════════════════════════════════════════
+
+    [<Fact>]
+    member _.``<+> operator composes two query expressions``() =
+        task {
+            let filters: TranslatedQuery<TestUser> =
+                query {
+                    for user in users do
+                        where (user.Active = true)
+                }
+
+            let sorting: TranslatedQuery<TestUser> =
+                query {
+                    for user in users do
+                        sortBy user.Name
+                }
+
+            let combined = filters <+> sorting
+            let! results = combined.exec (users)
+
+            results |> should haveLength 2
+            // Should be filtered (active only) and sorted by name
+            results.[0].Data.Name |> should equal "Alice"
+            results.[1].Data.Name |> should equal "Bob"
+        }
+
+    [<Fact>]
+    member _.``<+> operator composes three query expressions``() =
+        task {
+            let filters: TranslatedQuery<TestUser> =
+                query {
+                    for user in users do
+                        where (user.Active = true)
+                }
+
+            let sorting: TranslatedQuery<TestUser> =
+                query {
+                    for user in users do
+                        sortByDescending user.Age
+                }
+
+            let pagination: TranslatedQuery<TestUser> =
+                query {
+                    for user in users do
+                        take 1
+                }
+
+            let combined = filters <+> sorting <+> pagination
+            let! results = combined.exec (users)
+
+            results |> should haveLength 1
+            // Active users sorted by age desc, take 1 = Bob (age 30)
+            results.[0].Data.Name |> should equal "Bob"
+        }
+
+    [<Fact>]
+    member _.``<+> operator merges Where clauses with AND``() =
+        task {
+            let activeFilter: TranslatedQuery<TestUser> =
+                query {
+                    for user in users do
+                        where (user.Active = true)
+                }
+
+            let ageFilter: TranslatedQuery<TestUser> =
+                query {
+                    for user in users do
+                        where (user.Age >= 30L)
+                }
+
+            let combined = activeFilter <+> ageFilter
+            let! results = combined.exec (users)
+
+            // Active AND Age >= 30 = only Bob (age 30, active)
+            results |> should haveLength 1
+            results.[0].Data.Name |> should equal "Bob"
+        }
+
+    [<Fact>]
+    member _.``<+> operator appends OrderBy clauses``() =
+        task {
+            // Insert another user with same age for multi-sort test
+            let! insertResult =
+                users
+                |> Collection.insertOne
+                    { Name = "Zara"
+                      Email = "zara@test.com"
+                      Age = 30L
+                      Active = true }
+
+            try
+                let sortByAge: TranslatedQuery<TestUser> =
+                    query {
+                        for user in users do
+                            sortBy user.Age
+                    }
+
+                let sortByName: TranslatedQuery<TestUser> =
+                    query {
+                        for user in users do
+                            sortByDescending user.Name
+                    }
+
+                let combined = sortByAge <+> sortByName
+                let! results = combined.exec (users)
+
+                // Should be sorted by Age ASC, then Name DESC
+                // Age 25: Alice
+                // Age 30: Zara, Bob (name desc)
+                // Age 35: Charlie
+                let age30Users = results |> List.filter (fun d -> d.Data.Age = 30L)
+                age30Users |> should haveLength 2
+                age30Users.[0].Data.Name |> should equal "Zara"
+                age30Users.[1].Data.Name |> should equal "Bob"
+            finally
+                match insertResult with
+                | Ok doc ->
+                    users
+                    |> Collection.deleteById doc.Id
+                    |> Async.AwaitTask
+                    |> Async.RunSynchronously
+                    |> ignore
+                | Error _ -> ()
+        }
+
+    [<Fact>]
+    member _.``<+> operator: later Skip/Take wins``() =
+        task {
+            let firstPage: TranslatedQuery<TestUser> =
+                query {
+                    for user in users do
+                        sortBy user.Name
+                        skip 0
+                        take 10
+                }
+
+            let secondPage: TranslatedQuery<TestUser> =
+                query {
+                    for user in users do
+                        skip 1
+                        take 2
+                }
+
+            let combined = firstPage <+> secondPage
+            let! results = combined.exec (users)
+
+            // Later skip/take wins: skip 1, take 2
+            results |> should haveLength 2
+            // Sorted by name: Alice, Bob, Charlie -> skip 1 -> Bob, Charlie
+            results.[0].Data.Name |> should equal "Bob"
+            results.[1].Data.Name |> should equal "Charlie"
+        }
+
+    [<Fact>]
+    member _.``compose method works same as <+> operator``() =
+        task {
+            let filters: TranslatedQuery<TestUser> =
+                query {
+                    for user in users do
+                        where (user.Active = true)
+                }
+
+            let sorting: TranslatedQuery<TestUser> =
+                query {
+                    for user in users do
+                        sortBy user.Name
+                }
+
+            // Using compose method
+            let composed = filters.compose (sorting)
+            let! (composeResults: list<Document<TestUser>>) = composed.exec (users)
+
+            // Using <+> operator
+            let operated = filters <+> sorting
+            let! (operatorResults: list<Document<TestUser>>) = operated.exec (users)
+
+            composeResults |> should haveLength 2
+            operatorResults |> should haveLength 2
+            composeResults.[0].Data.Name |> should equal operatorResults.[0].Data.Name
+            composeResults.[1].Data.Name |> should equal operatorResults.[1].Data.Name
+        }
+
+    [<Fact>]
+    member _.``Reusable query parts can be composed``() =
+        task {
+            // Define reusable query parts
+            let activeOnly: TranslatedQuery<TestUser> =
+                query {
+                    for user in users do
+                        where (user.Active = true)
+                }
+
+            let sortedByName: TranslatedQuery<TestUser> =
+                query {
+                    for user in users do
+                        sortBy user.Name
+                }
+
+            let firstTwo: TranslatedQuery<TestUser> =
+                query {
+                    for user in users do
+                        take 2
+                }
+
+            // Compose in different ways
+            let! (activeNamedResults: list<Document<TestUser>>) = (activeOnly <+> sortedByName).exec (users)
+            let! (activeLimitedResults: list<Document<TestUser>>) = (activeOnly <+> firstTwo).exec (users)
+            let! (allThreeResults: list<Document<TestUser>>) = (activeOnly <+> sortedByName <+> firstTwo).exec (users)
+
+            activeNamedResults |> should haveLength 2
+            activeLimitedResults |> should haveLength 2
+            allThreeResults |> should haveLength 2
+
+            // All three combined: active, sorted by name, take 2
+            allThreeResults.[0].Data.Name |> should equal "Alice"
+            allThreeResults.[1].Data.Name |> should equal "Bob"
         }

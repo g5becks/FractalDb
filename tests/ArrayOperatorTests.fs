@@ -30,6 +30,18 @@ type Product =
       Ratings: list<int>
       Price: float }
 
+type Comment =
+    { Author: string
+      Text: string
+      Status: string
+      Likes: int }
+
+type Article =
+    { Title: string
+      Content: string
+      Comments: list<Comment>
+      Published: bool }
+
 // Helper to create test database
 let createTestDb () = FractalDb.InMemory()
 
@@ -660,4 +672,623 @@ let ``ArrayOp.Size works with integer arrays`` () =
         results |> should haveLength 1
         results.[0].Data.Name |> should equal "Product 1"
         results.[0].Data.Ratings |> should equal [ 5; 4; 3 ]
+    }
+
+// ═══════════════════════════════════════════════════════════════
+// ArrayOp.ElemMatch Tests (Arrays of Objects)
+// ═══════════════════════════════════════════════════════════════
+
+[<Fact>]
+let ``ArrayOp.ElemMatch matches array elements with simple field condition`` () =
+    task {
+        let db = createTestDb ()
+
+        let schema =
+            { Fields = []
+              Indexes = []
+              Timestamps = false
+              Validate = None }
+
+        let collection = db.Collection<Article>("articles", schema)
+
+        let article1 =
+            { Title = "Article 1"
+              Content = "Content 1"
+              Comments =
+                [ { Author = "Alice"
+                    Text = "Great article!"
+                    Status = "approved"
+                    Likes = 5 }
+                  { Author = "Bob"
+                    Text = "Thanks!"
+                    Status = "pending"
+                    Likes = 2 } ]
+              Published = true }
+
+        let article2 =
+            { Title = "Article 2"
+              Content = "Content 2"
+              Comments =
+                [ { Author = "Charlie"
+                    Text = "Interesting"
+                    Status = "pending"
+                    Likes = 3 } ]
+              Published = true }
+
+        let article3 =
+            { Title = "Article 3"
+              Content = "Content 3"
+              Comments =
+                [ { Author = "Dave"
+                    Text = "Well written"
+                    Status = "approved"
+                    Likes = 10 }
+                  { Author = "Eve"
+                    Text = "I agree"
+                    Status = "approved"
+                    Likes = 7 } ]
+              Published = false }
+
+        let! _ = collection |> Collection.insertOne article1
+        let! _ = collection |> Collection.insertOne article2
+        let! _ = collection |> Collection.insertOne article3
+
+        // Query: Find articles with at least one approved comment
+        let query =
+            Query.Field(
+                "comments",
+                FieldOp.Array(
+                    box (ArrayOp.ElemMatch(Query.Field("status", FieldOp.Compare(box (CompareOp.Eq "approved")))))
+                )
+            )
+
+        let! results = collection |> Collection.find query
+
+        results |> should haveLength 2
+        results |> List.map (fun doc -> doc.Data.Title) |> should contain "Article 1"
+        results |> List.map (fun doc -> doc.Data.Title) |> should contain "Article 3"
+    }
+
+[<Fact>]
+let ``ArrayOp.ElemMatch with AND condition matches multiple fields`` () =
+    task {
+        let db = createTestDb ()
+
+        let schema =
+            { Fields = []
+              Indexes = []
+              Timestamps = false
+              Validate = None }
+
+        let collection = db.Collection<Article>("articles", schema)
+
+        let article1 =
+            { Title = "Popular Article"
+              Content = "Content"
+              Comments =
+                [ { Author = "Alice"
+                    Text = "Excellent!"
+                    Status = "approved"
+                    Likes = 15 }
+                  { Author = "Bob"
+                    Text = "Good"
+                    Status = "approved"
+                    Likes = 3 } ]
+              Published = true }
+
+        let article2 =
+            { Title = "Less Popular"
+              Content = "Content"
+              Comments =
+                [ { Author = "Charlie"
+                    Text = "Nice"
+                    Status = "approved"
+                    Likes = 5 } ]
+              Published = true }
+
+        let! _ = collection |> Collection.insertOne article1
+        let! _ = collection |> Collection.insertOne article2
+
+        // Query: Find articles with at least one approved comment that has more than 10 likes
+        let query =
+            Query.Field(
+                "comments",
+                FieldOp.Array(
+                    box (
+                        ArrayOp.ElemMatch(
+                            Query.And
+                                [ Query.Field("status", FieldOp.Compare(box (CompareOp.Eq "approved")))
+                                  Query.Field("likes", FieldOp.Compare(box (CompareOp.Gt 10))) ]
+                        )
+                    )
+                )
+            )
+
+        let! results = collection |> Collection.find query
+
+        results |> should haveLength 1
+        results.[0].Data.Title |> should equal "Popular Article"
+    }
+
+[<Fact>]
+let ``ArrayOp.ElemMatch with OR condition allows alternative matches`` () =
+    task {
+        let db = createTestDb ()
+
+        let schema =
+            { Fields = []
+              Indexes = []
+              Timestamps = false
+              Validate = None }
+
+        let collection = db.Collection<Article>("articles", schema)
+
+        let article1 =
+            { Title = "Article 1"
+              Content = "Content"
+              Comments =
+                [ { Author = "Alice"
+                    Text = "Great!"
+                    Status = "approved"
+                    Likes = 8 } ]
+              Published = true }
+
+        let article2 =
+            { Title = "Article 2"
+              Content = "Content"
+              Comments =
+                [ { Author = "Bob"
+                    Text = "Interesting"
+                    Status = "pending"
+                    Likes = 20 } ]
+              Published = true }
+
+        let article3 =
+            { Title = "Article 3"
+              Content = "Content"
+              Comments =
+                [ { Author = "Charlie"
+                    Text = "Okay"
+                    Status = "pending"
+                    Likes = 2 } ]
+              Published = false }
+
+        let! _ = collection |> Collection.insertOne article1
+        let! _ = collection |> Collection.insertOne article2
+        let! _ = collection |> Collection.insertOne article3
+
+        // Query: Find articles with comments that are either approved OR have more than 15 likes
+        let query =
+            Query.Field(
+                "comments",
+                FieldOp.Array(
+                    box (
+                        ArrayOp.ElemMatch(
+                            Query.Or
+                                [ Query.Field("status", FieldOp.Compare(box (CompareOp.Eq "approved")))
+                                  Query.Field("likes", FieldOp.Compare(box (CompareOp.Gt 15))) ]
+                        )
+                    )
+                )
+            )
+
+        let! results = collection |> Collection.find query
+
+        results |> should haveLength 2
+        results |> List.map (fun doc -> doc.Data.Title) |> should contain "Article 1"
+        results |> List.map (fun doc -> doc.Data.Title) |> should contain "Article 2"
+    }
+
+[<Fact>]
+let ``ArrayOp.ElemMatch matches no documents when condition not met`` () =
+    task {
+        let db = createTestDb ()
+
+        let schema =
+            { Fields = []
+              Indexes = []
+              Timestamps = false
+              Validate = None }
+
+        let collection = db.Collection<Article>("articles", schema)
+
+        let article1 =
+            { Title = "Article 1"
+              Content = "Content"
+              Comments =
+                [ { Author = "Alice"
+                    Text = "Comment"
+                    Status = "pending"
+                    Likes = 5 } ]
+              Published = true }
+
+        let! _ = collection |> Collection.insertOne article1
+
+        // Query: Find articles with rejected comments (none exist)
+        let query =
+            Query.Field(
+                "comments",
+                FieldOp.Array(
+                    box (ArrayOp.ElemMatch(Query.Field("status", FieldOp.Compare(box (CompareOp.Eq "rejected")))))
+                )
+            )
+
+        let! results = collection |> Collection.find query
+
+        results |> should haveLength 0
+    }
+
+[<Fact>]
+let ``ArrayOp.ElemMatch with complex nested query`` () =
+    task {
+        let db = createTestDb ()
+
+        let schema =
+            { Fields = []
+              Indexes = []
+              Timestamps = false
+              Validate = None }
+
+        let collection = db.Collection<Article>("articles", schema)
+
+        let article1 =
+            { Title = "Viral Article"
+              Content = "Content"
+              Comments =
+                [ { Author = "Alice"
+                    Text = "Amazing!"
+                    Status = "approved"
+                    Likes = 100 }
+                  { Author = "Bob"
+                    Text = "Nice"
+                    Status = "approved"
+                    Likes = 5 } ]
+              Published = true }
+
+        let article2 =
+            { Title = "Moderate Article"
+              Content = "Content"
+              Comments =
+                [ { Author = "Charlie"
+                    Text = "Good"
+                    Status = "approved"
+                    Likes = 50 } ]
+              Published = true }
+
+        let! _ = collection |> Collection.insertOne article1
+        let! _ = collection |> Collection.insertOne article2
+
+        // Query: approved comments with likes >= 50 AND likes < 120
+        let query =
+            Query.Field(
+                "comments",
+                FieldOp.Array(
+                    box (
+                        ArrayOp.ElemMatch(
+                            Query.And
+                                [ Query.Field("status", FieldOp.Compare(box (CompareOp.Eq "approved")))
+                                  Query.Field("likes", FieldOp.Compare(box (CompareOp.Gte 50)))
+                                  Query.Field("likes", FieldOp.Compare(box (CompareOp.Lt 120))) ]
+                        )
+                    )
+                )
+            )
+
+        let! results = collection |> Collection.find query
+
+        results |> should haveLength 2
+
+        results
+        |> List.map (fun doc -> doc.Data.Title)
+        |> should contain "Viral Article"
+
+        results
+        |> List.map (fun doc -> doc.Data.Title)
+        |> should contain "Moderate Article"
+    }
+
+// ═══════════════════════════════════════════════════════════════
+// ArrayOp.Index Tests (Access specific array element)
+// ═══════════════════════════════════════════════════════════════
+
+[<Fact>]
+let ``ArrayOp.Index matches document by first element (index 0)`` () =
+    task {
+        let db = createTestDb ()
+
+        let schema =
+            { Fields = []
+              Indexes = []
+              Timestamps = false
+              Validate = None }
+
+        let collection = db.Collection<BlogPost>("posts", schema)
+
+        let post1 =
+            { Title = "First post"
+              Author = "Alice"
+              Tags = [ "featured"; "tutorial"; "beginner" ]
+              Scores = [ 100; 80; 60 ]
+              Published = true }
+
+        let post2 =
+            { Title = "Second post"
+              Author = "Bob"
+              Tags = [ "tutorial"; "advanced"; "featured" ]
+              Scores = [ 90; 85; 95 ]
+              Published = true }
+
+        let post3 =
+            { Title = "Third post"
+              Author = "Charlie"
+              Tags = [ "news"; "update"; "announcement" ]
+              Scores = [ 70; 75; 80 ]
+              Published = false }
+
+        let! _ = collection |> Collection.insertOne post1
+        let! _ = collection |> Collection.insertOne post2
+        let! _ = collection |> Collection.insertOne post3
+
+        // Query: Find posts where first tag is "featured"
+        let query =
+            Query.Field(
+                "tags",
+                FieldOp.Array(box (ArrayOp.Index(0, Query.Field("", FieldOp.Compare(box (CompareOp.Eq "featured"))))))
+            )
+
+        let! results = collection |> Collection.find query
+
+        results |> should haveLength 1
+        results |> List.map (fun doc -> doc.Data.Title) |> should contain "First post"
+    }
+
+[<Fact>]
+let ``ArrayOp.Index matches document by second element (index 1)`` () =
+    task {
+        let db = createTestDb ()
+
+        let schema =
+            { Fields = []
+              Indexes = []
+              Timestamps = false
+              Validate = None }
+
+        let collection = db.Collection<BlogPost>("posts", schema)
+
+        let post1 =
+            { Title = "Post A"
+              Author = "Alice"
+              Tags = [ "intro"; "advanced"; "tips" ]
+              Scores = [ 50; 60; 70 ]
+              Published = true }
+
+        let post2 =
+            { Title = "Post B"
+              Author = "Bob"
+              Tags = [ "beginner"; "tutorial"; "howto" ]
+              Scores = [ 80; 90; 100 ]
+              Published = true }
+
+        let! _ = collection |> Collection.insertOne post1
+        let! _ = collection |> Collection.insertOne post2
+
+        // Query: Find posts where second tag (index 1) is "advanced"
+        let query =
+            Query.Field(
+                "tags",
+                FieldOp.Array(box (ArrayOp.Index(1, Query.Field("", FieldOp.Compare(box (CompareOp.Eq "advanced"))))))
+            )
+
+        let! results = collection |> Collection.find query
+
+        results |> should haveLength 1
+        results |> List.map (fun doc -> doc.Data.Title) |> should contain "Post A"
+    }
+
+[<Fact>]
+let ``ArrayOp.Index with nested field query on array of objects`` () =
+    task {
+        let db = createTestDb ()
+
+        let schema =
+            { Fields = []
+              Indexes = []
+              Timestamps = false
+              Validate = None }
+
+        let collection = db.Collection<Article>("articles", schema)
+
+        let article1 =
+            { Title = "Article Alpha"
+              Content = "Content A"
+              Comments =
+                [ { Author = "Alice"
+                    Text = "First comment"
+                    Status = "pinned"
+                    Likes = 100 }
+                  { Author = "Bob"
+                    Text = "Second comment"
+                    Status = "approved"
+                    Likes = 50 } ]
+              Published = true }
+
+        let article2 =
+            { Title = "Article Beta"
+              Content = "Content B"
+              Comments =
+                [ { Author = "Charlie"
+                    Text = "Another first comment"
+                    Status = "approved"
+                    Likes = 75 }
+                  { Author = "Dave"
+                    Text = "Another second comment"
+                    Status = "pinned"
+                    Likes = 60 } ]
+              Published = true }
+
+        let! _ = collection |> Collection.insertOne article1
+        let! _ = collection |> Collection.insertOne article2
+
+        // Query: Find articles where first comment (index 0) has status "pinned"
+        let query =
+            Query.Field(
+                "comments",
+                FieldOp.Array(
+                    box (ArrayOp.Index(0, Query.Field("status", FieldOp.Compare(box (CompareOp.Eq "pinned")))))
+                )
+            )
+
+        let! results = collection |> Collection.find query
+
+        results |> should haveLength 1
+
+        results
+        |> List.map (fun doc -> doc.Data.Title)
+        |> should contain "Article Alpha"
+    }
+
+[<Fact>]
+let ``ArrayOp.Index with AND condition on nested fields`` () =
+    task {
+        let db = createTestDb ()
+
+        let schema =
+            { Fields = []
+              Indexes = []
+              Timestamps = false
+              Validate = None }
+
+        let collection = db.Collection<Article>("articles", schema)
+
+        let article1 =
+            { Title = "Popular Article"
+              Content = "Content"
+              Comments =
+                [ { Author = "Alice"
+                    Text = "Great work!"
+                    Status = "approved"
+                    Likes = 200 }
+                  { Author = "Bob"
+                    Text = "Nice"
+                    Status = "pending"
+                    Likes = 10 } ]
+              Published = true }
+
+        let article2 =
+            { Title = "Moderate Article"
+              Content = "Content"
+              Comments =
+                [ { Author = "Charlie"
+                    Text = "Good read"
+                    Status = "approved"
+                    Likes = 50 }
+                  { Author = "Dave"
+                    Text = "Thanks"
+                    Status = "approved"
+                    Likes = 40 } ]
+              Published = true }
+
+        let! _ = collection |> Collection.insertOne article1
+        let! _ = collection |> Collection.insertOne article2
+
+        // Query: Find articles where first comment is approved AND has >100 likes
+        let query =
+            Query.Field(
+                "comments",
+                FieldOp.Array(
+                    box (
+                        ArrayOp.Index(
+                            0,
+                            Query.And
+                                [ Query.Field("status", FieldOp.Compare(box (CompareOp.Eq "approved")))
+                                  Query.Field("likes", FieldOp.Compare(box (CompareOp.Gt 100))) ]
+                        )
+                    )
+                )
+            )
+
+        let! results = collection |> Collection.find query
+
+        results |> should haveLength 1
+
+        results
+        |> List.map (fun doc -> doc.Data.Title)
+        |> should contain "Popular Article"
+    }
+
+[<Fact>]
+let ``ArrayOp.Index returns no results for out-of-bounds index`` () =
+    task {
+        let db = createTestDb ()
+
+        let schema =
+            { Fields = []
+              Indexes = []
+              Timestamps = false
+              Validate = None }
+
+        let collection = db.Collection<BlogPost>("posts", schema)
+
+        let post1 =
+            { Title = "Short post"
+              Author = "Alice"
+              Tags = [ "one"; "two" ] // Only 2 elements
+              Scores = [ 10; 20 ]
+              Published = true }
+
+        let! _ = collection |> Collection.insertOne post1
+
+        // Query: Try to access index 5 (out of bounds)
+        let query =
+            Query.Field(
+                "tags",
+                FieldOp.Array(box (ArrayOp.Index(5, Query.Field("", FieldOp.Compare(box (CompareOp.Eq "one"))))))
+            )
+
+        let! results = collection |> Collection.find query
+
+        results |> should haveLength 0
+    }
+
+[<Fact>]
+let ``ArrayOp.Index with integer array matches by value at index`` () =
+    task {
+        let db = createTestDb ()
+
+        let schema =
+            { Fields = []
+              Indexes = []
+              Timestamps = false
+              Validate = None }
+
+        let collection = db.Collection<BlogPost>("posts", schema)
+
+        let post1 =
+            { Title = "High scorer"
+              Author = "Alice"
+              Tags = [ "test" ]
+              Scores = [ 100; 90; 85 ]
+              Published = true }
+
+        let post2 =
+            { Title = "Low scorer"
+              Author = "Bob"
+              Tags = [ "test" ]
+              Scores = [ 50; 60; 70 ]
+              Published = true }
+
+        let! _ = collection |> Collection.insertOne post1
+        let! _ = collection |> Collection.insertOne post2
+
+        // Query: Find posts where first score (index 0) is 100
+        let query =
+            Query.Field(
+                "scores",
+                FieldOp.Array(box (ArrayOp.Index(0, Query.Field("", FieldOp.Compare(box (CompareOp.Eq 100))))))
+            )
+
+        let! results = collection |> Collection.find query
+
+        results |> should haveLength 1
+        results |> List.map (fun doc -> doc.Data.Title) |> should contain "High scorer"
     }

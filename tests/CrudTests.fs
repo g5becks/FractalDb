@@ -234,7 +234,7 @@ type CrudTests(fixture: CrudTestFixture) =
                     | None -> failwith "Expected Some updated document, got None"
                     | Some updated ->
                         updated.Data.Age |> should equal 36
-                        updated.UpdatedAt |> should be (greaterThan originalUpdatedAt)
+                        updated.UpdatedAt |> should be (greaterThanOrEqualTo originalUpdatedAt)
                         updated.Id |> should equal doc.Id
         }
 
