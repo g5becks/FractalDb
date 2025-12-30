@@ -433,3 +433,235 @@ let ``TranslateOptions with empty options returns empty string`` () =
 
     sql |> should equal ""
     params' |> should be Empty
+
+// ═══════════════════════════════════════════════════════════════
+// Edge Cases and Complex Query Tests
+// ═══════════════════════════════════════════════════════════════
+
+[<Fact>]
+let ``Deeply nested query with multiple levels`` () =
+    let translator = SqlTranslator<TestUser>(testSchema, false)
+    
+    // ((name = "Alice" OR name = "Bob") AND (age > 25 OR age < 20)) OR status = "active"
+    let query =
+        Query.Or [
+            Query.And [
+                Query.Or [
+                    Query.Field("name", FieldOp.Compare(box (CompareOp.Eq "Alice")))
+                    Query.Field("name", FieldOp.Compare(box (CompareOp.Eq "Bob")))
+                ]
+                Query.Or [
+                    Query.Field("age", FieldOp.Compare(box (CompareOp.Gt 25)))
+                    Query.Field("age", FieldOp.Compare(box (CompareOp.Lt 20)))
+                ]
+            ]
+            Query.Field("status", FieldOp.Compare(box (CompareOp.Eq "active")))
+        ]
+    
+    let result = translator.Translate(query)
+    
+    // Should have proper parenthesization
+    result.Sql |> should haveSubstring "(("
+    result.Sql |> should haveSubstring "OR"
+    result.Sql |> should haveSubstring "AND"
+    
+    // Should have all parameters
+    result.Parameters |> should haveLength 5
+    
+    // Verify all field references are correct
+    result.Sql |> should haveSubstring "_name"  // indexed field
+    result.Sql |> should haveSubstring "_age"   // indexed field
+    result.Sql |> should haveSubstring "jsonb_extract(body, '$.status')"  // non-indexed
+
+[<Fact>]
+let ``Empty And list generates empty parentheses`` () =
+    let translator = SqlTranslator<TestUser>(testSchema, false)
+    let query = Query.And []
+    let result = translator.Translate(query)
+    
+    result.Sql |> should equal "()"
+    result.Parameters |> should be Empty
+
+[<Fact>]
+let ``Empty Or list generates empty parentheses`` () =
+    let translator = SqlTranslator<TestUser>(testSchema, false)
+    let query = Query.Or []
+    let result = translator.Translate(query)
+    
+    result.Sql |> should equal "()"
+    result.Parameters |> should be Empty
+
+[<Fact>]
+let ``Not with complex nested query`` () =
+    let translator = SqlTranslator<TestUser>(testSchema, false)
+    
+    // NOT ((name = "Alice" AND age > 30) OR status = "inactive")
+    let query =
+        Query.Not(
+            Query.Or [
+                Query.And [
+                    Query.Field("name", FieldOp.Compare(box (CompareOp.Eq "Alice")))
+                    Query.Field("age", FieldOp.Compare(box (CompareOp.Gt 30)))
+                ]
+                Query.Field("status", FieldOp.Compare(box (CompareOp.Eq "inactive")))
+            ]
+        )
+    
+    let result = translator.Translate(query)
+    
+    // Should start with NOT and have proper parentheses
+    result.Sql |> should startWith "NOT ("
+    result.Sql |> should endWith ")"
+    result.Sql |> should haveSubstring "AND"
+    result.Sql |> should haveSubstring "OR"
+    
+    result.Parameters |> should haveLength 3
+
+[<Fact>]
+let ``Special characters in string values are parameterized`` () =
+    let translator = SqlTranslator<TestUser>(testSchema, false)
+    
+    // Test various special characters: quotes, backslashes, SQL keywords
+    let specialValue = "O'Reilly & Co. -- SELECT * FROM users; DROP TABLE--"
+    let query = Query.Field("name", FieldOp.Compare(box (CompareOp.Eq specialValue)))
+    let result = translator.Translate(query)
+    
+    // Should use parameterization, not inline the value
+    result.Sql |> should equal "_name = @p0"
+    result.Parameters |> should haveLength 1
+    
+    let (paramName, paramValue) = result.Parameters.[0]
+    (unbox<string> paramValue) |> should equal specialValue
+
+[<Fact>]
+let ``Multiple fields with same value use separate parameters`` () =
+    let translator = SqlTranslator<TestUser>(testSchema, false)
+    
+    // name = "test" AND email = "test" AND status = "test"
+    let query =
+        Query.And [
+            Query.Field("name", FieldOp.Compare(box (CompareOp.Eq "test")))
+            Query.Field("email", FieldOp.Compare(box (CompareOp.Eq "test")))
+            Query.Field("status", FieldOp.Compare(box (CompareOp.Eq "test")))
+        ]
+    
+    let result = translator.Translate(query)
+    
+    // Should have 3 separate parameters (p0, p1, p2) not reused
+    result.Parameters |> should haveLength 3
+    
+    let paramNames = result.Parameters |> List.map fst
+    paramNames |> should contain "@p0"
+    paramNames |> should contain "@p1"
+    paramNames |> should contain "@p2"
+    
+    // All parameters should have the same value
+    result.Parameters |> List.iter (fun (_, value) -> 
+        (unbox<string> value) |> should equal "test"
+    )
+
+[<Fact>]
+let ``Nor with single query`` () =
+    let translator = SqlTranslator<TestUser>(testSchema, false)
+    
+    // NOR with single condition: NOT (name = "Alice")
+    let query = Query.Nor [ Query.Field("name", FieldOp.Compare(box (CompareOp.Eq "Alice"))) ]
+    let result = translator.Translate(query)
+    
+    // Should be: NOT (_name = @p0)
+    result.Sql |> should equal "NOT (_name = @p0)"
+    result.Parameters |> should haveLength 1
+
+[<Fact>]
+let ``Query with all comparison operators`` () =
+    let translator = SqlTranslator<TestUser>(testSchema, false)
+    
+    // Test all comparison operators in one query
+    let query =
+        Query.And [
+            Query.Field("age", FieldOp.Compare(box (CompareOp.Eq 30)))
+            Query.Field("age", FieldOp.Compare(box (CompareOp.Ne 25)))
+            Query.Field("age", FieldOp.Compare(box (CompareOp.Gt 20)))
+            Query.Field("age", FieldOp.Compare(box (CompareOp.Gte 21)))
+            Query.Field("age", FieldOp.Compare(box (CompareOp.Lt 40)))
+            Query.Field("age", FieldOp.Compare(box (CompareOp.Lte 39)))
+        ]
+    
+    let result = translator.Translate(query)
+    
+    // Should contain all operators
+    result.Sql |> should haveSubstring "="
+    result.Sql |> should haveSubstring "!="
+    result.Sql |> should haveSubstring ">"
+    result.Sql |> should haveSubstring ">="
+    result.Sql |> should haveSubstring "<"
+    result.Sql |> should haveSubstring "<="
+    
+    result.Parameters |> should haveLength 6
+
+[<Fact>]
+let ``Empty string value is handled correctly`` () =
+    let translator = SqlTranslator<TestUser>(testSchema, false)
+    let query = Query.Field("name", FieldOp.Compare(box (CompareOp.Eq "")))
+    let result = translator.Translate(query)
+    
+    result.Sql |> should equal "_name = @p0"
+    result.Parameters |> should haveLength 1
+    
+    let (_, paramValue) = result.Parameters.[0]
+    (unbox<string> paramValue) |> should equal ""
+
+[<Fact>]
+let ``Null value in In operator`` () =
+    let translator = SqlTranslator<TestUser>(testSchema, false)
+    
+    // Test In operator with null values mixed in
+    let query = Query.Field("status", FieldOp.Compare(box (CompareOp.In [ "active"; null; "pending" ])))
+    let result = translator.Translate(query)
+    
+    // Should generate IN clause
+    result.Sql |> should haveSubstring "IN"
+    result.Parameters |> should haveLength 3
+
+[<Fact>]
+let ``Very long And list generates correct SQL`` () =
+    let translator = SqlTranslator<TestUser>(testSchema, false)
+    
+    // Create a query with 50 AND conditions
+    let conditions =
+        [ 1..50 ]
+        |> List.map (fun i -> Query.Field("age", FieldOp.Compare(box (CompareOp.Ne i))))
+    
+    let query = Query.And conditions
+    let result = translator.Translate(query)
+    
+    // Should have 50 parameters
+    result.Parameters |> should haveLength 50
+    
+    // Should contain many AND operators (49 ANDs for 50 conditions)
+    let andCount = result.Sql.Split([|" AND "|], System.StringSplitOptions.None).Length - 1
+    andCount |> should equal 49
+
+[<Fact>]
+let ``Mixed indexed and non-indexed fields in same query`` () =
+    let translator = SqlTranslator<TestUser>(testSchema, false)
+    
+    let query =
+        Query.And [
+            Query.Field("name", FieldOp.Compare(box (CompareOp.Eq "Alice")))      // indexed: _name
+            Query.Field("email", FieldOp.Compare(box (CompareOp.Eq "alice@example.com")))  // non-indexed: jsonb_extract
+            Query.Field("age", FieldOp.Compare(box (CompareOp.Gt 25)))            // indexed: _age
+            Query.Field("status", FieldOp.Compare(box (CompareOp.Eq "active")))   // non-indexed: jsonb_extract
+        ]
+    
+    let result = translator.Translate(query)
+    
+    // Indexed fields use generated columns
+    result.Sql |> should haveSubstring "_name"
+    result.Sql |> should haveSubstring "_age"
+    
+    // Non-indexed fields use jsonb_extract
+    result.Sql |> should haveSubstring "jsonb_extract(body, '$.email')"
+    result.Sql |> should haveSubstring "jsonb_extract(body, '$.status')"
+    
+    result.Parameters |> should haveLength 4
