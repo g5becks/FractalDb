@@ -9,7 +9,6 @@
         <Compile Include="Types.fs"/>
         <Compile Include="Errors.fs"/>
         <Compile Include="Operators.fs"/>
-        <Compile Include="Query.fs"/>
         <Compile Include="Schema.fs"/>
         <Compile Include="Options.fs"/>
         <Compile Include="QueryExpr.fs"/>

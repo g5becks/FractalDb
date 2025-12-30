@@ -8,7 +8,7 @@ open FractalDb.Types
 open FractalDb.Schema
 open FractalDb.Database
 open FractalDb.Collection
-open FractalDb.Query
+open FractalDb.Operators
 open FractalDb.Options
 open System.Text.Json
 
@@ -85,7 +85,7 @@ let ``Select specific fields returns only those fields`` () =
         let options =
             QueryOptions.empty<UserProfile> |> QueryOptions.select [ "name"; "email" ]
 
-        let! results = collection |> Collection.findWith (Query.empty<UserProfile>) options
+        let! results = collection |> Collection.findWith (Query.Empty) options
 
         results |> should haveLength 1
 
@@ -128,7 +128,7 @@ let ``Select always includes _id field even if not specified`` () =
             // Select only name (not _id)
             let options = QueryOptions.empty<UserProfile> |> QueryOptions.select [ "name" ]
 
-            let! results = collection |> Collection.findWith (Query.empty<UserProfile>) options
+            let! results = collection |> Collection.findWith (Query.Empty) options
 
             results |> should haveLength 1
 
@@ -165,7 +165,7 @@ let ``Select with multiple fields returns all specified fields`` () =
             QueryOptions.empty<Product>
             |> QueryOptions.select [ "name"; "price"; "category" ]
 
-        let! results = collection |> Collection.findWith (Query.empty<Product>) options
+        let! results = collection |> Collection.findWith (Query.Empty) options
 
         results |> should haveLength 1
         results.[0].Data.Name |> should equal "Laptop"
@@ -199,7 +199,7 @@ let ``Empty select option returns all fields`` () =
         // No select option (default empty)
         let options = QueryOptions.empty<UserProfile>
 
-        let! results = collection |> Collection.findWith (Query.empty<UserProfile>) options
+        let! results = collection |> Collection.findWith (Query.Empty) options
 
         results |> should haveLength 1
 
@@ -243,7 +243,7 @@ let ``Omit specific fields excludes them from result`` () =
         let options =
             QueryOptions.empty<UserProfile> |> QueryOptions.omit [ "email"; "age" ]
 
-        let! results = collection |> Collection.findWith (Query.empty<UserProfile>) options
+        let! results = collection |> Collection.findWith (Query.Empty) options
 
         results |> should haveLength 1
 
@@ -286,7 +286,7 @@ let ``Omit does not affect _id field`` () =
             let options =
                 QueryOptions.empty<UserProfile> |> QueryOptions.omit [ "_id"; "email" ]
 
-            let! results = collection |> Collection.findWith (Query.empty<UserProfile>) options
+            let! results = collection |> Collection.findWith (Query.Empty) options
 
             results |> should haveLength 1
 
@@ -322,7 +322,7 @@ let ``Omit with multiple fields excludes all specified fields`` () =
         let options =
             QueryOptions.empty<Product> |> QueryOptions.omit [ "stock"; "description" ]
 
-        let! results = collection |> Collection.findWith (Query.empty<Product>) options
+        let! results = collection |> Collection.findWith (Query.Empty) options
 
         results |> should haveLength 1
         results.[0].Data.Name |> should equal "Mouse"
@@ -356,7 +356,7 @@ let ``Empty omit option returns all fields`` () =
         // No omit option (default empty)
         let options = QueryOptions.empty<UserProfile>
 
-        let! results = collection |> Collection.findWith (Query.empty<UserProfile>) options
+        let! results = collection |> Collection.findWith (Query.Empty) options
 
         results |> should haveLength 1
 
@@ -402,7 +402,7 @@ let ``Select with nested fields returns nested data`` () =
             QueryOptions.empty<UserWithNested>
             |> QueryOptions.select [ "name"; "address.city" ]
 
-        let! results = collection |> Collection.findWith (Query.empty<UserWithNested>) options
+        let! results = collection |> Collection.findWith (Query.Empty) options
 
         results |> should haveLength 1
         results.[0].Data.Name |> should equal "Grace"
@@ -435,7 +435,7 @@ let ``Omit nested fields excludes nested data`` () =
         // Omit nested field
         let options = QueryOptions.empty<UserWithNested> |> QueryOptions.omit [ "address" ]
 
-        let! results = collection |> Collection.findWith (Query.empty<UserWithNested>) options
+        let! results = collection |> Collection.findWith (Query.Empty) options
 
         results |> should haveLength 1
         results.[0].Data.Name |> should equal "Henry"
@@ -471,7 +471,7 @@ let ``Select entire nested object includes all nested fields`` () =
         let options =
             QueryOptions.empty<UserWithNested> |> QueryOptions.select [ "name"; "address" ]
 
-        let! results = collection |> Collection.findWith (Query.empty<UserWithNested>) options
+        let! results = collection |> Collection.findWith (Query.Empty) options
 
         results |> should haveLength 1
         results.[0].Data.Name |> should equal "Ivy"
@@ -613,7 +613,7 @@ let ``Projection works with sorting`` () =
             |> QueryOptions.sortBy "name" SortDirection.Ascending
             |> QueryOptions.select [ "name"; "age" ]
 
-        let! results = collection |> Collection.findWith (Query.empty<UserProfile>) options
+        let! results = collection |> Collection.findWith (Query.Empty) options
 
         results |> should haveLength 2
         results.[0].Data.Name |> should equal "Alice"

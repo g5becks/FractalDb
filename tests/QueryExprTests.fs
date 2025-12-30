@@ -9,7 +9,7 @@ open Xunit
 open FsUnit.Xunit
 open FractalDb.Types
 open FractalDb.Schema
-open FractalDb.QueryExpr
+open FractalDb.OperatorsExpr
 open FractalDb.Operators
 open FractalDb.Collection
 open FractalDb.Database
@@ -29,7 +29,9 @@ type TestUser =
 
 // Test types for nested property testing
 type NestedProfile = { Bio: string; Rating: int64 }
-type NestedUser = { Name: string; Profile: NestedProfile }
+
+type NestedUser =
+    { Name: string; Profile: NestedProfile }
 
 // Schema definition for the test collection
 let testUserSchema: SchemaDef<TestUser> =
@@ -87,7 +89,11 @@ type QueryExprTestFixture() =
 
         testUsers
         |> List.iter (fun user ->
-            users |> Collection.insertOne user |> Async.AwaitTask |> Async.RunSynchronously |> ignore)
+            users
+            |> Collection.insertOne user
+            |> Async.AwaitTask
+            |> Async.RunSynchronously
+            |> ignore)
 
     member _.Db = db
     member _.Users = users
@@ -720,7 +726,7 @@ type QueryExprTests(fixture: QueryExprTestFixture) =
             }
 
         result.Source |> should equal "users"
-        
+
         match result.Projection with
         | Projection.SelectFields fields ->
             fields |> should haveLength 3
@@ -738,7 +744,7 @@ type QueryExprTests(fixture: QueryExprTestFixture) =
         // Create a new empty collection
         let db = fixture.Db
         let emptyUsers = db.Collection<TestUser>("empty_users", testUserSchema)
-        
+
         let result =
             query {
                 for user in emptyUsers do
@@ -764,12 +770,13 @@ type QueryExprTests(fixture: QueryExprTestFixture) =
 
         // Both approaches should produce equivalent Where predicates
         exprQuery.Where |> should not' (equal None)
-        
+
         // Verify the predicate structure matches expected format
         match exprQuery.Where with
-        | Some (Query.Field (name, FieldOp.Compare op)) ->
+        | Some(Query.Field(name, FieldOp.Compare op)) ->
             name |> should equal "age"
             let unboxed = unbox<CompareOp<obj>> op
+
             match unboxed with
             | CompareOp.Gte value -> (value :?> int64) |> should equal 25L
             | _ -> failwith "Expected CompareOp.Gte"
@@ -782,7 +789,7 @@ type QueryExprTests(fixture: QueryExprTestFixture) =
     [<Fact>]
     member _.``Query expression works within transaction context``() =
         let db = fixture.Db
-        
+
         // Create query expression
         let activeUsersQuery =
             query {
@@ -793,11 +800,12 @@ type QueryExprTests(fixture: QueryExprTestFixture) =
         // Verify query translates correctly even in transaction context
         activeUsersQuery.Source |> should equal "users"
         activeUsersQuery.Where |> should not' (equal None)
-        
+
         match activeUsersQuery.Where with
-        | Some (Query.Field (name, FieldOp.Compare op)) ->
+        | Some(Query.Field(name, FieldOp.Compare op)) ->
             name |> should equal "active"
             let unboxed = unbox<CompareOp<obj>> op
+
             match unboxed with
             | CompareOp.Eq value -> (value :?> bool) |> should equal true
             | _ -> failwith "Expected CompareOp.Eq"
@@ -845,12 +853,13 @@ type QueryExprTests(fixture: QueryExprTestFixture) =
         // Verify translation extracts nested property correctly
         result.Source |> should equal "nested_users"
         result.Where |> should not' (equal None)
-        
+
         match result.Where with
-        | Some (Query.Field (name, FieldOp.Compare op)) ->
+        | Some(Query.Field(name, FieldOp.Compare op)) ->
             // Should extract full nested path "profile.rating" from Profile.Rating
             name |> should equal "profile.rating"
             let unboxed = unbox<CompareOp<obj>> op
+
             match unboxed with
             | CompareOp.Gt value -> (value :?> int64) |> should equal 50L
             | _ -> failwith "Expected CompareOp.Gt"
@@ -866,28 +875,26 @@ type QueryExprTests(fixture: QueryExprTestFixture) =
             query {
                 for user in users do
                     where (
-                        (user.Age > 20L && user.Age < 40L) &&
-                        (user.Active = true || user.Name = "Charlie")
+                        (user.Age > 20L && user.Age < 40L)
+                        && (user.Active = true || user.Name = "Charlie")
                     )
             }
 
         result.Source |> should equal "users"
         result.Where |> should not' (equal None)
-        
+
         // Verify complex AND/OR nesting is preserved
         match result.Where with
-        | Some (Query.And queries) ->
+        | Some(Query.And queries) ->
             queries |> should haveLength 2
-            
+
             // First part: (age > 20 && age < 40)
             match queries.[0] with
-            | Query.And innerQueries ->
-                innerQueries |> should haveLength 2
+            | Query.And innerQueries -> innerQueries |> should haveLength 2
             | _ -> failwith "Expected nested And"
-            
+
             // Second part: (active = true || name = "Charlie")
             match queries.[1] with
-            | Query.Or innerQueries ->
-                innerQueries |> should haveLength 2
+            | Query.Or innerQueries -> innerQueries |> should haveLength 2
             | _ -> failwith "Expected Or"
         | _ -> failwith "Expected Query.And at top level"

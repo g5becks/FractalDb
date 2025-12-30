@@ -1,15 +1,11 @@
 /// <summary>
-/// Computation expression builders for FractalDb query, schema, and options construction.
-/// Provides F#-idiomatic DSL for building complex queries, schemas, and query options.
+/// Computation expression builders for FractalDb schema, options, and transaction construction.
+/// Provides F#-idiomatic DSL for building schemas and query options.
 /// </summary>
 /// <remarks>
 /// This module provides computation expression builders that make it easy to construct
-/// FractalDb queries, schemas, and options using a fluent, type-safe syntax. The builders
+/// FractalDb schemas and options using a fluent, type-safe syntax. The builders
 /// are designed to work seamlessly with F#'s computation expression syntax.
-///
-/// The QueryBuilder enables creating complex queries with custom operations like 'where'
-/// and 'field' that automatically combine conditions with AND logic. More advanced logical
-/// operations (OR, NOR, NOT) are available through additional custom operations.
 ///
 /// All builders are auto-opened for convenience, making them available without explicit
 /// module qualification.
@@ -20,379 +16,9 @@ open System.Threading.Tasks
 open FractalDb.Types
 open FractalDb.Errors
 open FractalDb.Operators
-open FractalDb.Query
 open FractalDb.Schema
 open FractalDb.Options
 open FractalDb.Database
-
-/// <summary>
-/// Computation expression builder for constructing type-safe FractalDb queries.
-/// Provides custom operations for adding field conditions with automatic AND combination.
-/// </summary>
-/// <remarks>
-/// The QueryBuilder uses F# computation expression syntax to build Query&lt;'T&gt; values
-/// in a fluent, readable manner. Field conditions are automatically combined using AND logic,
-/// and the builder handles Query.Empty states correctly.
-///
-/// <para>Thread Safety: This type is immutable and thread-safe. Multiple threads can use
-/// the same QueryBuilder instance concurrently.</para>
-///
-/// <para>Performance: Query construction is lightweight and performs minimal allocations.
-/// The builder creates Query discriminated union values that are optimized for pattern matching.</para>
-/// </remarks>
-/// <example>
-/// <code>
-/// // Simple field conditions (implicitly AND-ed)
-/// let simpleQuery = query {
-///     field "age" (Query.gte 18)
-///     field "status" (Query.eq "active")
-/// }
-/// // Result: Query.And [field "age" (gte 18); field "status" (eq "active")]
-///
-/// // String operator example
-/// let emailQuery = query {
-///     field "email" (Query.endsWith "@company.com")
-///     field "name" (Query.contains "Smith")
-/// }
-///
-/// // Using 'where' instead of 'field' (they are aliases)
-/// let whereQuery = query {
-///     where "price" (Query.gte 100)
-///     where "price" (Query.lt 500)
-/// }
-///
-/// // Empty query
-/// let emptyQuery = query { () }
-/// // Result: Query.Empty
-/// </code>
-/// </example>
-type QueryBuilder() =
-    /// <summary>
-    /// Yield operation for computation expression (returns empty query).
-    /// </summary>
-    /// <param name="x">The unit value (ignored).</param>
-    /// <returns>An empty query.</returns>
-    member _.Yield(_) = Query.Empty
-    
-    /// <summary>
-    /// Zero operation for computation expression (returns empty query).
-    /// </summary>
-    /// <returns>An empty query.</returns>
-    member _.Zero() = Query.Empty
-    
-    /// <summary>
-    /// Delay operation for computation expression (defers evaluation).
-    /// </summary>
-    /// <param name="f">The delayed computation function.</param>
-    /// <returns>The result of invoking the delayed computation.</returns>
-    member _.Delay(f) = f()
-
-    /// <summary>
-    /// Add a field condition with implicit AND combination.
-    /// Creates a new FieldOp query and combines it with the existing state using AND logic.
-    /// </summary>
-    /// <param name="state">The current query state.</param>
-    /// <param name="name">The field name to query.</param>
-    /// <param name="op">The query operation to apply to the field (e.g., eq, gte, contains).</param>
-    /// <returns>A new query with the field condition added.</returns>
-    /// <remarks>
-    /// This is the primary operation for building queries. It automatically combines multiple
-    /// conditions using AND logic. If the state is empty, the field condition becomes the
-    /// entire query. If the state is already an AND query, the new condition is added to
-    /// the list. Otherwise, a new AND query is created with both conditions.
-    ///
-    /// <para>The 'where' custom operation enables natural query syntax in computation expressions.</para>
-    /// </remarks>
-    /// <example>
-    /// <code>
-    /// let ageQuery = query {
-    ///     where "age" (Query.gte 18)
-    ///     where "age" (Query.lt 65)
-    /// }
-    /// // Result: Query.And [field "age" (gte 18); field "age" (lt 65)]
-    ///
-    /// let categoryQuery = query {
-    ///     where "category" (Query.eq "Electronics")
-    ///     where "inStock" (Query.eq true)
-    /// }
-    /// // Result: Query.And [field "category" (eq "Electronics"); field "inStock" (eq true)]
-    /// </code>
-    /// </example>
-    [<CustomOperation("where")>]
-    member _.Where(state: Query<'T>, name: string, op: Query<'T>) : Query<'T> =
-        let fieldOp = Query.field name op
-        match state with
-        | Query.Empty -> fieldOp
-        | Query.And queries -> Query.And (fieldOp :: queries)
-        | other -> Query.And [fieldOp; other]
-
-    /// <summary>
-    /// Add a field condition (alias for 'where').
-    /// </summary>
-    /// <param name="state">The current query state.</param>
-    /// <param name="name">The field name to query.</param>
-    /// <param name="op">The query operation to apply to the field.</param>
-    /// <returns>A new query with the field condition added.</returns>
-    /// <remarks>
-    /// This is an exact alias for the 'where' operation. Use whichever reads better
-    /// in your specific context. Both operations are functionally identical and combine
-    /// field conditions using AND logic.
-    /// </remarks>
-    /// <example>
-    /// <code>
-    /// // These are equivalent
-    /// let query1 = query { where "age" (Query.gte 18) }
-    /// let query2 = query { field "age" (Query.gte 18) }
-    ///
-    /// // Mix and match as preferred
-    /// let mixedQuery = query {
-    ///     field "status" (Query.eq "active")
-    ///     where "role" (Query.eq "admin")
-    /// }
-    /// </code>
-    /// </example>
-    [<CustomOperation("field")>]
-    member this.Field(state, name, op) = this.Where(state, name, op)
-
-    /// <summary>
-    /// Add an explicit AND condition to the query.
-    /// Combines the provided query with the current state using AND logic.
-    /// </summary>
-    /// <param name="state">The current query state.</param>
-    /// <param name="query">The query condition to add.</param>
-    /// <returns>A new query with the AND condition added.</returns>
-    /// <remarks>
-    /// Use 'andAlso' when you need to add a complete query expression (not just a field)
-    /// to the current query. This is useful for combining sub-queries or adding complex
-    /// conditions that were built separately.
-    ///
-    /// <para>Note: Field conditions added with 'where' or 'field' are already implicitly
-    /// combined with AND, so 'andAlso' is typically used for more complex scenarios.</para>
-    /// </remarks>
-    /// <example>
-    /// <code>
-    /// // Combine a pre-built query with field conditions
-    /// let priceRange = Query.all' [
-    ///     Query.field "price" (Query.gte 100)
-    ///     Query.field "price" (Query.lt 500)
-    /// ]
-    ///
-    /// let productQuery = query {
-    ///     field "category" (Query.eq "Electronics")
-    ///     andAlso priceRange
-    ///     field "inStock" (Query.eq true)
-    /// }
-    /// // Result: Query.And [field "inStock" (eq true); priceRange; field "category" (eq "Electronics")]
-    ///
-    /// // Explicit AND for clarity
-    /// let complexQuery = query {
-    ///     field "status" (Query.eq "active")
-    ///     andAlso (Query.field "role" (Query.eq "admin"))
-    /// }
-    /// </code>
-    /// </example>
-    [<CustomOperation("andAlso")>]
-    member _.AndAlso(state: Query<'T>, query: Query<'T>) : Query<'T> =
-        match state with
-        | Query.Empty -> query
-        | Query.And queries -> Query.And (query :: queries)
-        | other -> Query.And [query; other]
-
-    /// <summary>
-    /// Add an OR branch to the query.
-    /// Combines multiple queries with OR logic and adds them to the current state.
-    /// </summary>
-    /// <param name="state">The current query state.</param>
-    /// <param name="queries">The list of queries to combine with OR logic.</param>
-    /// <returns>A new query with the OR branch added.</returns>
-    /// <remarks>
-    /// The 'orElse' operation creates an OR branch that matches documents satisfying
-    /// any of the provided queries. If the current state is not empty, the OR branch
-    /// is combined with the existing state using AND logic.
-    ///
-    /// <para>This enables patterns like: "field1 must match AND (field2 OR field3)".</para>
-    /// </remarks>
-    /// <example>
-    /// <code>
-    /// // OR condition with multiple alternatives
-    /// let categoryQuery = query {
-    ///     field "active" (Query.eq true)
-    ///     orElse [
-    ///         Query.field "category" (Query.eq "Electronics")
-    ///         Query.field "category" (Query.eq "Computers")
-    ///         Query.field "category" (Query.eq "Phones")
-    ///     ]
-    /// }
-    /// // Result: Query.And [
-    /// //   field "active" (eq true);
-    /// //   Query.Or [
-    /// //     field "category" (eq "Electronics");
-    /// //     field "category" (eq "Computers");
-    /// //     field "category" (eq "Phones")
-    /// //   ]
-    /// // ]
-    ///
-    /// // Pure OR without prior conditions
-    /// let statusQuery = query {
-    ///     orElse [
-    ///         Query.field "status" (Query.eq "pending")
-    ///         Query.field "status" (Query.eq "processing")
-    ///     ]
-    /// }
-    /// // Result: Query.Or [field "status" (eq "pending"); field "status" (eq "processing")]
-    /// </code>
-    /// </example>
-    [<CustomOperation("orElse")>]
-    member _.OrElse(state: Query<'T>, queries: list<Query<'T>>) : Query<'T> =
-        match state with
-        | Query.Empty -> Query.Or queries
-        | other -> Query.And [other; Query.Or queries]
-
-    /// <summary>
-    /// Add a NOR branch to the query (negated OR).
-    /// Combines multiple queries with NOR logic, matching documents that satisfy none of them.
-    /// </summary>
-    /// <param name="state">The current query state.</param>
-    /// <param name="queries">The list of queries to combine with NOR logic.</param>
-    /// <returns>A new query with the NOR branch added.</returns>
-    /// <remarks>
-    /// The 'norElse' operation creates a NOR branch that matches documents satisfying
-    /// NONE of the provided queries. This is useful for exclusion patterns.
-    ///
-    /// <para>If the current state is not empty, the NOR branch is combined with the
-    /// existing state using AND logic.</para>
-    ///
-    /// <para>NOR is the logical opposite of OR: Query.Nor [a; b; c] matches when
-    /// neither a, nor b, nor c match.</para>
-    /// </remarks>
-    /// <example>
-    /// <code>
-    /// // Exclude specific categories
-    /// let productQuery = query {
-    ///     field "inStock" (Query.eq true)
-    ///     norElse [
-    ///         Query.field "category" (Query.eq "Discontinued")
-    ///         Query.field "category" (Query.eq "Clearance")
-    ///     ]
-    /// }
-    /// // Result: Query.And [
-    /// //   field "inStock" (eq true);
-    /// //   Query.Nor [field "category" (eq "Discontinued"); field "category" (eq "Clearance")]
-    /// // ]
-    /// // Matches: inStock=true AND category is neither "Discontinued" nor "Clearance"
-    ///
-    /// // Exclude multiple conditions
-    /// let userQuery = query {
-    ///     norElse [
-    ///         Query.field "role" (Query.eq "banned")
-    ///         Query.field "status" (Query.eq "deleted")
-    ///         Query.field "active" (Query.eq false)
-    ///     ]
-    /// }
-    /// // Result: Query.Nor [field "role" (eq "banned"); field "status" (eq "deleted"); field "active" (eq false)]
-    /// </code>
-    /// </example>
-    [<CustomOperation("norElse")>]
-    member _.NorElse(state: Query<'T>, queries: list<Query<'T>>) : Query<'T> =
-        match state with
-        | Query.Empty -> Query.Nor queries
-        | other -> Query.And [other; Query.Nor queries]
-
-    /// <summary>
-    /// Negate a query condition (logical NOT).
-    /// Wraps the provided query in a NOT operation.
-    /// </summary>
-    /// <param name="state">The current query state.</param>
-    /// <param name="query">The query to negate.</param>
-    /// <returns>A new query with the negated condition added.</returns>
-    /// <remarks>
-    /// The 'not'' operation negates the provided query, matching documents that do NOT
-    /// satisfy the condition. The negated query is added to the current state using
-    /// AND logic if the state is not empty.
-    ///
-    /// <para>Use NOT for negating single conditions. For negating multiple conditions,
-    /// consider using 'norElse' instead.</para>
-    ///
-    /// <para>Note: The operation is named 'not'' (with apostrophe) to avoid conflicts
-    /// with F#'s built-in 'not' function.</para>
-    /// </remarks>
-    /// <example>
-    /// <code>
-    /// // Negate a condition
-    /// let activeUsers = query {
-    ///     field "role" (Query.eq "user")
-    ///     not' (Query.field "status" (Query.eq "banned"))
-    /// }
-    /// // Result: Query.And [Query.Not (field "status" (eq "banned")); field "role" (eq "user")]
-    /// // Matches: role="user" AND NOT (status="banned")
-    ///
-    /// // Complex negation
-    /// let availableProducts = query {
-    ///     field "category" (Query.eq "Electronics")
-    ///     not' (Query.all' [
-    ///         Query.field "discontinued" (Query.eq true)
-    ///         Query.field "outOfStock" (Query.eq true)
-    ///     ])
-    /// }
-    /// // Result: Matches electronics that are NOT (discontinued AND outOfStock)
-    ///
-    /// // Pure negation without prior conditions
-    /// let notBanned = query {
-    ///     not' (Query.field "status" (Query.eq "banned"))
-    /// }
-    /// // Result: Query.Not (field "status" (eq "banned"))
-    /// </code>
-    /// </example>
-    [<CustomOperation("not'")>]
-    member _.Not(state: Query<'T>, query: Query<'T>) : Query<'T> =
-        let negated = Query.Not query
-        match state with
-        | Query.Empty -> negated
-        | Query.And queries -> Query.And (negated :: queries)
-        | other -> Query.And [negated; other]
-
-    /// <summary>
-    /// Combine two queries into a single query using AND logic.
-    /// Handles various combinations of Query types efficiently.
-    /// </summary>
-    /// <param name="a">The first query to combine.</param>
-    /// <param name="b">The second query to combine.</param>
-    /// <returns>A combined query using AND logic.</returns>
-    /// <remarks>
-    /// This member is used by the computation expression framework to combine multiple
-    /// query expressions. It intelligently merges queries based on their types:
-    /// <list type="bullet">
-    /// <item>If either query is Empty, returns the other query</item>
-    /// <item>If both are AND queries, concatenates their condition lists</item>
-    /// <item>If one is an AND query, adds the other to its list</item>
-    /// <item>Otherwise, creates a new AND query with both conditions</item>
-    /// </list>
-    ///
-    /// <para>This ensures optimal query structure without unnecessary nesting.</para>
-    /// </remarks>
-    /// <example>
-    /// <code>
-    /// // The computation expression automatically uses Combine
-    /// let combinedQuery = query {
-    ///     field "age" (Query.gte 18)  // First expression
-    ///     field "status" (Query.eq "active")  // Combined with first using Combine
-    /// }
-    ///
-    /// // Manual combination (rarely needed)
-    /// let q1 = Query.field "age" (Query.gte 18)
-    /// let q2 = Query.field "status" (Query.eq "active")
-    /// let builder = QueryBuilder()
-    /// let combined = builder.Combine(q1, q2)
-    /// // Result: Query.And [field "status" (eq "active"); field "age" (gte 18)]
-    /// </code>
-    /// </example>
-    member _.Combine(a: Query<'T>, b: Query<'T>) : Query<'T> =
-        match a, b with
-        | Query.Empty, x | x, Query.Empty -> x
-        | Query.And xs, Query.And ys -> Query.And (xs @ ys)
-        | Query.And xs, y -> Query.And (y :: xs)
-        | x, Query.And ys -> Query.And (x :: ys)
-        | x, y -> Query.And [x; y]
 
 /// <summary>
 /// Computation expression builder for constructing type-safe schema definitions.
@@ -431,12 +57,28 @@ type SchemaBuilder<'T>() =
     /// </summary>
     /// <param name="x">The unit value (ignored).</param>
     /// <returns>An empty schema definition with no fields, indexes, or validation.</returns>
-    member _.Yield(_) = {
-        Fields = []
-        Indexes = []
-        Timestamps = false
-        Validate = None
-    }
+    member _.Yield(_) =
+        { Fields = []
+          Indexes = []
+          Timestamps = false
+          Validate = None }
+
+    /// <summary>
+    /// Zero operation for computation expression (returns empty schema definition).
+    /// </summary>
+    /// <returns>An empty schema definition with no fields, indexes, or validation.</returns>
+    member _.Zero() =
+        { Fields = []
+          Indexes = []
+          Timestamps = false
+          Validate = None }
+
+    /// <summary>
+    /// Delay operation for computation expression (defers evaluation).
+    /// </summary>
+    /// <param name="f">The delayed computation function.</param>
+    /// <returns>The result of invoking the delayed computation.</returns>
+    member _.Delay(f) = f ()
 
     /// <summary>
     /// Define a field in the schema.
@@ -484,17 +126,26 @@ type SchemaBuilder<'T>() =
     /// </code>
     /// </example>
     [<CustomOperation("field")>]
-    member _.Field(state: SchemaDef<'T>, name: string, sqlType: SqliteType,
-                   ?indexed: bool, ?unique: bool, ?nullable: bool, ?path: string) =
-        let field = {
-            Name = name
-            Path = path
-            SqlType = sqlType
-            Indexed = defaultArg indexed false
-            Unique = defaultArg unique false
-            Nullable = defaultArg nullable false
-        }
-        { state with Fields = field :: state.Fields }
+    member _.Field
+        (
+            state: SchemaDef<'T>,
+            name: string,
+            sqlType: SqliteType,
+            ?indexed: bool,
+            ?unique: bool,
+            ?nullable: bool,
+            ?path: string
+        ) =
+        let field =
+            { Name = name
+              Path = path
+              SqlType = sqlType
+              Indexed = defaultArg indexed false
+              Unique = defaultArg unique false
+              Nullable = defaultArg nullable false }
+
+        { state with
+            Fields = state.Fields @ [ field ] }
 
     /// <summary>
     /// Define an indexed field (shorthand for field with indexed=true).
@@ -528,17 +179,19 @@ type SchemaBuilder<'T>() =
     /// </code>
     /// </example>
     [<CustomOperation("indexed")>]
-    member _.Indexed(state: SchemaDef<'T>, name: string, sqlType: SqliteType,
-                     ?unique: bool, ?nullable: bool, ?path: string) =
-        let field = {
-            Name = name
-            Path = path
-            SqlType = sqlType
-            Indexed = true
-            Unique = defaultArg unique false
-            Nullable = defaultArg nullable false
-        }
-        { state with Fields = field :: state.Fields }
+    member _.Indexed
+        (state: SchemaDef<'T>, name: string, sqlType: SqliteType, ?unique: bool, ?nullable: bool, ?path: string)
+        =
+        let field =
+            { Name = name
+              Path = path
+              SqlType = sqlType
+              Indexed = true
+              Unique = defaultArg unique false
+              Nullable = defaultArg nullable false }
+
+        { state with
+            Fields = state.Fields @ [ field ] }
 
     /// <summary>
     /// Define a unique indexed field (shorthand for field with indexed=true, unique=true).
@@ -575,17 +228,17 @@ type SchemaBuilder<'T>() =
     /// </code>
     /// </example>
     [<CustomOperation("unique")>]
-    member _.Unique(state: SchemaDef<'T>, name: string, sqlType: SqliteType,
-                    ?nullable: bool, ?path: string) =
-        let field = {
-            Name = name
-            Path = path
-            SqlType = sqlType
-            Indexed = true
-            Unique = true
-            Nullable = defaultArg nullable false
-        }
-        { state with Fields = field :: state.Fields }
+    member _.Unique(state: SchemaDef<'T>, name: string, sqlType: SqliteType, ?nullable: bool, ?path: string) =
+        let field =
+            { Name = name
+              Path = path
+              SqlType = sqlType
+              Indexed = true
+              Unique = true
+              Nullable = defaultArg nullable false }
+
+        { state with
+            Fields = state.Fields @ [ field ] }
 
     /// <summary>
     /// Enable automatic timestamp management for the schema.
@@ -620,8 +273,7 @@ type SchemaBuilder<'T>() =
     /// </code>
     /// </example>
     [<CustomOperation("timestamps")>]
-    member _.Timestamps(state: SchemaDef<'T>) =
-        { state with Timestamps = true }
+    member _.Timestamps(state: SchemaDef<'T>) = { state with Timestamps = true }
 
     /// <summary>
     /// Define a compound index spanning multiple fields.
@@ -666,14 +318,14 @@ type SchemaBuilder<'T>() =
     /// </code>
     /// </example>
     [<CustomOperation("compoundIndex")>]
-    member _.CompoundIndex(state: SchemaDef<'T>, name: string,
-                           fields: list<string>, ?unique: bool) =
-        let index = {
-            Name = name
-            Fields = fields
-            Unique = defaultArg unique false
-        }
-        { state with Indexes = index :: state.Indexes }
+    member _.CompoundIndex(state: SchemaDef<'T>, name: string, fields: list<string>, ?unique: bool) =
+        let index =
+            { Name = name
+              Fields = fields
+              Unique = defaultArg unique false }
+
+        { state with
+            Indexes = state.Indexes @ [ index ] }
 
     /// <summary>
     /// Add a validation function to the schema.
@@ -1189,8 +841,7 @@ type TransactionBuilder(db: FractalDb) =
     /// If the task result is Ok, the continuation is applied. If Error, the error
     /// is propagated without executing the continuation (short-circuit evaluation).
     /// </remarks>
-    member _.Bind(taskValue: Task<FractalResult<'T>>,
-                  f: 'T -> Task<FractalResult<'U>>) : Task<FractalResult<'U>> =
+    member _.Bind(taskValue: Task<FractalResult<'T>>, f: 'T -> Task<FractalResult<'U>>) : Task<FractalResult<'U>> =
         task {
             match! taskValue with
             | Ok value -> return! f value
@@ -1208,8 +859,7 @@ type TransactionBuilder(db: FractalDb) =
     /// This overload handles synchronous Result values within the transaction.
     /// Useful for mixing sync validation logic with async database operations.
     /// </remarks>
-    member _.Bind(result: FractalResult<'T>,
-                  f: 'T -> Task<FractalResult<'U>>) : Task<FractalResult<'U>> =
+    member _.Bind(result: FractalResult<'T>, f: 'T -> Task<FractalResult<'U>>) : Task<FractalResult<'U>> =
         task {
             match result with
             | Ok value -> return! f value
@@ -1224,8 +874,7 @@ type TransactionBuilder(db: FractalDb) =
     /// <remarks>
     /// Use 'return' in computation expressions to wrap values in the Result context.
     /// </remarks>
-    member _.Return(value: 'T) : Task<FractalResult<'T>> =
-        Task.FromResult(Ok value)
+    member _.Return(value: 'T) : Task<FractalResult<'T>> = Task.FromResult(Ok value)
 
     /// <summary>
     /// ReturnFrom operation for returning an existing Task&lt;FractalResult&lt;'T&gt;&gt;.
@@ -1235,8 +884,7 @@ type TransactionBuilder(db: FractalDb) =
     /// <remarks>
     /// Use 'return!' in computation expressions to return an existing task result.
     /// </remarks>
-    member _.ReturnFrom(taskValue: Task<FractalResult<'T>>) : Task<FractalResult<'T>> =
-        taskValue
+    member _.ReturnFrom(taskValue: Task<FractalResult<'T>>) : Task<FractalResult<'T>> = taskValue
 
     /// <summary>
     /// Zero operation returning an empty success result.
@@ -1245,8 +893,7 @@ type TransactionBuilder(db: FractalDb) =
     /// <remarks>
     /// Used by the computation expression framework for empty branches.
     /// </remarks>
-    member _.Zero() : Task<FractalResult<unit>> =
-        Task.FromResult(Ok ())
+    member _.Zero() : Task<FractalResult<unit>> = Task.FromResult(Ok())
 
     /// <summary>
     /// Delay operation deferring computation execution.
@@ -1272,8 +919,7 @@ type TransactionBuilder(db: FractalDb) =
     /// <para>Commit happens when the computation returns Ok.</para>
     /// <para>Rollback happens when the computation returns Error or throws an exception.</para>
     /// </remarks>
-    member _.Run(f: unit -> Task<FractalResult<'T>>) : Task<FractalResult<'T>> =
-        db.ExecuteTransaction(fun _tx -> f())
+    member _.Run(f: unit -> Task<FractalResult<'T>>) : Task<FractalResult<'T>> = db.ExecuteTransaction(fun _tx -> f ())
 
     /// <summary>
     /// TryWith operation for exception handling within transactions.
@@ -1285,14 +931,14 @@ type TransactionBuilder(db: FractalDb) =
     /// Enables try/with blocks in transaction computation expressions.
     /// The handler can convert exceptions to Error results or re-throw.
     /// </remarks>
-    member _.TryWith(computation: unit -> Task<FractalResult<'T>>,
-                     handler: exn -> Task<FractalResult<'T>>) =
-        fun () -> task {
-            try
-                return! computation()
-            with ex ->
-                return! handler ex
-        }
+    member _.TryWith(computation: unit -> Task<FractalResult<'T>>, handler: exn -> Task<FractalResult<'T>>) =
+        fun () ->
+            task {
+                try
+                    return! computation ()
+                with ex ->
+                    return! handler ex
+            }
 
     /// <summary>
     /// TryFinally operation for cleanup within transactions.
@@ -1304,14 +950,14 @@ type TransactionBuilder(db: FractalDb) =
     /// Enables try/finally blocks in transaction computation expressions.
     /// The compensation function always executes, even if the computation fails.
     /// </remarks>
-    member _.TryFinally(computation: unit -> Task<FractalResult<'T>>,
-                        compensation: unit -> unit) =
-        fun () -> task {
-            try
-                return! computation()
-            finally
-                compensation()
-        }
+    member _.TryFinally(computation: unit -> Task<FractalResult<'T>>, compensation: unit -> unit) =
+        fun () ->
+            task {
+                try
+                    return! computation ()
+                finally
+                    compensation ()
+            }
 
 /// <summary>
 /// Extension methods for FractalDb to provide builder instances.
@@ -1358,37 +1004,3 @@ type FractalDb with
     /// </code>
     /// </example>
     member this.Transact = TransactionBuilder(this)
-
-[<AutoOpen>]
-module QueryBuilderInstance =
-    /// <summary>
-    /// Global QueryBuilder instance for computation expressions.
-    /// Use this in 'query { }' computation expressions to build type-safe queries.
-    /// </summary>
-    /// <remarks>
-    /// This is a singleton instance that can be safely used across your entire application.
-    /// The QueryBuilder type is stateless and thread-safe, so sharing this instance
-    /// has no performance or correctness implications.
-    /// </remarks>
-    /// <example>
-    /// <code>
-    /// // Simple query with AND conditions
-    /// let userQuery = query {
-    ///     field "age" (Query.gte 18)
-    ///     field "status" (Query.eq "active")
-    ///     field "role" (Query.eq "user")
-    /// }
-    ///
-    /// // Use in collection operations
-    /// let! users = collection |&gt; Collection.find userQuery QueryOptions.empty
-    ///
-    /// // Complex field operations
-    /// let productQuery = query {
-    ///     where "category" (Query.eq "Electronics")
-    ///     where "price" (Query.gte 100)
-    ///     where "price" (Query.lt 1000)
-    ///     where "inStock" (Query.eq true)
-    /// }
-    /// </code>
-    /// </example>
-    let query = QueryBuilder()

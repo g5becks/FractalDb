@@ -8,7 +8,7 @@ open FractalDb.Types
 open FractalDb.Schema
 open FractalDb.Database
 open FractalDb.Collection
-open FractalDb.Query
+open FractalDb.Operators
 open FractalDb.Operators
 
 /// <summary>
