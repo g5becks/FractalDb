@@ -10,9 +10,9 @@
         <Compile Include="Errors.fs"/>
         <Compile Include="Operators.fs"/>
         <Compile Include="Query.fs"/>
-        <Compile Include="QueryExpr.fs"/>
         <Compile Include="Schema.fs"/>
         <Compile Include="Options.fs"/>
+        <Compile Include="QueryExpr.fs"/>
         <Compile Include="Serialization.fs"/>
         <Compile Include="SqlTranslator.fs"/>
         <Compile Include="TableBuilder.fs"/>
