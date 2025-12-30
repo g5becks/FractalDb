@@ -176,7 +176,7 @@ type InsertManyResult<'T> =
 /// let! result =
 ///     users
 ///     |> Collection.updateMany
-///         (Query.field "status" (Query.eq "pending"))
+///         (Query.Field("status", FieldOp.Compare (box (CompareOp.Eq "pending"))))
 ///         (fun user -> { user with Status = "active" })
 ///
 /// match result with
@@ -220,7 +220,7 @@ type UpdateResult =
 /// let! result =
 ///     users
 ///     |> Collection.deleteMany
-///         (Query.field "lastLogin" (Query.lt oldDate))
+///         (Query.Field("lastLogin", FieldOp.Compare (box (CompareOp.Lt oldDate))))
 ///
 /// printfn $"Deleted {result.DeletedCount} inactive users"
 /// </code>
@@ -261,7 +261,7 @@ type DeleteResult =
 /// let! maybeDoc =
 ///     users
 ///     |> Collection.findOneAndUpdate
-///         (Query.field "email" (Query.eq "alice@example.com"))
+///         (Query.Field("email", FieldOp.Compare (box (CompareOp.Eq "alice@example.com"))))
 ///         (fun user -> { user with Age = user.Age + 1 })
 ///         options
 ///
@@ -309,7 +309,7 @@ type ReturnDocument =
 /// let! users =
 ///     users
 ///     |> Collection.findWith
-///         (Query.field "active" (Query.eq true))
+///         (Query.Field("active", FieldOp.Compare (box (CompareOp.Eq true))))
 ///         (QueryOptions.sort [("age", SortDirection.Desc)])
 /// </code>
 /// </example>
@@ -357,7 +357,7 @@ type FindOptions =
 /// let! result =
 ///     tasks
 ///     |> Collection.findOneAndUpdate
-///         (Query.field "status" (Query.eq "pending"))
+///         (Query.Field("status", FieldOp.Compare (box (CompareOp.Eq "pending"))))
 ///         (fun task -> { task with Status = "processing" })
 ///         options
 /// </code>
@@ -541,7 +541,7 @@ module Collection =
     /// // Find first active user
     /// let! maybeUser =
     ///     users
-    ///     |> Collection.findOne (Query.field "active" (Query.eq true))
+    ///     |> Collection.findOne (Query.Field("active", FieldOp.Compare (box (CompareOp.Eq true))))
     ///
     /// match maybeUser with
     /// | Some doc -> printfn $"Found: {doc.Data.Name}"
@@ -602,7 +602,7 @@ module Collection =
     /// let! maybeUser =
     ///     users
     ///     |> Collection.findOneWith
-    ///         (Query.field "active" (Query.eq true))
+    ///         (Query.Field("active", FieldOp.Compare (box (CompareOp.Eq true))))
     ///         (QueryOptions.sort [("createdAt", SortDirection.Desc)])
     /// </code>
     /// </example>
@@ -670,7 +670,7 @@ module Collection =
     /// // Find all active users
     /// let! activeUsers =
     ///     users
-    ///     |> Collection.find (Query.field "active" (Query.eq true))
+    ///     |> Collection.find (Query.Field("active", FieldOp.Compare (box (CompareOp.Eq true))))
     ///
     /// for doc in activeUsers do
     ///     printfn $"{doc.Data.Name} - {doc.Data.Email}"
@@ -735,7 +735,7 @@ module Collection =
     /// let! users =
     ///     users
     ///     |> Collection.findWith
-    ///         (Query.field "active" (Query.eq true))
+    ///         (Query.Field("active", FieldOp.Compare (box (CompareOp.Eq true))))
     ///         (QueryOptions.create()
     ///             |> QueryOptions.sort [("name", SortDirection.Asc)]
     ///             |> QueryOptions.limit 20
@@ -810,13 +810,13 @@ module Collection =
     /// // Count active users
     /// let! activeCount =
     ///     users
-    ///     |> Collection.count (Query.field "status" (Query.eq "active"))
+    ///     |> Collection.count (Query.Field("status", FieldOp.Compare (box (CompareOp.Eq "active"))))
     /// printfn $"Active users: {activeCount}"
     ///
     /// // Count users older than 18
     /// let! adultCount =
     ///     users
-    ///     |> Collection.count (Query.field "age" (Query.gte 18))
+    ///     |> Collection.count (Query.Field("age", FieldOp.Compare (box (CompareOp.Gte 18))))
     /// printfn $"Adults: {adultCount}"
     ///
     /// // Count all documents
@@ -1144,7 +1144,7 @@ module Collection =
     /// // Get distinct cities for active users
     /// let! result =
     ///     users
-    ///     |> Collection.distinct "address.city" (Query.field "active" (Query.eq true))
+    ///     |> Collection.distinct "address.city" (Query.Field("active", FieldOp.Compare (box (CompareOp.Eq true))))
     /// match result with
     /// | Ok cities ->
     ///     printfn $"Found {cities.Length} unique cities"
@@ -1163,7 +1163,11 @@ module Collection =
     ///     printfn $"Error: {err}"
     /// </code>
     /// </example>
-    let distinct<'T, 'V> (field: string) (filter: Query<'T>) (collection: Collection<'T>) : Task<FractalResult<list<'V>>> =
+    let distinct<'T, 'V>
+        (field: string)
+        (filter: Query<'T>)
+        (collection: Collection<'T>)
+        : Task<FractalResult<list<'V>>> =
         tryDbOperationAsync (fun () ->
             task {
                 let translated = collection.Translator.Translate(filter)
@@ -1196,8 +1200,8 @@ module Collection =
                         else
                             try
                                 Some(deserialize<'V> jsonValue)
-                            with
-                            | _ -> None)
+                            with _ ->
+                                None)
 
                 return values
             })
@@ -1663,7 +1667,7 @@ module Collection =
     /// let! result =
     ///     users
     ///     |> Collection.updateOne
-    ///         (Query.field "status" (Query.eq "active"))
+    ///         (Query.Field("status", FieldOp.Compare (box (CompareOp.Eq "active"))))
     ///         (fun user -> { user with LastSeen = DateTime.UtcNow })
     ///
     /// match result with
@@ -1735,7 +1739,7 @@ module Collection =
     /// let! result =
     ///     profiles
     ///     |> Collection.updateOneWith
-    ///         (Query.field "userId" (Query.eq "user123"))
+    ///         (Query.Field("userId", FieldOp.Compare (box (CompareOp.Eq "user123"))))
     ///         (fun profile -> { profile with LastLogin = DateTime.UtcNow })
     ///         true  // upsert=true
     ///
@@ -1752,7 +1756,7 @@ module Collection =
     /// let! result2 =
     ///     users
     ///     |> Collection.updateOneWith
-    ///         (Query.field "email" (Query.eq "test@example.com"))
+    ///         (Query.Field("email", FieldOp.Compare (box (CompareOp.Eq "test@example.com"))))
     ///         (fun u -> { u with Active = false })
     ///         false  // upsert=false
     /// </code>
@@ -1847,7 +1851,7 @@ module Collection =
     /// let! result =
     ///     users
     ///     |> Collection.replaceOne
-    ///         (Query.field "email" (Query.eq "alice@example.com"))
+    ///         (Query.Field("email", FieldOp.Compare (box (CompareOp.Eq "alice@example.com"))))
     ///         newUserData
     ///
     /// match result with
@@ -1865,7 +1869,7 @@ module Collection =
     /// let! result2 =
     ///     products
     ///     |> Collection.replaceOne
-    ///         (Query.field "_id" (Query.eq "prod123"))
+    ///         (Query.Field("_id", FieldOp.Compare (box (CompareOp.Eq "prod123"))))
     ///         { Name = "New Product"; Price = 99.99 }
     /// </code>
     /// </example>
@@ -1978,7 +1982,7 @@ module Collection =
     /// let! result =
     ///     users
     ///     |> Collection.updateMany
-    ///         (Query.field "lastSeen" (Query.lt (DateTime.UtcNow.AddDays(-90))))
+    ///         (Query.Field("lastSeen", FieldOp.Compare (box (CompareOp.Lt (DateTime.UtcNow.AddDays(-90))))))
     ///         (fun user -> { user with Active = false })
     ///
     /// match result with
@@ -1992,14 +1996,14 @@ module Collection =
     /// let! result2 =
     ///     products
     ///     |> Collection.updateMany
-    ///         (Query.field "category" (Query.eq "electronics"))
+    ///         (Query.Field("category", FieldOp.Compare (box (CompareOp.Eq "electronics"))))
     ///         (fun p -> { p with Price = p.Price * 0.9; OnSale = true })
     ///
     /// // Increment view count for all featured items
     /// let! result3 =
     ///     items
     ///     |> Collection.updateMany
-    ///         (Query.field "featured" (Query.eq true))
+    ///         (Query.Field("featured", FieldOp.Compare (box (CompareOp.Eq true))))
     ///         (fun item -> { item with Views = item.Views + 1 })
     /// </code>
     /// </example>
@@ -2177,7 +2181,7 @@ module Collection =
     /// let! deleted =
     ///     users
     ///     |> Collection.deleteOne
-    ///         (Query.field "active" (Query.eq false))
+    ///         (Query.Field("active", FieldOp.Compare (box (CompareOp.Eq false))))
     ///
     /// printfn $"Deleted: {deleted}"
     ///
@@ -2191,7 +2195,7 @@ module Collection =
     /// let! deleted3 =
     ///     users
     ///     |> Collection.deleteOne
-    ///         (Query.field "email" (Query.eq "old@example.com"))
+    ///         (Query.Field("email", FieldOp.Compare (box (CompareOp.Eq "old@example.com"))))
     /// </code>
     /// </example>
     let deleteOne (filter: Query<'T>) (collection: Collection<'T>) : Task<bool> =
@@ -2246,7 +2250,7 @@ module Collection =
     /// let! result =
     ///     users
     ///     |> Collection.deleteMany
-    ///         (Query.field "active" (Query.eq false))
+    ///         (Query.Field("active", FieldOp.Compare (box (CompareOp.Eq false))))
     ///
     /// printfn $"Deleted {result.DeletedCount} inactive users"
     ///
@@ -2255,7 +2259,7 @@ module Collection =
     /// let! result2 =
     ///     logs
     ///     |> Collection.deleteMany
-    ///         (Query.field "timestamp" (Query.lt cutoffDate))
+    ///         (Query.Field("timestamp", FieldOp.Compare (box (CompareOp.Lt cutoffDate))))
     ///
     /// printfn $"Deleted {result2.DeletedCount} old logs"
     ///
@@ -2353,7 +2357,7 @@ module Collection =
     /// let! work =
     ///     workQueue
     ///     |> Collection.findOneAndDelete
-    ///         (Query.field "status" (Query.eq "pending"))
+    ///         (Query.Field("status", FieldOp.Compare (box (CompareOp.Eq "pending"))))
     ///
     /// match work with
     /// | Some doc -&gt;
@@ -2366,7 +2370,7 @@ module Collection =
     /// let! resource =
     ///     pool
     ///     |> Collection.findOneAndDelete
-    ///         (Query.field "available" (Query.eq true))
+    ///         (Query.Field("available", FieldOp.Compare (box (CompareOp.Eq true))))
     ///
     /// match resource with
     /// | Some doc -&gt;
@@ -2446,7 +2450,7 @@ module Collection =
     /// let! work =
     ///     workQueue
     ///     |> Collection.findOneAndDeleteWith
-    ///         (Query.field "status" (Query.eq "pending"))
+    ///         (Query.Field("status", FieldOp.Compare (box (CompareOp.Eq "pending"))))
     ///         options
     ///
     /// match work with
@@ -2464,7 +2468,7 @@ module Collection =
     /// let! task =
     ///     tasks
     ///     |> Collection.findOneAndDeleteWith
-    ///         (Query.field "status" (Query.eq "ready"))
+    ///         (Query.Field("status", FieldOp.Compare (box (CompareOp.Eq "ready"))))
     ///         priorityOptions
     /// </code>
     /// </example>
@@ -2577,7 +2581,7 @@ module Collection =
     /// let! result =
     ///     workQueue
     ///     |> Collection.findOneAndUpdate
-    ///         (Query.field "status" (Query.eq "pending"))
+    ///         (Query.Field("status", FieldOp.Compare (box (CompareOp.Eq "pending"))))
     ///         (fun work -&gt; { work with Status = "processing"; WorkerId = currentWorkerId })
     ///         options
     ///
@@ -2600,7 +2604,7 @@ module Collection =
     /// let! counterResult =
     ///     counters
     ///     |> Collection.findOneAndUpdate
-    ///         (Query.field "name" (Query.eq "page_views"))
+    ///         (Query.Field("name", FieldOp.Compare (box (CompareOp.Eq "page_views"))))
     ///         (fun counter -&gt; { counter with Count = counter.Count + 1 })
     ///         counterOptions
     ///
@@ -2615,8 +2619,8 @@ module Collection =
     ///     documents
     ///     |> Collection.findOneAndUpdate
     ///         (Query.all [
-    ///             Query.field "id" (Query.eq docId)
-    ///             Query.field "version" (Query.eq expectedVersion)
+    ///             Query.Field("id", FieldOp.Compare (box (CompareOp.Eq docId)))
+    ///             Query.Field("version", FieldOp.Compare (box (CompareOp.Eq expectedVersion)))
     ///         ])
     ///         (fun doc -&gt; { doc with Version = doc.Version + 1; Data = newData })
     ///         lockOptions
@@ -2814,7 +2818,7 @@ module Collection =
     /// let! result =
     ///     users
     ///     |> Collection.findOneAndReplace
-    ///         (Query.field "email" (Query.eq "old@example.com"))
+    ///         (Query.Field("email", FieldOp.Compare (box (CompareOp.Eq "old@example.com"))))
     ///         newProfile
     ///         options
     ///
@@ -2839,7 +2843,7 @@ module Collection =
     /// let! configResult =
     ///     settings
     ///     |> Collection.findOneAndReplace
-    ///         (Query.field "name" (Query.eq "api_config"))
+    ///         (Query.Field("name", FieldOp.Compare (box (CompareOp.Eq "api_config"))))
     ///         config
     ///         upsertOptions
     ///
@@ -2863,7 +2867,7 @@ module Collection =
     /// let! versionResult =
     ///     documents
     ///     |> Collection.findOneAndReplace
-    ///         (Query.field "docId" (Query.eq documentId))
+    ///         (Query.Field("docId", FieldOp.Compare (box (CompareOp.Eq documentId))))
     ///         newVersion
     ///         versionOptions
     /// </code>

@@ -873,7 +873,7 @@ type SqlTranslator<'T>(schema: FractalDb.Schema.SchemaDef<'T>, enableCache: bool
     /// let translator = SqlTranslator(schema, false)
     ///
     /// // Simple query
-    /// let query1 = Query.field "name" (Query.eq "Alice")
+    /// let query1 = Query.Field("name", FieldOp.Compare (box (CompareOp.Eq "Alice")))
     /// let result1 = translator.Translate(query1)
     /// // result1.Sql = "_name = @p0" (if indexed)
     /// // result1.Parameters = [("@p0", box "Alice")]
@@ -881,8 +881,8 @@ type SqlTranslator<'T>(schema: FractalDb.Schema.SchemaDef<'T>, enableCache: bool
     /// // Complex query with logical operators
     /// let query2 =
     ///     Query.and' [
-    ///         Query.field "age" (Query.gt 18)
-    ///         Query.field "status" (Query.eq "active")
+    ///         Query.Field("age", FieldOp.Compare (box (CompareOp.Gt 18)))
+    ///         Query.Field("status", FieldOp.Compare (box (CompareOp.Eq "active")))
     ///     ]
     /// let result2 = translator.Translate(query2)
     /// // result2.Sql = "(_age > @p0 AND _status = @p1)"

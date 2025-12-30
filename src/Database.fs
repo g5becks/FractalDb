@@ -656,7 +656,7 @@ type FractalDb private (connection: SqliteConnection, options: DbOptions, ownsCo
     ///
     /// // Load and process data in memory
     /// let! batch = staging |&gt; Collection.insertMany records
-    /// let! processed = staging |&gt; Collection.find (Query.field "status" (Query.eq "valid"))
+    /// let! processed = staging |&gt; Collection.find (Query.Field("status", FieldOp.Compare (box (CompareOp.Eq "valid"))))
     ///
     /// // Custom options for in-memory database
     /// let options = { DbOptions.defaults with EnableCache = true }
