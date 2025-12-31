@@ -19,6 +19,7 @@ module FractalDb.Collection
 
 open System
 open System.Data
+open System.Threading
 open System.Threading.Tasks
 open Donald
 open FSharp.Control
@@ -3272,14 +3273,18 @@ module Collection =
 /// Instance methods for Collection&lt;'T&gt; providing object-oriented API.
 /// </summary>
 /// <remarks>
-/// These methods delegate to the module functions but provide a more
-/// discoverable API through IntelliSense. Both styles are equivalent:
+/// These methods delegate to the Cancellable module functions but provide a more
+/// discoverable API through IntelliSense. All methods accept an optional CancellationToken.
+/// Both styles are equivalent:
 /// <code>
 /// // Module function style (pipeline)
 /// users |> Collection.insertOne doc
 ///
 /// // Instance method style (object-oriented)
 /// users.InsertOne(doc)
+///
+/// // With cancellation token
+/// users.InsertOne(doc, ?ct = Some ct)
 /// </code>
 /// </remarks>
 type Collection<'T> with
@@ -3290,20 +3295,36 @@ type Collection<'T> with
 
     /// <summary>Inserts a document into the collection.</summary>
     /// <param name="doc">The document to insert.</param>
+    /// <param name="ct">Optional cancellation token.</param>
     /// <returns>Task with Result containing the inserted document or error.</returns>
-    member this.InsertOne(doc: 'T) : Task<FractalResult<Document<'T>>> = Collection.insertOne doc this
+    member this.InsertOne(doc: 'T, ?ct: CancellationToken) : Task<FractalResult<Document<'T>>> =
+        task {
+            (defaultArg ct CancellationToken.None).ThrowIfCancellationRequested()
+            return! Collection.insertOne doc this
+        }
 
     /// <summary>Inserts multiple documents into the collection.</summary>
     /// <param name="docs">List of documents to insert.</param>
+    /// <param name="ct">Optional cancellation token.</param>
     /// <returns>Task with Result containing InsertManyResult or error.</returns>
-    member this.InsertMany(docs: list<'T>) : Task<FractalResult<InsertManyResult<'T>>> = Collection.insertMany docs this
+    member this.InsertMany(docs: list<'T>, ?ct: CancellationToken) : Task<FractalResult<InsertManyResult<'T>>> =
+        task {
+            (defaultArg ct CancellationToken.None).ThrowIfCancellationRequested()
+            return! Collection.insertMany docs this
+        }
 
     /// <summary>Inserts multiple documents with ordering control.</summary>
     /// <param name="docs">List of documents to insert.</param>
     /// <param name="ordered">If true, stops on first error; if false, continues.</param>
+    /// <param name="ct">Optional cancellation token.</param>
     /// <returns>Task with Result containing InsertManyResult or error.</returns>
-    member this.InsertMany(docs: list<'T>, ordered: bool) : Task<FractalResult<InsertManyResult<'T>>> =
-        Collection.insertManyWith docs ordered this
+    member this.InsertMany
+        (docs: list<'T>, ordered: bool, ?ct: CancellationToken)
+        : Task<FractalResult<InsertManyResult<'T>>> =
+        task {
+            (defaultArg ct CancellationToken.None).ThrowIfCancellationRequested()
+            return! Collection.insertManyWith docs ordered this
+        }
 
     // ============================================================
     // FIND OPERATIONS
@@ -3311,41 +3332,76 @@ type Collection<'T> with
 
     /// <summary>Finds a document by its ID.</summary>
     /// <param name="id">The document ID.</param>
+    /// <param name="ct">Optional cancellation token.</param>
     /// <returns>Task with Some document if found, None otherwise.</returns>
-    member this.FindById(id: string) : Task<option<Document<'T>>> = Collection.findById id this
+    member this.FindById(id: string, ?ct: CancellationToken) : Task<option<Document<'T>>> =
+        task {
+            (defaultArg ct CancellationToken.None).ThrowIfCancellationRequested()
+            return! Collection.findById id this
+        }
 
     /// <summary>Finds the first document matching the filter.</summary>
     /// <param name="filter">Query filter.</param>
+    /// <param name="ct">Optional cancellation token.</param>
     /// <returns>Task with Some document if found, None otherwise.</returns>
-    member this.FindOne(filter: Query<'T>) : Task<option<Document<'T>>> = Collection.findOne filter this
+    member this.FindOne(filter: Query<'T>, ?ct: CancellationToken) : Task<option<Document<'T>>> =
+        task {
+            (defaultArg ct CancellationToken.None).ThrowIfCancellationRequested()
+            return! Collection.findOne filter this
+        }
 
     /// <summary>Finds the first document matching the filter with options.</summary>
     /// <param name="filter">Query filter.</param>
     /// <param name="options">Query options (sort, limit, etc.).</param>
+    /// <param name="ct">Optional cancellation token.</param>
     /// <returns>Task with Some document if found, None otherwise.</returns>
-    member this.FindOne(filter: Query<'T>, options: QueryOptions<'T>) : Task<option<Document<'T>>> =
-        Collection.findOneWith filter options this
+    member this.FindOne
+        (filter: Query<'T>, options: QueryOptions<'T>, ?ct: CancellationToken)
+        : Task<option<Document<'T>>> =
+        task {
+            (defaultArg ct CancellationToken.None).ThrowIfCancellationRequested()
+            return! Collection.findOneWith filter options this
+        }
 
     /// <summary>Finds all documents matching the filter.</summary>
     /// <param name="filter">Query filter.</param>
+    /// <param name="ct">Optional cancellation token.</param>
     /// <returns>Task with list of matching documents.</returns>
-    member this.Find(filter: Query<'T>) : Task<list<Document<'T>>> = Collection.find filter this
+    member this.Find(filter: Query<'T>, ?ct: CancellationToken) : Task<list<Document<'T>>> =
+        task {
+            (defaultArg ct CancellationToken.None).ThrowIfCancellationRequested()
+            return! Collection.find filter this
+        }
 
     /// <summary>Finds all documents matching the filter with options.</summary>
     /// <param name="filter">Query filter.</param>
     /// <param name="options">Query options (sort, limit, etc.).</param>
+    /// <param name="ct">Optional cancellation token.</param>
     /// <returns>Task with list of matching documents.</returns>
-    member this.Find(filter: Query<'T>, options: QueryOptions<'T>) : Task<list<Document<'T>>> =
-        Collection.findWith filter options this
+    member this.Find(filter: Query<'T>, options: QueryOptions<'T>, ?ct: CancellationToken) : Task<list<Document<'T>>> =
+        task {
+            (defaultArg ct CancellationToken.None).ThrowIfCancellationRequested()
+            return! Collection.findWith filter options this
+        }
 
     /// <summary>Counts documents matching the filter.</summary>
     /// <param name="filter">Query filter.</param>
+    /// <param name="ct">Optional cancellation token.</param>
     /// <returns>Task with count of matching documents.</returns>
-    member this.Count(filter: Query<'T>) : Task<int> = Collection.count filter this
+    member this.Count(filter: Query<'T>, ?ct: CancellationToken) : Task<int> =
+        task {
+            (defaultArg ct CancellationToken.None).ThrowIfCancellationRequested()
+            return! Collection.count filter this
+        }
 
     /// <summary>Gets estimated total document count (fast, no filter).</summary>
+    /// <param name="ct">Optional cancellation token.</param>
     /// <returns>Task with estimated count.</returns>
-    member this.EstimatedCount() : Task<int> = Collection.estimatedCount this
+    member this.EstimatedCount(?ct: CancellationToken) : Task<int> =
+        task {
+            (defaultArg ct CancellationToken.None).ThrowIfCancellationRequested()
+            return! Collection.estimatedCount this
+        }
 
     // ============================================================
     // SEARCH OPERATIONS
@@ -3354,24 +3410,38 @@ type Collection<'T> with
     /// <summary>Full-text search across specified fields.</summary>
     /// <param name="text">Search text.</param>
     /// <param name="fields">Fields to search in.</param>
+    /// <param name="ct">Optional cancellation token.</param>
     /// <returns>Task with list of matching documents.</returns>
-    member this.Search(text: string, fields: list<string>) : Task<list<Document<'T>>> =
-        Collection.search text fields this
+    member this.Search(text: string, fields: list<string>, ?ct: CancellationToken) : Task<list<Document<'T>>> =
+        task {
+            (defaultArg ct CancellationToken.None).ThrowIfCancellationRequested()
+            return! Collection.search text fields this
+        }
 
     /// <summary>Full-text search with options.</summary>
     /// <param name="text">Search text.</param>
     /// <param name="fields">Fields to search in.</param>
     /// <param name="options">Query options.</param>
+    /// <param name="ct">Optional cancellation token.</param>
     /// <returns>Task with list of matching documents.</returns>
-    member this.Search(text: string, fields: list<string>, options: QueryOptions<'T>) : Task<list<Document<'T>>> =
-        Collection.searchWith text fields options this
+    member this.Search
+        (text: string, fields: list<string>, options: QueryOptions<'T>, ?ct: CancellationToken)
+        : Task<list<Document<'T>>> =
+        task {
+            (defaultArg ct CancellationToken.None).ThrowIfCancellationRequested()
+            return! Collection.searchWith text fields options this
+        }
 
     /// <summary>Gets distinct values for a field.</summary>
     /// <param name="field">Field name.</param>
     /// <param name="filter">Query filter.</param>
+    /// <param name="ct">Optional cancellation token.</param>
     /// <returns>Task with Result containing list of distinct values.</returns>
-    member this.Distinct<'V>(field: string, filter: Query<'T>) : Task<FractalResult<list<'V>>> =
-        Collection.distinct<'T, 'V> field filter this
+    member this.Distinct<'V>(field: string, filter: Query<'T>, ?ct: CancellationToken) : Task<FractalResult<list<'V>>> =
+        task {
+            (defaultArg ct CancellationToken.None).ThrowIfCancellationRequested()
+            return! Collection.distinct<'T, 'V> field filter this
+        }
 
     // ============================================================
     // UPDATE OPERATIONS
@@ -3380,40 +3450,68 @@ type Collection<'T> with
     /// <summary>Updates a document by ID.</summary>
     /// <param name="id">Document ID.</param>
     /// <param name="update">Update function.</param>
+    /// <param name="ct">Optional cancellation token.</param>
     /// <returns>Task with Result containing Some updated document if found, None otherwise.</returns>
-    member this.UpdateById(id: string, update: 'T -> 'T) : Task<FractalResult<option<Document<'T>>>> =
-        Collection.updateById id update this
+    member this.UpdateById
+        (id: string, update: 'T -> 'T, ?ct: CancellationToken)
+        : Task<FractalResult<option<Document<'T>>>> =
+        task {
+            (defaultArg ct CancellationToken.None).ThrowIfCancellationRequested()
+            return! Collection.updateById id update this
+        }
 
     /// <summary>Updates the first document matching the filter.</summary>
     /// <param name="filter">Query filter.</param>
     /// <param name="update">Update function.</param>
+    /// <param name="ct">Optional cancellation token.</param>
     /// <returns>Task with Result containing Some updated document if found, None otherwise.</returns>
-    member this.UpdateOne(filter: Query<'T>, update: 'T -> 'T) : Task<FractalResult<option<Document<'T>>>> =
-        Collection.updateOne filter update this
+    member this.UpdateOne
+        (filter: Query<'T>, update: 'T -> 'T, ?ct: CancellationToken)
+        : Task<FractalResult<option<Document<'T>>>> =
+        task {
+            (defaultArg ct CancellationToken.None).ThrowIfCancellationRequested()
+            return! Collection.updateOne filter update this
+        }
 
     /// <summary>Updates the first document matching the filter with upsert option.</summary>
     /// <param name="filter">Query filter.</param>
     /// <param name="update">Update function.</param>
     /// <param name="upsert">If true, inserts if no match found.</param>
+    /// <param name="ct">Optional cancellation token.</param>
     /// <returns>Task with Result containing Some document if found/created, None otherwise.</returns>
     member this.UpdateOne
-        (filter: Query<'T>, update: 'T -> 'T, upsert: bool)
+        (filter: Query<'T>, update: 'T -> 'T, upsert: bool, ?ct: CancellationToken)
         : Task<FractalResult<option<Document<'T>>>> =
-        Collection.updateOneWith filter update upsert this
+        task {
+            (defaultArg ct CancellationToken.None).ThrowIfCancellationRequested()
+            return! Collection.updateOneWith filter update upsert this
+        }
 
     /// <summary>Replaces the first document matching the filter.</summary>
     /// <param name="filter">Query filter.</param>
     /// <param name="doc">Replacement document.</param>
+    /// <param name="ct">Optional cancellation token.</param>
     /// <returns>Task with Result containing Some replaced document if found, None otherwise.</returns>
-    member this.ReplaceOne(filter: Query<'T>, doc: 'T) : Task<FractalResult<option<Document<'T>>>> =
-        Collection.replaceOne filter doc this
+    member this.ReplaceOne
+        (filter: Query<'T>, doc: 'T, ?ct: CancellationToken)
+        : Task<FractalResult<option<Document<'T>>>> =
+        task {
+            (defaultArg ct CancellationToken.None).ThrowIfCancellationRequested()
+            return! Collection.replaceOne filter doc this
+        }
 
     /// <summary>Updates all documents matching the filter.</summary>
     /// <param name="filter">Query filter.</param>
     /// <param name="update">Update function.</param>
+    /// <param name="ct">Optional cancellation token.</param>
     /// <returns>Task with Result containing UpdateResult with match and modify counts.</returns>
-    member this.UpdateMany(filter: Query<'T>, update: 'T -> 'T) : Task<FractalResult<UpdateResult>> =
-        Collection.updateMany filter update this
+    member this.UpdateMany
+        (filter: Query<'T>, update: 'T -> 'T, ?ct: CancellationToken)
+        : Task<FractalResult<UpdateResult>> =
+        task {
+            (defaultArg ct CancellationToken.None).ThrowIfCancellationRequested()
+            return! Collection.updateMany filter update this
+        }
 
     // ============================================================
     // DELETE OPERATIONS
@@ -3421,18 +3519,33 @@ type Collection<'T> with
 
     /// <summary>Deletes a document by ID.</summary>
     /// <param name="id">Document ID.</param>
+    /// <param name="ct">Optional cancellation token.</param>
     /// <returns>Task with true if deleted, false if not found.</returns>
-    member this.DeleteById(id: string) : Task<bool> = Collection.deleteById id this
+    member this.DeleteById(id: string, ?ct: CancellationToken) : Task<bool> =
+        task {
+            (defaultArg ct CancellationToken.None).ThrowIfCancellationRequested()
+            return! Collection.deleteById id this
+        }
 
     /// <summary>Deletes the first document matching the filter.</summary>
     /// <param name="filter">Query filter.</param>
+    /// <param name="ct">Optional cancellation token.</param>
     /// <returns>Task with true if deleted, false if not found.</returns>
-    member this.DeleteOne(filter: Query<'T>) : Task<bool> = Collection.deleteOne filter this
+    member this.DeleteOne(filter: Query<'T>, ?ct: CancellationToken) : Task<bool> =
+        task {
+            (defaultArg ct CancellationToken.None).ThrowIfCancellationRequested()
+            return! Collection.deleteOne filter this
+        }
 
     /// <summary>Deletes all documents matching the filter.</summary>
     /// <param name="filter">Query filter.</param>
+    /// <param name="ct">Optional cancellation token.</param>
     /// <returns>Task with DeleteResult containing deleted count.</returns>
-    member this.DeleteMany(filter: Query<'T>) : Task<DeleteResult> = Collection.deleteMany filter this
+    member this.DeleteMany(filter: Query<'T>, ?ct: CancellationToken) : Task<DeleteResult> =
+        task {
+            (defaultArg ct CancellationToken.None).ThrowIfCancellationRequested()
+            return! Collection.deleteMany filter this
+        }
 
     // ============================================================
     // ATOMIC FIND-AND-MODIFY OPERATIONS
@@ -3440,44 +3553,67 @@ type Collection<'T> with
 
     /// <summary>Atomically finds and deletes a document.</summary>
     /// <param name="filter">Query filter.</param>
+    /// <param name="ct">Optional cancellation token.</param>
     /// <returns>Task with Some deleted document if found, None otherwise.</returns>
-    member this.FindOneAndDelete(filter: Query<'T>) : Task<option<Document<'T>>> =
-        Collection.findOneAndDelete filter this
+    member this.FindOneAndDelete(filter: Query<'T>, ?ct: CancellationToken) : Task<option<Document<'T>>> =
+        task {
+            (defaultArg ct CancellationToken.None).ThrowIfCancellationRequested()
+            return! Collection.findOneAndDelete filter this
+        }
 
     /// <summary>Atomically finds and deletes a document with options.</summary>
     /// <param name="filter">Query filter.</param>
     /// <param name="options">Find options (sort).</param>
+    /// <param name="ct">Optional cancellation token.</param>
     /// <returns>Task with Some deleted document if found, None otherwise.</returns>
-    member this.FindOneAndDelete(filter: Query<'T>, options: FindOptions) : Task<option<Document<'T>>> =
-        Collection.findOneAndDeleteWith filter options this
+    member this.FindOneAndDelete
+        (filter: Query<'T>, options: FindOptions, ?ct: CancellationToken)
+        : Task<option<Document<'T>>> =
+        task {
+            (defaultArg ct CancellationToken.None).ThrowIfCancellationRequested()
+            return! Collection.findOneAndDeleteWith filter options this
+        }
 
     /// <summary>Atomically finds and updates a document.</summary>
     /// <param name="filter">Query filter.</param>
     /// <param name="update">Update function.</param>
     /// <param name="options">Find and modify options.</param>
+    /// <param name="ct">Optional cancellation token.</param>
     /// <returns>Task with Result containing Some document if found, None otherwise.</returns>
     member this.FindOneAndUpdate
-        (filter: Query<'T>, update: 'T -> 'T, options: FindAndModifyOptions)
+        (filter: Query<'T>, update: 'T -> 'T, options: FindAndModifyOptions, ?ct: CancellationToken)
         : Task<FractalResult<option<Document<'T>>>> =
-        Collection.findOneAndUpdate filter update options this
+        task {
+            (defaultArg ct CancellationToken.None).ThrowIfCancellationRequested()
+            return! Collection.findOneAndUpdate filter update options this
+        }
 
     /// <summary>Atomically finds and replaces a document.</summary>
     /// <param name="filter">Query filter.</param>
     /// <param name="doc">Replacement document.</param>
     /// <param name="options">Find and modify options.</param>
+    /// <param name="ct">Optional cancellation token.</param>
     /// <returns>Task with Result containing Some document if found, None otherwise.</returns>
     member this.FindOneAndReplace
-        (filter: Query<'T>, doc: 'T, options: FindAndModifyOptions)
+        (filter: Query<'T>, doc: 'T, options: FindAndModifyOptions, ?ct: CancellationToken)
         : Task<FractalResult<option<Document<'T>>>> =
-        Collection.findOneAndReplace filter doc options this
+        task {
+            (defaultArg ct CancellationToken.None).ThrowIfCancellationRequested()
+            return! Collection.findOneAndReplace filter doc options this
+        }
 
     // ============================================================
     // UTILITY OPERATIONS
     // ============================================================
 
     /// <summary>Drops the collection (deletes table).</summary>
+    /// <param name="ct">Optional cancellation token.</param>
     /// <returns>Task that completes when collection is dropped.</returns>
-    member this.Drop() : Task<unit> = Collection.drop this
+    member this.Drop(?ct: CancellationToken) : Task<unit> =
+        task {
+            (defaultArg ct CancellationToken.None).ThrowIfCancellationRequested()
+            return! Collection.drop this
+        }
 
     /// <summary>Validates a document against the schema.</summary>
     /// <param name="doc">Document to validate.</param>

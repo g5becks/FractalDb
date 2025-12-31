@@ -694,6 +694,8 @@ type FindAndModifyOptions = FractalDb.Collection.FindAndModifyOptions
 
 module Collection = FractalDb.Collection.Collection
 
+module Cancellable = FractalDb.Cancellable
+
 // =============================================================================
 // Database (from Database.fs)
 // =============================================================================
