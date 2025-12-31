@@ -20,11 +20,10 @@ open FractalDb.Database
 // Test Data Setup
 // =============================================================================
 
-type TestItem = {
-    Name: string
-    Value: int
-    Category: string
-}
+type TestItem =
+    { Name: string
+      Value: int
+      Category: string }
 
 let testItemSchema: SchemaDef<TestItem> =
     { Fields =
@@ -53,27 +52,31 @@ let testItemSchema: SchemaDef<TestItem> =
 type QueryOptionsTestFixture() =
     let db = FractalDb.InMemory()
     let items = db.Collection<TestItem>("items", testItemSchema)
-    
+
     // Seed test data: 20 items with predictable values
     do
-        let testData = [
-            for i in 1..20 do
-                { Name = $"Item_{i:D2}"
-                  Value = i * 10
-                  Category = if i % 2 = 0 then "Even" else "Odd" }
-        ]
+        let testData =
+            [ for i in 1..20 do
+                  { Name = $"Item_{i:D2}"
+                    Value = i * 10
+                    Category = if i % 2 = 0 then "Even" else "Odd" } ]
+
         for item in testData do
-            items |> Collection.insertOne item |> Async.AwaitTask |> Async.RunSynchronously |> ignore
-    
+            items
+            |> Collection.insertOne item
+            |> Async.AwaitTask
+            |> Async.RunSynchronously
+            |> ignore
+
     member _.Db = db
     member _.Items = items
-    
+
     interface IDisposable with
         member _.Dispose() = db.Close()
 
 type QueryOptionsTests(fixture: QueryOptionsTestFixture) =
     let items = fixture.Items
-    
+
     interface IClassFixture<QueryOptionsTestFixture>
 
     // =============================================================================
@@ -85,7 +88,7 @@ type QueryOptionsTests(fixture: QueryOptionsTestFixture) =
         task {
             let opts = QueryOptions.empty |> QueryOptions.limit 0
             let! results = items |> Collection.findWith Query.Empty opts
-            
+
             results |> should haveLength 0
         }
 
@@ -94,7 +97,7 @@ type QueryOptionsTests(fixture: QueryOptionsTestFixture) =
         task {
             let opts = QueryOptions.empty |> QueryOptions.limit 5
             let! results = items |> Collection.findWith Query.Empty opts
-            
+
             results |> should haveLength 5
         }
 
@@ -103,7 +106,7 @@ type QueryOptionsTests(fixture: QueryOptionsTestFixture) =
         task {
             let opts = QueryOptions.empty |> QueryOptions.limit 1000
             let! results = items |> Collection.findWith Query.Empty opts
-            
+
             results |> should haveLength 20
         }
 
@@ -112,7 +115,7 @@ type QueryOptionsTests(fixture: QueryOptionsTestFixture) =
         task {
             let opts = QueryOptions.empty |> QueryOptions.limit 1
             let! results = items |> Collection.findWith Query.Empty opts
-            
+
             results |> should haveLength 1
         }
 
@@ -126,21 +129,21 @@ type QueryOptionsTests(fixture: QueryOptionsTestFixture) =
         task {
             let opts = QueryOptions.empty |> QueryOptions.skip 0 |> QueryOptions.limit 20
             let! results = items |> Collection.findWith Query.Empty opts
-            
+
             results |> should haveLength 20
         }
 
     [<Fact>]
     member _.``skip 10 with limit skips first 10 results``() : Task =
         task {
-            let opts = 
-                QueryOptions.empty 
+            let opts =
+                QueryOptions.empty
                 |> QueryOptions.sortAsc "value"
                 |> QueryOptions.skip 10
                 |> QueryOptions.limit 20
-            
+
             let! results = items |> Collection.findWith Query.Empty opts
-            
+
             results |> should haveLength 10
             // First result after skip should be item 11 (value 110)
             results.[0].Data.Value |> should equal 110
@@ -151,21 +154,21 @@ type QueryOptionsTests(fixture: QueryOptionsTestFixture) =
         task {
             let opts = QueryOptions.empty |> QueryOptions.skip 100 |> QueryOptions.limit 20
             let! results = items |> Collection.findWith Query.Empty opts
-            
+
             results |> should haveLength 0
         }
 
     [<Fact>]
     member _.``skip and limit combine correctly``() : Task =
         task {
-            let opts = 
-                QueryOptions.empty 
+            let opts =
+                QueryOptions.empty
                 |> QueryOptions.sortAsc "value"
                 |> QueryOptions.skip 5
                 |> QueryOptions.limit 3
-            
+
             let! results = items |> Collection.findWith Query.Empty opts
-            
+
             results |> should haveLength 3
             // Should get items 6, 7, 8 (values 60, 70, 80)
             results.[0].Data.Value |> should equal 60
@@ -182,7 +185,7 @@ type QueryOptionsTests(fixture: QueryOptionsTestFixture) =
         task {
             let opts = QueryOptions.empty |> QueryOptions.sortAsc "value"
             let! results = items |> Collection.findWith Query.Empty opts
-            
+
             results |> should haveLength 20
             // First item should have lowest value
             results.[0].Data.Value |> should equal 10
@@ -195,7 +198,7 @@ type QueryOptionsTests(fixture: QueryOptionsTestFixture) =
         task {
             let opts = QueryOptions.empty |> QueryOptions.sortDesc "value"
             let! results = items |> Collection.findWith Query.Empty opts
-            
+
             results |> should haveLength 20
             // First item should have highest value
             results.[0].Data.Value |> should equal 200
@@ -208,7 +211,7 @@ type QueryOptionsTests(fixture: QueryOptionsTestFixture) =
         task {
             let opts = QueryOptions.empty |> QueryOptions.sortAsc "name"
             let! results = items |> Collection.findWith Query.Empty opts
-            
+
             results |> should haveLength 20
             // Item_01 < Item_02 < ... < Item_20 (lexicographic)
             results.[0].Data.Name |> should equal "Item_01"
@@ -223,9 +226,9 @@ type QueryOptionsTests(fixture: QueryOptionsTestFixture) =
                 QueryOptions.empty
                 |> QueryOptions.sortDesc "value"
                 |> QueryOptions.sortAsc "category"
-            
+
             let! results = items |> Collection.findWith Query.Empty opts
-            
+
             results |> should haveLength 20
             // First group: "Even" category (alphabetically first)
             results.[0].Data.Category |> should equal "Even"
@@ -238,7 +241,7 @@ type QueryOptionsTests(fixture: QueryOptionsTestFixture) =
         task {
             let opts = QueryOptions.empty
             let! results = items |> Collection.findWith Query.Empty opts
-            
+
             results |> should haveLength 20
         }
 
@@ -251,25 +254,23 @@ type QueryOptionsTests(fixture: QueryOptionsTestFixture) =
     member _.``cursorAfter accepts cursor token``() : Task =
         task {
             // First, get initial results and extract a cursor
-            let initialOpts = 
-                QueryOptions.empty 
-                |> QueryOptions.sortAsc "_id"
-                |> QueryOptions.limit 5
-            
+            let initialOpts =
+                QueryOptions.empty |> QueryOptions.sortAsc "_id" |> QueryOptions.limit 5
+
             let! initialResults = items |> Collection.findWith Query.Empty initialOpts
-            
+
             if initialResults.Length > 0 then
                 let cursorId = initialResults.[2].Id // Use 3rd item as cursor
-                
+
                 // Get results after cursor - just verify it doesn't error
-                let afterOpts = 
-                    QueryOptions.empty 
+                let afterOpts =
+                    QueryOptions.empty
                     |> QueryOptions.sortAsc "_id"
                     |> QueryOptions.cursorAfter cursorId
                     |> QueryOptions.limit 3
-                
+
                 let! afterResults = items |> Collection.findWith Query.Empty afterOpts
-                
+
                 // Just verify we get results (cursor implementation may vary)
                 afterResults |> should not' (be Null)
         }
@@ -278,28 +279,27 @@ type QueryOptionsTests(fixture: QueryOptionsTestFixture) =
     member _.``cursorBefore retrieves results before cursor``() : Task =
         task {
             // Get some results to extract a cursor
-            let initialOpts = 
-                QueryOptions.empty 
-                |> QueryOptions.sortAsc "_id"
-                |> QueryOptions.limit 10
-            
+            let initialOpts =
+                QueryOptions.empty |> QueryOptions.sortAsc "_id" |> QueryOptions.limit 10
+
             let! initialResults = items |> Collection.findWith Query.Empty initialOpts
-            
+
             if initialResults.Length > 5 then
                 let cursorId = initialResults.[8].Id // Use 9th item as cursor
-                
+
                 // Get results before cursor
-                let beforeOpts = 
-                    QueryOptions.empty 
+                let beforeOpts =
+                    QueryOptions.empty
                     |> QueryOptions.sortAsc "_id"
                     |> QueryOptions.cursorBefore cursorId
                     |> QueryOptions.limit 3
-                
+
                 let! beforeResults = items |> Collection.findWith Query.Empty beforeOpts
-                
+
                 beforeResults |> should not' (be Empty)
                 // All results should have IDs < cursorId
-                beforeResults |> List.forall (fun d -> String.Compare(d.Id, cursorId, StringComparison.Ordinal) < 0)
+                beforeResults
+                |> List.forall (fun d -> String.Compare(d.Id, cursorId, StringComparison.Ordinal) < 0)
                 |> should equal true
         }
 
@@ -312,19 +312,18 @@ type QueryOptionsTests(fixture: QueryOptionsTestFixture) =
         task {
             // Query: Even category items, sorted by value desc, skip 2, limit 3
             let query = Query.Field("category", FieldOp.Compare(box (CompareOp.Eq "Even")))
-            
+
             let opts =
                 QueryOptions.empty
                 |> QueryOptions.sortDesc "value"
                 |> QueryOptions.skip 2
                 |> QueryOptions.limit 3
-            
+
             let! results = items |> Collection.findWith query opts
-            
+
             results |> should haveLength 3
             // All should be "Even" category
-            results |> List.forall (fun d -> d.Data.Category = "Even")
-            |> should equal true
+            results |> List.forall (fun d -> d.Data.Category = "Even") |> should equal true
             // Should be sorted descending
             results.[0].Data.Value |> should be (greaterThan results.[1].Data.Value)
             results.[1].Data.Value |> should be (greaterThan results.[2].Data.Value)
@@ -335,20 +334,18 @@ type QueryOptionsTests(fixture: QueryOptionsTestFixture) =
         task {
             let opts = QueryOptions.empty
             let! results = items |> Collection.findWith Query.Empty opts
-            
+
             results |> should haveLength 20
         }
 
     [<Fact>]
     member _.``limit and sort combine correctly``() : Task =
         task {
-            let opts=
-                QueryOptions.empty
-                |> QueryOptions.sortDesc "value"
-                |> QueryOptions.limit 5
-            
+            let opts =
+                QueryOptions.empty |> QueryOptions.sortDesc "value" |> QueryOptions.limit 5
+
             let! results = items |> Collection.findWith Query.Empty opts
-            
+
             results |> should haveLength 5
             // Top 5 highest values
             results.[0].Data.Value |> should equal 200
@@ -362,7 +359,7 @@ type QueryOptionsTests(fixture: QueryOptionsTestFixture) =
     [<Fact>]
     member _.``QueryOptions.empty creates default options``() =
         let opts = QueryOptions.empty<TestItem>
-        
+
         opts.Sort |> should be Empty
         opts.Limit |> should equal None
         opts.Skip |> should equal None
@@ -376,15 +373,15 @@ type QueryOptionsTests(fixture: QueryOptionsTestFixture) =
         let opts1 = QueryOptions.empty<TestItem>
         let opts2 = opts1 |> QueryOptions.limit 10
         let opts3 = opts2 |> QueryOptions.skip 5
-        
+
         // Original should be unchanged
         opts1.Limit |> should equal None
         opts1.Skip |> should equal None
-        
+
         // Each step creates new instance
         opts2.Limit |> should equal (Some 10)
         opts2.Skip |> should equal None
-        
+
         opts3.Limit |> should equal (Some 10)
         opts3.Skip |> should equal (Some 5)
 
@@ -394,7 +391,7 @@ type QueryOptionsTests(fixture: QueryOptionsTestFixture) =
             QueryOptions.empty<TestItem>
             |> QueryOptions.sortAsc "name"
             |> QueryOptions.sortDesc "value"
-        
+
         opts.Sort |> should haveLength 2
         opts.Sort.[0] |> should equal ("name", SortDirection.Ascending)
         opts.Sort.[1] |> should equal ("value", SortDirection.Descending)
@@ -402,7 +399,7 @@ type QueryOptionsTests(fixture: QueryOptionsTestFixture) =
     [<Fact>]
     member _.``cursorAfter sets After field``() =
         let opts = QueryOptions.empty<TestItem> |> QueryOptions.cursorAfter "test-cursor"
-        
+
         match opts.Cursor with
         | Some cursor ->
             cursor.After |> should equal (Some "test-cursor")
@@ -412,7 +409,7 @@ type QueryOptionsTests(fixture: QueryOptionsTestFixture) =
     [<Fact>]
     member _.``cursorBefore sets Before field``() =
         let opts = QueryOptions.empty<TestItem> |> QueryOptions.cursorBefore "test-cursor"
-        
+
         match opts.Cursor with
         | Some cursor ->
             cursor.Before |> should equal (Some "test-cursor")
@@ -421,8 +418,8 @@ type QueryOptionsTests(fixture: QueryOptionsTestFixture) =
 
     [<Fact>]
     member _.``select option sets Select field``() =
-        let opts = QueryOptions.empty<TestItem> |> QueryOptions.select ["name"; "value"]
-        
+        let opts = QueryOptions.empty<TestItem> |> QueryOptions.select [ "name"; "value" ]
+
         match opts.Select with
         | Some fields ->
             fields |> should haveLength 2
@@ -432,10 +429,40 @@ type QueryOptionsTests(fixture: QueryOptionsTestFixture) =
 
     [<Fact>]
     member _.``omit option sets Omit field``() =
-        let opts = QueryOptions.empty<TestItem> |> QueryOptions.omit ["category"]
-        
+        let opts = QueryOptions.empty<TestItem> |> QueryOptions.omit [ "category" ]
+
         match opts.Omit with
         | Some fields ->
             fields |> should haveLength 1
             fields |> should contain "category"
         | None -> failwith "Expected Omit to be set"
+
+    // =============================================================================
+    // Search Tests
+    // =============================================================================
+
+    [<Fact>]
+    member _.``search option sets Search field with case insensitive default``() =
+        let opts =
+            QueryOptions.empty<TestItem>
+            |> QueryOptions.search "test" [ "name"; "category" ]
+
+        match opts.Search with
+        | Some spec ->
+            spec.Text |> should equal "test"
+            spec.Fields |> should equal [ "name"; "category" ]
+            spec.CaseSensitive |> should equal false
+        | None -> failwith "Expected Search to be set"
+
+    [<Fact>]
+    member _.``searchCaseSensitive sets case-sensitive search``() =
+        let opts =
+            QueryOptions.empty<TestItem>
+            |> QueryOptions.searchCaseSensitive "FractalDb" [ "name" ]
+
+        match opts.Search with
+        | Some spec ->
+            spec.Text |> should equal "FractalDb"
+            spec.Fields |> should equal [ "name" ]
+            spec.CaseSensitive |> should equal true
+        | None -> failwith "Expected Search to be set"

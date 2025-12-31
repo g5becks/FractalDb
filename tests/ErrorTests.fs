@@ -235,3 +235,214 @@ let ``FractalResult.sequence returns first Error when any result is Error`` () =
     match sequenced with
     | Error(FractalError.NotFound id) -> id |> should equal "id1"
     | _ -> failwith "Expected NotFound error"
+
+// ═══════════════════════════════════════════════════════════════
+// FractalResult.map Tests
+// ═══════════════════════════════════════════════════════════════
+
+[<Fact>]
+let ``FractalResult.map transforms Ok value`` () =
+    let result: FractalResult<int> = Ok 21
+    let mapped = FractalResult.map (fun x -> x * 2) result
+
+    match mapped with
+    | Ok v -> v |> should equal 42
+    | Error e -> failwith $"Expected Ok but got Error: {e.Message}"
+
+[<Fact>]
+let ``FractalResult.map preserves Error unchanged`` () =
+    let result: FractalResult<int> = Error(FractalError.NotFound "id")
+    let mapped = FractalResult.map (fun x -> x * 2) result
+
+    match mapped with
+    | Error(FractalError.NotFound id) -> id |> should equal "id"
+    | _ -> failwith "Expected NotFound error"
+
+// ═══════════════════════════════════════════════════════════════
+// FractalResult.bind Tests
+// ═══════════════════════════════════════════════════════════════
+
+[<Fact>]
+let ``FractalResult.bind chains successful operations`` () =
+    let validate x =
+        if x > 0 then
+            Ok(x * 2)
+        else
+            Error(FractalError.Validation(Some "x", "Must be positive"))
+
+    let result: FractalResult<int> = Ok 21
+    let bound = FractalResult.bind validate result
+
+    match bound with
+    | Ok v -> v |> should equal 42
+    | Error e -> failwith $"Expected Ok but got Error: {e.Message}"
+
+[<Fact>]
+let ``FractalResult.bind short-circuits on initial Error`` () =
+    let validate x = Ok(x * 2) // Should never be called
+
+    let result: FractalResult<int> = Error(FractalError.NotFound "id")
+    let bound = FractalResult.bind validate result
+
+    match bound with
+    | Error(FractalError.NotFound id) -> id |> should equal "id"
+    | _ -> failwith "Expected NotFound error"
+
+[<Fact>]
+let ``FractalResult.bind propagates Error from function`` () =
+    let validate x =
+        if x > 0 then
+            Ok(x * 2)
+        else
+            Error(FractalError.Validation(Some "x", "Must be positive"))
+
+    let result: FractalResult<int> = Ok(-5)
+    let bound = FractalResult.bind validate result
+
+    match bound with
+    | Error(FractalError.Validation(field, msg)) ->
+        field |> should equal (Some "x")
+        msg |> should equal "Must be positive"
+    | _ -> failwith "Expected Validation error"
+
+// ═══════════════════════════════════════════════════════════════
+// FractalResult.mapError Tests
+// ═══════════════════════════════════════════════════════════════
+
+[<Fact>]
+let ``FractalResult.mapError transforms Error value`` () =
+    let result: FractalResult<int> = Error(FractalError.NotFound "id")
+
+    let mapped =
+        FractalResult.mapError (fun _ -> FractalError.InvalidOperation "Wrapped") result
+
+    match mapped with
+    | Error(FractalError.InvalidOperation msg) -> msg |> should equal "Wrapped"
+    | _ -> failwith "Expected InvalidOperation error"
+
+[<Fact>]
+let ``FractalResult.mapError preserves Ok unchanged`` () =
+    let result: FractalResult<int> = Ok 42
+
+    let mapped =
+        FractalResult.mapError (fun _ -> FractalError.InvalidOperation "Wrapped") result
+
+    match mapped with
+    | Ok v -> v |> should equal 42
+    | Error e -> failwith $"Expected Ok but got Error: {e.Message}"
+
+// ═══════════════════════════════════════════════════════════════
+// FractalResult.getOrRaise Tests
+// ═══════════════════════════════════════════════════════════════
+
+[<Fact>]
+let ``FractalResult.getOrRaise extracts Ok value`` () =
+    let result: FractalResult<int> = Ok 42
+    let value = FractalResult.getOrRaise result
+
+    value |> should equal 42
+
+[<Fact>]
+let ``FractalResult.getOrRaise throws on Error`` () =
+    let result: FractalResult<int> = Error(FractalError.NotFound "test-id")
+
+    let action = fun () -> FractalResult.getOrRaise result |> ignore
+
+    action |> should throw typeof<System.Exception>
+
+// ═══════════════════════════════════════════════════════════════
+// FractalResult.traverse Tests
+// ═══════════════════════════════════════════════════════════════
+
+[<Fact>]
+let ``FractalResult.traverse applies function to all elements when all succeed`` () =
+    let validate x =
+        if x >= 0 then
+            Ok(x * 2)
+        else
+            Error(FractalError.Validation(None, $"Invalid: {x}"))
+
+    let result = FractalResult.traverse validate [ 1; 2; 3 ]
+
+    match result with
+    | Ok values -> values |> should equal [ 2; 4; 6 ]
+    | Error e -> failwith $"Expected Ok but got Error: {e.Message}"
+
+[<Fact>]
+let ``FractalResult.traverse stops at first Error`` () =
+    let mutable callCount = 0
+
+    let validate x =
+        callCount <- callCount + 1
+
+        if x >= 0 then
+            Ok(x * 2)
+        else
+            Error(FractalError.Validation(None, $"Invalid: {x}"))
+
+    let result = FractalResult.traverse validate [ 1; -2; 3; 4 ]
+
+    match result with
+    | Error(FractalError.Validation(_, msg)) ->
+        msg |> should equal "Invalid: -2"
+        callCount |> should equal 2 // Only called for 1 and -2, not 3 and 4
+    | _ -> failwith "Expected Validation error"
+
+[<Fact>]
+let ``FractalResult.traverse returns empty list for empty input`` () =
+    let validate x = Ok(x * 2)
+    let result = FractalResult.traverse validate []
+
+    match result with
+    | Ok values -> values |> should be Empty
+    | Error e -> failwith $"Expected Ok but got Error: {e.Message}"
+
+// ═══════════════════════════════════════════════════════════════
+// FractalResult.combine Tests
+// ═══════════════════════════════════════════════════════════════
+
+[<Fact>]
+let ``FractalResult.combine returns tuple when both Ok`` () =
+    let r1: FractalResult<int> = Ok 42
+    let r2: FractalResult<string> = Ok "hello"
+
+    let combined = FractalResult.combine r1 r2
+
+    match combined with
+    | Ok(v1, v2) ->
+        v1 |> should equal 42
+        v2 |> should equal "hello"
+    | Error e -> failwith $"Expected Ok but got Error: {e.Message}"
+
+[<Fact>]
+let ``FractalResult.combine returns first Error when first fails`` () =
+    let r1: FractalResult<int> = Error(FractalError.NotFound "id1")
+    let r2: FractalResult<string> = Ok "hello"
+
+    let combined = FractalResult.combine r1 r2
+
+    match combined with
+    | Error(FractalError.NotFound id) -> id |> should equal "id1"
+    | _ -> failwith "Expected NotFound error"
+
+[<Fact>]
+let ``FractalResult.combine returns second Error when first succeeds and second fails`` () =
+    let r1: FractalResult<int> = Ok 42
+    let r2: FractalResult<string> = Error(FractalError.NotFound "id2")
+
+    let combined = FractalResult.combine r1 r2
+
+    match combined with
+    | Error(FractalError.NotFound id) -> id |> should equal "id2"
+    | _ -> failwith "Expected NotFound error"
+
+[<Fact>]
+let ``FractalResult.combine returns first Error when both fail`` () =
+    let r1: FractalResult<int> = Error(FractalError.NotFound "id1")
+    let r2: FractalResult<string> = Error(FractalError.NotFound "id2")
+
+    let combined = FractalResult.combine r1 r2
+
+    match combined with
+    | Error(FractalError.NotFound id) -> id |> should equal "id1" // First error wins
+    | _ -> failwith "Expected NotFound error"

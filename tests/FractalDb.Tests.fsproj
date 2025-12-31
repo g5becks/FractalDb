@@ -14,8 +14,8 @@
     <Compile Include="ArrayOperatorTests.fs" />
     <Compile Include="ProjectionTests.fs" />
     <Compile Include="ErrorTests.fs" />
-    <!-- Temporarily disabled QueryExprTests - needs QueryExpr feature -->
-    <!-- <Compile Include="QueryExprTests.fs" /> -->
+    <Compile Include="QueryExprTests.fs" />
+    <Compile Include="CollectionInstanceTests.fs" />
     <Compile Include="SerializationTests.fs" />
     <Compile Include="SqlTranslatorTests.fs" />
     <Compile Include="UniqueConstraintDebugTest.fs" />
@@ -30,6 +30,8 @@
     <Compile Include="QueryOptionsTests.fs" />
     <Compile Include="DatabaseLifecycleTests.fs" />
     <Compile Include="ErrorRecoveryTests.fs" />
+    <Compile Include="ResilienceTests.fs" />
+    <Compile Include="CancellableTests.fs" />
     <Compile Include="TableBuilderTests.fs" />
     <Compile Include="Tests.fs" />
     <Compile Include="Program.fs" />

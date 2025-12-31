@@ -53,6 +53,39 @@ let ``SchemaBuilder field with constraints sets flags`` () =
     f.Nullable |> should equal false
 
 [<Fact>]
+let ``SchemaBuilder indexed operation creates indexed field`` () =
+    let s = schema<TestUser> { indexed "age" SqliteType.Integer }
+
+    s.Fields |> should haveLength 1
+    let f = s.Fields.[0]
+    f.Name |> should equal "age"
+    f.SqlType |> should equal SqliteType.Integer
+    f.Indexed |> should equal true
+    f.Unique |> should equal false
+
+[<Fact>]
+let ``SchemaBuilder indexed with unique creates unique indexed field`` () =
+    let s = schema<TestUser> { indexed "username" SqliteType.Text true }
+
+    let f = s.Fields.[0]
+    f.Indexed |> should equal true
+    f.Unique |> should equal true
+
+[<Fact>]
+let ``SchemaBuilder indexed with nullable creates nullable indexed field`` () =
+    let s = schema<TestUser> { indexed "middleName" SqliteType.Text false true }
+
+    let f = s.Fields.[0]
+    f.Indexed |> should equal true
+    f.Nullable |> should equal true
+
+[<Fact>]
+let ``SchemaBuilder timestamps enables timestamp tracking`` () =
+    let s = schema<TestUser> { timestamps }
+
+    s.Timestamps |> should equal true
+
+[<Fact>]
 let ``SchemaBuilder multiple fields preserves order`` () =
     let s =
         schema<TestUser> {
@@ -162,6 +195,24 @@ let ``OptionsBuilder sortBy adds sort field`` () =
     dir |> should equal SortDirection.Descending
 
 [<Fact>]
+let ``OptionsBuilder sortAsc adds ascending sort`` () =
+    let opts = options<TestUser> { sortAsc "name" }
+
+    opts.Sort |> should haveLength 1
+    let (field, dir) = opts.Sort.[0]
+    field |> should equal "name"
+    dir |> should equal SortDirection.Ascending
+
+[<Fact>]
+let ``OptionsBuilder sortDesc adds descending sort`` () =
+    let opts = options<TestUser> { sortDesc "createdAt" }
+
+    opts.Sort |> should haveLength 1
+    let (field, dir) = opts.Sort.[0]
+    field |> should equal "createdAt"
+    dir |> should equal SortDirection.Descending
+
+[<Fact>]
 let ``OptionsBuilder multiple sortBy preserves order`` () =
     let opts =
         options<TestUser> {
@@ -184,6 +235,14 @@ let ``OptionsBuilder project sets projection fields`` () =
     match opts.Select with
     | Some fields -> fields |> should equal [ "_id"; "name"; "email" ]
     | None -> failwith "Expected Some projection"
+
+[<Fact>]
+let ``OptionsBuilder omit sets field exclusion`` () =
+    let opts = options<TestUser> { omit [ "password"; "internalNotes" ] }
+
+    match opts.Omit with
+    | Some fields -> fields |> should equal [ "password"; "internalNotes" ]
+    | None -> failwith "Expected Some omit fields"
 
 [<Fact>]
 let ``OptionsBuilder cursorAfter sets cursor`` () =
