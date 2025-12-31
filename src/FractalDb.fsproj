@@ -10,6 +10,10 @@
     </ItemGroup>
 
     <ItemGroup>
+        <None Include="../README.md" Pack="true" PackagePath="\" />
+    </ItemGroup>
+
+    <ItemGroup>
         <Compile Include="Types.fs" />
         <Compile Include="Errors.fs" />
         <Compile Include="Operators.fs" />

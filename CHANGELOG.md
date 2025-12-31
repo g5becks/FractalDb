@@ -9,6 +9,62 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## FractalDb (F# Port)
 
+### [1.1.0] - 2025-12-31
+
+#### Added
+
+##### Resilience & Automatic Retry
+- **RetryableError type** for configurable transient error categories:
+  - `Busy` (SQLITE_BUSY) - Another connection holds a lock
+  - `Locked` (SQLITE_LOCKED) - Table/row write conflict
+  - `IOError` (SQLITE_IOERR) - Transient disk/network I/O
+  - `CantOpen` (SQLITE_CANTOPEN) - File temporarily unavailable
+  - `Connection` - Transient connection issues
+  - `Transaction` - Deadlock or timeout
+- **ResilienceOptions** with configurable retry behavior:
+  - `MaxRetries` - Maximum retry attempts (default: 2)
+  - `BaseDelay` - Initial delay between retries (default: 100ms)
+  - `MaxDelay` - Maximum delay cap (default: 5s)
+  - `BackoffMultiplier` - Exponential backoff factor (default: 2.0)
+  - `Jitter` - Random variation to prevent thundering herd (default: true)
+- **Pre-defined resilience presets**:
+  - `ResilienceOptions.defaults` - Retry on Busy/Locked
+  - `ResilienceOptions.extended` - Include IOError/CantOpen
+  - `ResilienceOptions.aggressive` - All errors, 5 retries
+  - `ResilienceOptions.none` - Disable retry
+- **Automatic retry** on all Collection write operations
+
+##### CancellationToken Support
+- **IcedTasks integration** for CancellableTask support
+- **Optional `?ct` parameter** on all Collection<'T> instance methods
+- **`*Async` instance methods** returning CancellableTask<'T> for automatic CT propagation:
+  ```fsharp
+  cancellableTask {
+      let! result = collection.InsertManyAsync(records)
+      let! doc = collection.FindByIdAsync(id)
+      return result
+  }
+  ```
+- **FractalDb.Cancellable module** with CancellableTask-returning functions
+
+##### Test Coverage Improvements
+- **622 tests** (up from 587)
+- Enabled QueryExprTests.fs (75 tests)
+- Added CollectionInstanceTests.fs (35 tests)
+- Added FractalResult helper tests (18 tests)
+- Added DatabaseLifecycleTests (10 tests)
+- Added BuilderTests (8 tests)
+- Added QueryOptionsTests for search (2 tests)
+- Added ResilienceTests.fs
+- Added CancellableTests.fs
+
+##### NuGet Package Improvements
+- **README.md included in NuGet package** for better discoverability
+- **PackageLicenseExpression** set to MIT
+
+#### Changed
+- Version bumped to 1.1.0
+
 ### [1.0.0] - 2025-01-30
 
 **Initial release of FractalDb** - Complete F# port of StrataDB for .NET 10+
