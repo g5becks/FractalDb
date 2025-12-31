@@ -466,6 +466,90 @@ match result with
 - Automatic rollback on error or exception
 - 4x performance improvement for batched operations
 
+## Resilience & Automatic Retry
+
+FractalDb supports automatic retry for transient database errors like `SQLITE_BUSY` and `SQLITE_LOCKED`. Enable resilience at the database level and all collection operations will automatically retry on configured errors.
+
+### Basic Usage
+
+```fsharp
+open FractalDb
+open FractalDb.Errors
+
+// Enable default resilience (retry on Busy/Locked, 2 retries)
+let options = { DbOptions.defaults with Resilience = Some ResilienceOptions.defaults }
+use db = FractalDb.Open("app.db", options)
+
+// All operations now automatically retry on transient errors
+let users = db.Collection<User>("users")
+let! result = users |> Collection.insertOne newUser  // Retries automatically if busy
+```
+
+### Configuration Presets
+
+| Preset | Errors Retried | Max Retries | Use Case |
+|--------|---------------|-------------|----------|
+| `ResilienceOptions.defaults` | Busy, Locked | 2 | Standard applications |
+| `ResilienceOptions.extended` | Busy, Locked, IOError, CantOpen | 2 | Network drives |
+| `ResilienceOptions.aggressive` | All transient errors | 5 | High-contention scenarios |
+| `ResilienceOptions.none` | None | 0 | Disable retry |
+
+### Custom Configuration
+
+```fsharp
+// Custom resilience settings
+let customResilience = {
+    ResilienceOptions.defaults with
+        RetryOn = RetryableError.extended           // Busy, Locked, IOError, CantOpen
+        MaxRetries = 5                               // More attempts
+        BaseDelay = TimeSpan.FromMilliseconds(200.0) // Longer initial delay
+        MaxDelay = TimeSpan.FromSeconds(10.0)        // Higher cap
+}
+
+let options = { DbOptions.defaults with Resilience = Some customResilience }
+use db = FractalDb.Open("network.db", options)
+```
+
+### Retryable Error Types
+
+| Error | SQLite Code | Description |
+|-------|-------------|-------------|
+| `Busy` | SQLITE_BUSY (5) | Another connection holds a lock |
+| `Locked` | SQLITE_LOCKED (6) | Table or row write conflict |
+| `IOError` | SQLITE_IOERR (10) | Transient disk/network I/O |
+| `CantOpen` | SQLITE_CANTOPEN (14) | File temporarily unavailable |
+| `Connection` | - | Transient connection issues |
+| `Transaction` | - | Deadlock or timeout |
+
+### Error Sets
+
+```fsharp
+// Pre-defined error sets
+RetryableError.defaults   // set [ Busy; Locked ]
+RetryableError.extended   // set [ Busy; Locked; IOError; CantOpen ]
+RetryableError.all        // All 6 retryable error types
+
+// Custom set
+let myErrors = set [ RetryableError.Busy; RetryableError.IOError ]
+```
+
+### Retry Behavior
+
+- **Exponential backoff**: Delays double each retry (100ms -> 200ms -> 400ms)
+- **Jitter**: Random variation prevents thundering herd
+- **Capped delays**: Never exceeds `MaxDelay` setting
+- **Cancellation aware**: Respects `CancellationToken` during delays
+
+### Which Operations Are Retried?
+
+All write operations in `Collection` module are wrapped with retry logic:
+- `insertOne`, `insertMany`
+- `updateById`, `updateOne`, `updateMany`
+- `replaceOne`
+- `deleteById`, `deleteOne`, `deleteMany`
+
+Read operations (`find`, `findById`, `count`, etc.) do not retry by default since they are typically idempotent and fast.
+
 ## Performance
 
 | Operation | Throughput |

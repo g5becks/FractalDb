@@ -2,12 +2,12 @@
 
 Summary:
 
-| Section            | Lines     | Content                                            |
-|--------------------|-----------|---------------------------------------------------|
-| Header             | 1-27      | This summary and grep instructions                |
-| Quick Reference    | 28-849    | Computation expressions, common patterns, examples |
-| Full API Reference | 850-3544  | Extracted XML docs for all modules                |
-| **Total**          | **3544**  | Complete documentation                            |
+| Section            | Lines      | Content                                            |
+|--------------------|------------|---------------------------------------------------|
+| Header             | 1-27       | This summary and grep instructions                |
+| Quick Reference    | 28-1151    | Computation expressions, common patterns, examples |
+| Full API Reference | 1152-3867  | Extracted XML docs for all modules                |
+| **Total**          | **3867**   | Complete documentation                            |
 
 Grepable patterns:
 
@@ -21,11 +21,12 @@ grep "^RULE:" LLMS.txt                # Find composition rules
 grep -A5 "InsertOne" LLMS.txt         # Find specific API with context
 grep -i "transaction" LLMS.txt        # Search for any term
 grep -i "composition" LLMS.txt        # Find query composition docs
+grep -i "resilience" LLMS.txt         # Find resilience/retry docs
 ```
 
 Documented items:
-- 28 modules
-- 50+ types
+- 30 modules (including RetryableError, ResilienceOptions)
+- 55+ types (including new transient error types)
 - 151 functions
 - Parameters, return types, and examples included
 
@@ -829,6 +830,12 @@ type FractalError =
     | NotFound of id: string
     | Serialization of message: string
     | InvalidOperation of message: string
+    // Transient errors (retryable)
+    | Busy of message: string       // SQLITE_BUSY (5) - another connection holds a lock
+    | Locked of message: string     // SQLITE_LOCKED (6) - table/row write conflict
+    | IOError of message: string    // SQLITE_IOERR (10) - transient disk/network I/O
+    | CantOpen of message: string   // SQLITE_CANTOPEN (14) - file temporarily unavailable
+    | DiskFull of message: string   // SQLITE_FULL (13) - database disk is full
 ```
 
 ### Error Handling
@@ -838,6 +845,8 @@ match result with
 | Error (FractalError.Validation (field, msg)) -> printfn "Validation: %s" msg
 | Error (FractalError.UniqueConstraint (field, _)) -> printfn "Duplicate: %s" field
 | Error (FractalError.NotFound id) -> printfn "Not found: %s" id
+| Error (FractalError.Busy msg) -> printfn "Database busy: %s" msg
+| Error (FractalError.Locked msg) -> printfn "Database locked: %s" msg
 | Error err -> printfn "Error: %s" err.Message
 ```
 
@@ -845,6 +854,50 @@ match result with
 Type alias for Result<'T, FractalError>.
 ```fsharp
 type FractalResult<'T> = Result<'T, FractalError>
+```
+
+### RetryableError
+Discriminated union for errors that can trigger automatic retry.
+```fsharp
+type RetryableError =
+    | Busy        // Database is busy (SQLITE_BUSY)
+    | Locked      // Table/row is locked (SQLITE_LOCKED)
+    | IOError     // I/O error (SQLITE_IOERR)
+    | CantOpen    // Cannot open database (SQLITE_CANTOPEN)
+    | Connection  // Transient connection issues
+    | Transaction // Deadlock or timeout
+```
+
+MODULE: RetryableError
+```fsharp
+RetryableError.defaults   // set [ Busy; Locked ] - most common transient errors
+RetryableError.extended   // set [ Busy; Locked; IOError; CantOpen ] - for network drives
+RetryableError.all        // All 6 retryable error types
+
+// Check if error matches a retryable type
+RetryableError.matches (retryable: RetryableError) (error: FractalError) : bool
+RetryableError.shouldRetry (retryableSet: Set<RetryableError>) (error: FractalError) : bool
+```
+
+### ResilienceOptions
+Configuration for automatic retry behavior.
+```fsharp
+type ResilienceOptions = {
+    RetryOn: Set<RetryableError>  // Which errors trigger retry
+    MaxRetries: int               // Max retry attempts (default: 2)
+    BaseDelay: TimeSpan           // Initial delay (default: 100ms)
+    MaxDelay: TimeSpan            // Maximum delay cap (default: 5s)
+    ExponentialBackoff: bool      // Double delay each retry (default: true)
+    Jitter: bool                  // Add random variation (default: true)
+}
+```
+
+MODULE: ResilienceOptions
+```fsharp
+ResilienceOptions.defaults    // RetryableError.defaults, 2 retries, 100ms base delay
+ResilienceOptions.none        // No retry (MaxRetries = 0, empty RetryOn)
+ResilienceOptions.extended    // RetryableError.extended, 2 retries
+ResilienceOptions.aggressive  // RetryableError.all, 5 retries, 10s max delay
 ```
 
 ================================================================================
@@ -891,6 +944,70 @@ let! result = db.Transact {
 // CORRECT - insertMany has internal transaction
 let! result = collection |> Collection.insertMany items
 ```
+
+================================================================================
+## RESILIENCE
+================================================================================
+
+Automatic retry for transient database errors. Configure at database level.
+
+### Enable Resilience
+```fsharp
+open FractalDb
+open FractalDb.Errors
+
+// Default: retry Busy/Locked, 2 retries with exponential backoff
+let options = { DbOptions.defaults with Resilience = Some ResilienceOptions.defaults }
+use db = FractalDb.Open("app.db", options)
+
+// All collection write operations now retry automatically
+let users = db.Collection<User>("users")
+let! result = users |> Collection.insertOne newUser
+```
+
+### Configuration Presets
+```fsharp
+// Standard applications - retry Busy/Locked, 2 retries
+{ DbOptions.defaults with Resilience = Some ResilienceOptions.defaults }
+
+// Network drives - also retry IOError/CantOpen
+{ DbOptions.defaults with Resilience = Some ResilienceOptions.extended }
+
+// High-contention - all errors, 5 retries, 10s max delay
+{ DbOptions.defaults with Resilience = Some ResilienceOptions.aggressive }
+
+// Disable retry
+{ DbOptions.defaults with Resilience = Some ResilienceOptions.none }
+// or
+{ DbOptions.defaults with Resilience = None }
+```
+
+### Custom Configuration
+```fsharp
+let customResilience = {
+    ResilienceOptions.defaults with
+        RetryOn = set [ RetryableError.Busy; RetryableError.Locked; RetryableError.IOError ]
+        MaxRetries = 5
+        BaseDelay = TimeSpan.FromMilliseconds(200.0)
+        MaxDelay = TimeSpan.FromSeconds(10.0)
+}
+let options = { DbOptions.defaults with Resilience = Some customResilience }
+```
+
+### Retry Behavior
+- Exponential backoff: delays double each retry (100ms -> 200ms -> 400ms)
+- Jitter: random variation prevents thundering herd
+- Capped delays: never exceeds MaxDelay setting
+- Cancellation aware: respects CancellationToken during delays
+
+### Operations That Retry
+Write operations in Collection module:
+- insertOne, insertMany
+- updateById, updateOne, updateMany
+- replaceOne
+- deleteById, deleteOne, deleteMany
+
+Read operations (find, count, etc.) do not retry.
 
 ================================================================================
 ## UTILITY MODULES

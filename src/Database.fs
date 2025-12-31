@@ -52,6 +52,12 @@ open FractalDb.Transaction
 /// - true: Cache queries for performance (uses more memory)
 /// - false: Translate queries every time (less memory)
 ///
+/// Resilience:
+/// - Optional automatic retry configuration for transient errors
+/// - Default: None (no retry)
+/// - Some ResilienceOptions.defaults: Retry Busy and Locked errors
+/// - Retry is invisible to callers - operations work the same
+///
 /// Cache Benefits:
 /// - Faster repeated queries with same structure
 /// - Reduces CPU overhead of SQL translation
@@ -71,12 +77,18 @@ open FractalDb.Transaction
 /// let options = {
 ///     IdGenerator = fun () -&gt; Guid.NewGuid().ToString()
 ///     EnableCache = false
+///     CommandBehavior = CommandBehavior.SequentialAccess
+///     Resilience = None
 /// }
 /// let! db2 = FractalDb.Open("data2.db", options)
 ///
 /// // Enable caching for performance
 /// let cachedOptions = { DbOptions.defaults with EnableCache = true }
 /// let! db3 = FractalDb.Open("data3.db", cachedOptions)
+///
+/// // Enable automatic retry for transient errors
+/// let resilientOptions = { DbOptions.defaults with Resilience = Some ResilienceOptions.defaults }
+/// let! db4 = FractalDb.Open("concurrent.db", resilientOptions)
 /// </code>
 /// </example>
 type DbOptions =
@@ -134,6 +146,41 @@ type DbOptions =
         /// </code>
         /// </example>
         CommandBehavior: CommandBehavior
+
+        /// <summary>
+        /// Optional resilience configuration for automatic retry of transient errors.
+        /// </summary>
+        /// <remarks>
+        /// When set to Some, FractalDb will automatically retry operations that fail
+        /// with transient errors (e.g., SQLITE_BUSY, SQLITE_LOCKED).
+        ///
+        /// Retry is invisible to callers - operations work exactly the same, but
+        /// transient failures are handled automatically with configurable backoff.
+        ///
+        /// Default: None (no retry - errors returned immediately)
+        ///
+        /// Common configurations:
+        /// - None: No retry (default, backward compatible)
+        /// - Some ResilienceOptions.defaults: Retry Busy/Locked with 2 retries
+        /// - Some ResilienceOptions.extended: Also retry I/O errors
+        /// - Some ResilienceOptions.aggressive: Retry all transient errors, 5 retries
+        /// </remarks>
+        /// <example>
+        /// <code>
+        /// // Enable default resilience (retry Busy and Locked)
+        /// let options = { DbOptions.defaults with Resilience = Some ResilienceOptions.defaults }
+        /// let db = FractalDb.Open("concurrent.db", options)
+        ///
+        /// // Custom resilience configuration
+        /// let customResilience = {
+        ///     ResilienceOptions.defaults with
+        ///         RetryOn = RetryableError.extended
+        ///         MaxRetries = 5
+        /// }
+        /// let options2 = { DbOptions.defaults with Resilience = Some customResilience }
+        /// </code>
+        /// </example>
+        Resilience: ResilienceOptions option
     }
 
 /// <summary>
@@ -149,21 +196,25 @@ module DbOptions =
     /// - IdGenerator: IdGenerator.generate (UUID v7 / ULID)
     /// - EnableCache: false (no query caching)
     /// - CommandBehavior: SequentialAccess (best performance)
+    /// - Resilience: None (no automatic retry)
     ///
     /// These defaults are suitable for most applications:
     /// - UUID v7 IDs are time-sortable and globally unique
     /// - No caching keeps memory usage predictable
     /// - SequentialAccess provides optimal performance for generated queries
+    /// - No resilience means errors are returned immediately (fastest)
     ///
     /// Consider overriding:
     /// - IdGenerator: if you need custom ID format
     /// - EnableCache: if you have high-throughput repeated queries
     /// - CommandBehavior: if you need random column access (rare)
+    /// - Resilience: if you need automatic retry for concurrent access
     /// </remarks>
     let defaults =
         { IdGenerator = IdGenerator.generate
           EnableCache = false
-          CommandBehavior = CommandBehavior.SequentialAccess }
+          CommandBehavior = CommandBehavior.SequentialAccess
+          Resilience = None }
 
     /// <summary>
     /// Sets the CommandBehavior for database operations.
@@ -931,7 +982,8 @@ type FractalDb private (connection: SqliteConnection, options: DbOptions, ownsCo
                           Connection = connection :> IDbConnection
                           IdGenerator = options.IdGenerator
                           Translator = SqlTranslator<'T>(schema, options.EnableCache)
-                          EnableCache = options.EnableCache }
+                          EnableCache = options.EnableCache
+                          Resilience = options.Resilience }
 
                     // Ensure table and indexes exist
                     TableBuilder.ensureTable (connection :> IDbConnection) name schema

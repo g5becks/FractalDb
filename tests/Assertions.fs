@@ -61,6 +61,16 @@ let shouldBeOk (result: FractalResult<'T>) : unit =
         failwith $"Expected Ok but got Transaction error: {message}"
     | Error (FractalError.InvalidOperation message) ->
         failwith $"Expected Ok but got InvalidOperation: {message}"
+    | Error (FractalError.Busy message) ->
+        failwith $"Expected Ok but got Busy: {message}"
+    | Error (FractalError.Locked message) ->
+        failwith $"Expected Ok but got Locked: {message}"
+    | Error (FractalError.IOError message) ->
+        failwith $"Expected Ok but got IOError: {message}"
+    | Error (FractalError.CantOpen message) ->
+        failwith $"Expected Ok but got CantOpen: {message}"
+    | Error (FractalError.DiskFull message) ->
+        failwith $"Expected Ok but got DiskFull: {message}"
 
 /// <summary>
 /// Asserts that a FractalResult is Ok and applies a function to the value.
@@ -106,6 +116,16 @@ let shouldBeOkWith (f: 'T -> unit) (result: FractalResult<'T>) : unit =
         failwith $"Expected Ok but got Transaction error: {message}"
     | Error (FractalError.InvalidOperation message) ->
         failwith $"Expected Ok but got InvalidOperation: {message}"
+    | Error (FractalError.Busy message) ->
+        failwith $"Expected Ok but got Busy: {message}"
+    | Error (FractalError.Locked message) ->
+        failwith $"Expected Ok but got Locked: {message}"
+    | Error (FractalError.IOError message) ->
+        failwith $"Expected Ok but got IOError: {message}"
+    | Error (FractalError.CantOpen message) ->
+        failwith $"Expected Ok but got CantOpen: {message}"
+    | Error (FractalError.DiskFull message) ->
+        failwith $"Expected Ok but got DiskFull: {message}"
 
 /// <summary>
 /// Asserts that a FractalResult is Error (failure).

@@ -111,6 +111,11 @@ type Collection<'T> =
             /// Whether to cache translated SQL queries for performance.
             /// </summary>
             EnableCache: bool
+
+            /// <summary>
+            /// Optional resilience configuration for automatic retry of transient errors.
+            /// </summary>
+            Resilience: ResilienceOptions option
         }
 
 /// <summary>
@@ -1362,43 +1367,43 @@ module Collection =
     /// </code>
     /// </example>
     let insertOne (doc: 'T) (collection: Collection<'T>) : Task<FractalResult<Document<'T>>> =
-        // Create document with auto-generated ID and timestamps
-        let document = Document.create doc
+        let doInsert () =
+            task {
+                // Create document with auto-generated ID and timestamps
+                let document = Document.create doc
 
-        // Serialize document data to JSON
-        let bodyJson = serialize document.Data
+                // Serialize document data to JSON
+                let bodyJson = serialize document.Data
 
-        // Build INSERT statement
-        let sql =
-            $"INSERT INTO {collection.Name} (_id, body, createdAt, updatedAt) 
-                VALUES (@id, @body, @created, @updated)"
+                // Build INSERT statement
+                let sql =
+                    $"INSERT INTO {collection.Name} (_id, body, createdAt, updatedAt) 
+                        VALUES (@id, @body, @created, @updated)"
 
-        let params' =
-            [ "id", SqlType.String document.Id
-              "body", SqlType.String bodyJson
-              "created", SqlType.Int64 document.CreatedAt
-              "updated", SqlType.Int64 document.UpdatedAt ]
+                let params' =
+                    [ "id", SqlType.String document.Id
+                      "body", SqlType.String bodyJson
+                      "created", SqlType.Int64 document.CreatedAt
+                      "updated", SqlType.Int64 document.UpdatedAt ]
 
-        try
-            collection.Connection
-            |> Db.newCommand sql
-            |> Db.setParams params'
-            |> Db.exec
-            |> ignore
+                try
+                    collection.Connection
+                    |> Db.newCommand sql
+                    |> Db.setParams params'
+                    |> Db.exec
+                    |> ignore
 
-            Task.FromResult(Ok document)
-        with :? DbExecutionException as ex ->
-            // Check if inner exception is SqliteException with constraint violation
-            match ex.InnerException with
-            | :? SqliteException as sqlEx when sqlEx.SqliteErrorCode = 19 ->
-                // SQLITE_CONSTRAINT error code = 19
-                // Use centralized parsing from DonaldExceptions module
-                let fieldName = parseUniqueConstraintField sqlEx.Message
-                let error = FractalError.UniqueConstraint(fieldName, box document.Id)
-                Task.FromResult(Error error)
-            | _ ->
-                // Re-raise other exceptions
-                reraise ()
+                    return Ok document
+                with
+                | :? DbExecutionException as ex ->
+                    // Map Donald exception to FractalError
+                    let error = mapDonaldException ex
+
+                    return Error error
+            }
+
+        // Wrap with retry logic
+        Retry.executeAsync collection.Resilience doInsert
 
     /// <summary>
     /// Inserts multiple documents into the collection with transaction support.
@@ -1490,66 +1495,68 @@ module Collection =
         (collection: Collection<'T>)
         : Task<FractalResult<InsertManyResult<'T>>> =
 
-        if List.isEmpty docs then
-            // Empty list - return empty result
-            let emptyResult = { Documents = []; InsertedCount = 0 }
-            Task.FromResult(Ok emptyResult)
-        else
-            use transaction = Transaction.create collection.Connection
+        let doInsertMany () =
+            task {
+                if List.isEmpty docs then
+                    // Empty list - return empty result
+                    let emptyResult = { Documents = []; InsertedCount = 0 }
+                    return Ok emptyResult
+                else
+                    use transaction = Transaction.create collection.Connection
 
-            let mutable insertedDocs = []
-            let mutable error = None
+                    let mutable insertedDocs = []
+                    let mutable error: FractalError option = None
 
-            for doc in docs do
-                if error.IsNone || not ordered then
-                    // Create document with auto-generated ID and timestamps
-                    let document = Document.create doc
-                    let bodyJson = serialize document.Data
+                    for doc in docs do
+                        if error.IsNone || not ordered then
+                            // Create document with auto-generated ID and timestamps
+                            let document = Document.create doc
+                            let bodyJson = serialize document.Data
 
-                    let sql =
-                        $"INSERT INTO {collection.Name} (_id, body, createdAt, updatedAt) 
-                            VALUES (@id, @body, @created, @updated)"
+                            let sql =
+                                $"INSERT INTO {collection.Name} (_id, body, createdAt, updatedAt) 
+                                    VALUES (@id, @body, @created, @updated)"
 
-                    let params' =
-                        [ "id", SqlType.String document.Id
-                          "body", SqlType.String bodyJson
-                          "created", SqlType.Int64 document.CreatedAt
-                          "updated", SqlType.Int64 document.UpdatedAt ]
+                            let params' =
+                                [ "id", SqlType.String document.Id
+                                  "body", SqlType.String bodyJson
+                                  "created", SqlType.Int64 document.CreatedAt
+                                  "updated", SqlType.Int64 document.UpdatedAt ]
 
-                    try
-                        collection.Connection
-                        |> Db.newCommand sql
-                        |> Db.setParams params'
-                        |> Db.exec
-                        |> ignore
+                            try
+                                collection.Connection
+                                |> Db.newCommand sql
+                                |> Db.setParams params'
+                                |> Db.exec
+                                |> ignore
 
-                        insertedDocs <- document :: insertedDocs
-                    with :? DbExecutionException as ex ->
-                        match ex.InnerException with
-                        | :? SqliteException as sqlEx when sqlEx.SqliteErrorCode = 19 ->
-                            let err = FractalError.UniqueConstraint("_id", box document.Id)
+                                insertedDocs <- document :: insertedDocs
+                            with
+                            | :? DbExecutionException as ex ->
+                                let err = mapDonaldException ex
 
-                            if ordered then
-                                error <- Some err
-                        // else: skip this document, continue with next
-                        | _ ->
-                            // Re-raise unexpected exceptions
-                            reraise ()
+                                if ordered then
+                                    error <- Some err
+                            // else: skip this document, continue with next (unordered mode)
 
-            match error with
-            | Some err when ordered ->
-                // Ordered mode with error - rollback
-                transaction.Rollback()
-                Task.FromResult(Error err)
-            | _ ->
-                // Success (or unordered with partial success)
-                transaction.Commit()
+                    match error with
+                    | Some err when ordered ->
+                        // Ordered mode with error - rollback
+                        transaction.Rollback()
+                        return Error err
+                    | _ ->
+                        // Success (or unordered with partial success)
+                        transaction.Commit()
 
-                let result =
-                    { Documents = List.rev insertedDocs // Reverse to maintain insertion order
-                      InsertedCount = List.length insertedDocs }
+                        let result =
+                            { Documents = List.rev insertedDocs // Reverse to maintain insertion order
+                              InsertedCount = List.length insertedDocs }
 
-                Task.FromResult(Ok result)
+                        return Ok result
+            }
+
+        // Wrap with retry logic
+        Retry.executeAsync collection.Resilience doInsertMany
 
     /// <summary>
     /// Inserts multiple documents into the collection (ordered mode).
@@ -1672,55 +1679,64 @@ module Collection =
         (update: 'T -> 'T)
         (collection: Collection<'T>)
         : Task<FractalResult<option<Document<'T>>>> =
-        task {
-            // Find existing document
-            let! maybeDoc = findById id collection
+        let doUpdate () =
+            task {
+                // Find existing document
+                let! maybeDoc = findById id collection
 
-            match maybeDoc with
-            | None ->
-                // Document not found
-                return Ok None
-            | Some doc ->
-                try
-                    // Apply update function to document data
-                    let updatedData = update doc.Data
+                match maybeDoc with
+                | None ->
+                    // Document not found
+                    return Ok None
+                | Some doc ->
+                    try
+                        // Apply update function to document data
+                        let updatedData = update doc.Data
 
-                    // Serialize updated data
-                    let bodyJson = serialize updatedData
+                        // Serialize updated data
+                        let bodyJson = serialize updatedData
 
-                    // Get new timestamp
-                    let newUpdatedAt = Timestamp.now ()
+                        // Get new timestamp
+                        let newUpdatedAt = Timestamp.now ()
 
-                    // Build UPDATE statement
-                    let sql =
-                        $"UPDATE {collection.Name} 
-                            SET body = @body, updatedAt = @updated 
-                            WHERE _id = @id"
+                        // Build UPDATE statement
+                        let sql =
+                            $"UPDATE {collection.Name} 
+                                SET body = @body, updatedAt = @updated 
+                                WHERE _id = @id"
 
-                    let params' =
-                        [ "body", SqlType.String bodyJson
-                          "updated", SqlType.Int64 newUpdatedAt
-                          "id", SqlType.String id ]
+                        let params' =
+                            [ "body", SqlType.String bodyJson
+                              "updated", SqlType.Int64 newUpdatedAt
+                              "id", SqlType.String id ]
 
-                    collection.Connection
-                    |> Db.newCommand sql
-                    |> Db.setParams params'
-                    |> Db.exec
-                    |> ignore
+                        collection.Connection
+                        |> Db.newCommand sql
+                        |> Db.setParams params'
+                        |> Db.exec
+                        |> ignore
 
-                    // Return updated document
-                    let updatedDoc =
-                        { Id = doc.Id
-                          Data = updatedData
-                          CreatedAt = doc.CreatedAt
-                          UpdatedAt = newUpdatedAt }
+                        // Return updated document
+                        let updatedDoc =
+                            { Id = doc.Id
+                              Data = updatedData
+                              CreatedAt = doc.CreatedAt
+                              UpdatedAt = newUpdatedAt }
 
-                    return Ok(Some updatedDoc)
-                with ex ->
-                    // Wrap serialization or database errors
-                    let error = FractalError.Serialization ex.Message
-                    return Error error
-        }
+                        return Ok(Some updatedDoc)
+                    with
+                    | :? DbExecutionException as ex ->
+                        // Map Donald exception to FractalError for proper retry handling
+                        let error = mapDonaldException ex
+                        return Error error
+                    | ex ->
+                        // Wrap serialization or other errors
+                        let error = FractalError.Serialization ex.Message
+                        return Error error
+            }
+
+        // Wrap with retry logic
+        Retry.executeAsync collection.Resilience doUpdate
 
     /// <summary>
     /// Updates the first document matching the filter using a transformation function.
@@ -1970,51 +1986,60 @@ module Collection =
         (doc: 'T)
         (collection: Collection<'T>)
         : Task<FractalResult<option<Document<'T>>>> =
-        task {
-            // Find first matching document
-            let! maybeDoc = findOne filter collection
+        let doReplace () =
+            task {
+                // Find first matching document
+                let! maybeDoc = findOne filter collection
 
-            match maybeDoc with
-            | None ->
-                // Document not found
-                return Ok None
-            | Some existingDoc ->
-                try
-                    // Serialize new data
-                    let bodyJson = serialize doc
+                match maybeDoc with
+                | None ->
+                    // Document not found
+                    return Ok None
+                | Some existingDoc ->
+                    try
+                        // Serialize new data
+                        let bodyJson = serialize doc
 
-                    // Get new timestamp
-                    let newUpdatedAt = Timestamp.now ()
+                        // Get new timestamp
+                        let newUpdatedAt = Timestamp.now ()
 
-                    // Build UPDATE statement
-                    let sql =
-                        $"UPDATE {collection.Name} 
-                            SET body = @body, updatedAt = @updated 
-                            WHERE _id = @id"
+                        // Build UPDATE statement
+                        let sql =
+                            $"UPDATE {collection.Name} 
+                                SET body = @body, updatedAt = @updated 
+                                WHERE _id = @id"
 
-                    let params' =
-                        [ "body", SqlType.String bodyJson
-                          "updated", SqlType.Int64 newUpdatedAt
-                          "id", SqlType.String existingDoc.Id ]
+                        let params' =
+                            [ "body", SqlType.String bodyJson
+                              "updated", SqlType.Int64 newUpdatedAt
+                              "id", SqlType.String existingDoc.Id ]
 
-                    collection.Connection
-                    |> Db.newCommand sql
-                    |> Db.setParams params'
-                    |> Db.exec
-                    |> ignore
+                        collection.Connection
+                        |> Db.newCommand sql
+                        |> Db.setParams params'
+                        |> Db.exec
+                        |> ignore
 
-                    // Return replaced document
-                    let replacedDoc =
-                        { Id = existingDoc.Id
-                          Data = doc
-                          CreatedAt = existingDoc.CreatedAt
-                          UpdatedAt = newUpdatedAt }
+                        // Return replaced document
+                        let replacedDoc =
+                            { Id = existingDoc.Id
+                              Data = doc
+                              CreatedAt = existingDoc.CreatedAt
+                              UpdatedAt = newUpdatedAt }
 
-                    return Ok(Some replacedDoc)
-                with ex ->
-                    let error = FractalError.Serialization ex.Message
-                    return Error error
-        }
+                        return Ok(Some replacedDoc)
+                    with
+                    | :? DbExecutionException as ex ->
+                        // Map Donald exception to FractalError for proper retry handling
+                        let error = mapDonaldException ex
+                        return Error error
+                    | ex ->
+                        let error = FractalError.Serialization ex.Message
+                        return Error error
+            }
+
+        // Wrap with retry logic
+        Retry.executeAsync collection.Resilience doReplace
 
     // ═══════════════════════════════════════════════════════════════
     // BATCH OPERATIONS
@@ -2104,60 +2129,69 @@ module Collection =
         (update: 'T -> 'T)
         (collection: Collection<'T>)
         : Task<FractalResult<UpdateResult>> =
-        task {
-            try
-                // Find all matching documents
-                let! docs = find filter collection
+        let doUpdateMany () =
+            task {
+                try
+                    // Find all matching documents
+                    let! docs = find filter collection
 
-                let matchedCount = List.length docs
+                    let matchedCount = List.length docs
 
-                if matchedCount = 0 then
-                    // No documents matched - return zero counts
-                    return Ok { MatchedCount = 0; ModifiedCount = 0 }
-                else
-                    use transaction = Transaction.create collection.Connection
+                    if matchedCount = 0 then
+                        // No documents matched - return zero counts
+                        return Ok { MatchedCount = 0; ModifiedCount = 0 }
+                    else
+                        use transaction = Transaction.create collection.Connection
 
-                    let mutable modifiedCount = 0
-                    let newUpdatedAt = Timestamp.now ()
+                        let mutable modifiedCount = 0
+                        let newUpdatedAt = Timestamp.now ()
 
-                    // Update each document
-                    for doc in docs do
-                        // Apply update function
-                        let updatedData = update doc.Data
+                        // Update each document
+                        for doc in docs do
+                            // Apply update function
+                            let updatedData = update doc.Data
 
-                        // Serialize updated data
-                        let bodyJson = serialize updatedData
+                            // Serialize updated data
+                            let bodyJson = serialize updatedData
 
-                        // Build UPDATE statement
-                        let sql =
-                            $"UPDATE {collection.Name} 
-                                SET body = @body, updatedAt = @updated 
-                                WHERE _id = @id"
+                            // Build UPDATE statement
+                            let sql =
+                                $"UPDATE {collection.Name} 
+                                    SET body = @body, updatedAt = @updated 
+                                    WHERE _id = @id"
 
-                        let params' =
-                            [ "body", SqlType.String bodyJson
-                              "updated", SqlType.Int64 newUpdatedAt
-                              "id", SqlType.String doc.Id ]
+                            let params' =
+                                [ "body", SqlType.String bodyJson
+                                  "updated", SqlType.Int64 newUpdatedAt
+                                  "id", SqlType.String doc.Id ]
 
-                        collection.Connection
-                        |> Db.newCommand sql
-                        |> Db.setParams params'
-                        |> Db.exec
-                        |> ignore
+                            collection.Connection
+                            |> Db.newCommand sql
+                            |> Db.setParams params'
+                            |> Db.exec
+                            |> ignore
 
-                        modifiedCount <- modifiedCount + 1
+                            modifiedCount <- modifiedCount + 1
 
-                    // Commit transaction
-                    transaction.Commit()
+                        // Commit transaction
+                        transaction.Commit()
 
-                    return
-                        Ok
-                            { MatchedCount = matchedCount
-                              ModifiedCount = modifiedCount }
-            with ex ->
-                let error = FractalError.Serialization ex.Message
-                return Error error
-        }
+                        return
+                            Ok
+                                { MatchedCount = matchedCount
+                                  ModifiedCount = modifiedCount }
+                with
+                | :? DbExecutionException as ex ->
+                    // Map Donald exception to FractalError for proper retry handling
+                    let error = mapDonaldException ex
+                    return Error error
+                | ex ->
+                    let error = FractalError.Serialization ex.Message
+                    return Error error
+            }
+
+        // Wrap with retry logic
+        Retry.executeAsync collection.Resilience doUpdateMany
 
     // ═══════════════════════════════════════════════════════════════
     // DELETE OPERATIONS
@@ -2724,110 +2758,110 @@ module Collection =
         (options: FindAndModifyOptions)
         (collection: Collection<'T>)
         : Task<FractalResult<option<Document<'T>>>> =
-        task {
-            try
-                use transaction = Transaction.create collection.Connection
+        let doFindAndUpdate () =
+            task {
+                try
+                    use transaction = Transaction.create collection.Connection
 
-                // Find the document with sort options
-                let queryOptions =
-                    { QueryOptions.empty with
-                        Sort = options.Sort }
+                    // Find the document with sort options
+                    let queryOptions =
+                        { QueryOptions.empty with
+                            Sort = options.Sort }
 
-                let! maybeDoc = collection |> findOneWith filter queryOptions
+                    let! maybeDoc = collection |> findOneWith filter queryOptions
 
-                match maybeDoc with
-                | Some doc ->
-                    // Apply update function and serialize
-                    let updatedData = update doc.Data
-                    let dataJson = Serialization.serialize updatedData
-                    let now = Timestamp.now ()
+                    match maybeDoc with
+                    | Some doc ->
+                        // Apply update function and serialize
+                        let updatedData = update doc.Data
+                        let dataJson = Serialization.serialize updatedData
+                        let now = Timestamp.now ()
 
-                    // Update the document in database
-                    let sql =
-                        $"
-                        UPDATE {collection.Name}
-                        SET body = @body, updatedAt = @updatedAt
-                        WHERE _id = @id"
+                        // Update the document in database
+                        let sql =
+                            $"
+                            UPDATE {collection.Name}
+                            SET body = @body, updatedAt = @updatedAt
+                            WHERE _id = @id"
 
-                    let params' =
-                        [ "@body", SqlType.String dataJson
-                          "@updatedAt", SqlType.Int64 now
-                          "@id", SqlType.String doc.Id ]
+                        let params' =
+                            [ "@body", SqlType.String dataJson
+                              "@updatedAt", SqlType.Int64 now
+                              "@id", SqlType.String doc.Id ]
 
-                    collection.Connection
-                    |> Db.newCommand sql
-                    |> Db.setParams params'
-                    |> Db.exec
-                    |> ignore
+                        collection.Connection
+                        |> Db.newCommand sql
+                        |> Db.setParams params'
+                        |> Db.exec
+                        |> ignore
 
-                    transaction.Commit()
+                        transaction.Commit()
 
-                    // Return document based on options
-                    match options.ReturnDocument with
-                    | ReturnDocument.Before -> return Ok(Some doc)
-                    | ReturnDocument.After ->
-                        let updatedDoc =
-                            { Id = doc.Id
-                              Data = updatedData
-                              CreatedAt = doc.CreatedAt
+                        // Return document based on options
+                        match options.ReturnDocument with
+                        | ReturnDocument.Before -> return Ok(Some doc)
+                        | ReturnDocument.After ->
+                            let updatedDoc =
+                                { Id = doc.Id
+                                  Data = updatedData
+                                  CreatedAt = doc.CreatedAt
+                                  UpdatedAt = now }
+
+                            return Ok(Some updatedDoc)
+
+                    | None when options.Upsert ->
+                        // No document found, but upsert is enabled - insert new document
+                        // Apply update to default/'T value
+                        let defaultData = Unchecked.defaultof<'T>
+                        let newData = update defaultData
+                        let dataJson = Serialization.serialize newData
+                        let now = Timestamp.now ()
+                        let newId = IdGenerator.generate ()
+
+                        let sql =
+                            $"
+                            INSERT INTO {collection.Name} (_id, body, createdAt, updatedAt)
+                            VALUES (@id, @body, @createdAt, @updatedAt)"
+
+                        let params' =
+                            [ "@id", SqlType.String newId
+                              "@body", SqlType.String dataJson
+                              "@createdAt", SqlType.Int64 now
+                              "@updatedAt", SqlType.Int64 now ]
+
+                        collection.Connection
+                        |> Db.newCommand sql
+                        |> Db.setParams params'
+                        |> Db.exec
+                        |> ignore
+
+                        transaction.Commit()
+
+                        let newDoc =
+                            { Id = newId
+                              Data = newData
+                              CreatedAt = now
                               UpdatedAt = now }
 
-                        return Ok(Some updatedDoc)
+                        return Ok(Some newDoc)
 
-                | None when options.Upsert ->
-                    // No document found, but upsert is enabled - insert new document
-                    // Apply update to default/'T value
-                    let defaultData = Unchecked.defaultof<'T>
-                    let newData = update defaultData
-                    let dataJson = Serialization.serialize newData
-                    let now = Timestamp.now ()
-                    let newId = IdGenerator.generate ()
+                    | None ->
+                        // No document found and upsert is false
+                        transaction.Commit()
+                        return Ok None
 
-                    let sql =
-                        $"
-                        INSERT INTO {collection.Name} (_id, body, createdAt, updatedAt)
-                        VALUES (@id, @body, @createdAt, @updatedAt)"
-
-                    let params' =
-                        [ "@id", SqlType.String newId
-                          "@body", SqlType.String dataJson
-                          "@createdAt", SqlType.Int64 now
-                          "@updatedAt", SqlType.Int64 now ]
-
-                    collection.Connection
-                    |> Db.newCommand sql
-                    |> Db.setParams params'
-                    |> Db.exec
-                    |> ignore
-
-                    transaction.Commit()
-
-                    let newDoc =
-                        { Id = newId
-                          Data = newData
-                          CreatedAt = now
-                          UpdatedAt = now }
-
-                    return Ok(Some newDoc)
-
-                | None ->
-                    // No document found and upsert is false
-                    transaction.Commit()
-                    return Ok None
-
-            with
-            | :? DbExecutionException as ex ->
-                match ex.InnerException with
-                | :? SqliteException as sqlEx when sqlEx.SqliteErrorCode = 19 ->
-                    // SQLITE_CONSTRAINT
-                    return Error(FractalError.UniqueConstraint("_id", obj ()))
-                | _ ->
-                    let msg = $"Database error during findOneAndUpdate: {ex.Message}"
+                with
+                | :? DbExecutionException as ex ->
+                    // Map Donald exception to FractalError for proper retry handling
+                    let error = mapDonaldException ex
+                    return Error error
+                | ex ->
+                    let msg = $"Unexpected error during findOneAndUpdate: {ex.Message}"
                     return Error(FractalError.InvalidOperation(msg))
-            | ex ->
-                let msg = $"Unexpected error during findOneAndUpdate: {ex.Message}"
-                return Error(FractalError.InvalidOperation(msg))
-        }
+            }
+
+        // Wrap with retry logic
+        Retry.executeAsync collection.Resilience doFindAndUpdate
 
     /// <summary>
     /// Atomically finds and replaces a single document matching the filter.
@@ -2970,106 +3004,106 @@ module Collection =
         (options: FindAndModifyOptions)
         (collection: Collection<'T>)
         : Task<FractalResult<option<Document<'T>>>> =
-        task {
-            try
-                use transaction = Transaction.create collection.Connection
+        let doFindAndReplace () =
+            task {
+                try
+                    use transaction = Transaction.create collection.Connection
 
-                // Find the document with sort options
-                let queryOptions =
-                    { QueryOptions.empty with
-                        Sort = options.Sort }
+                    // Find the document with sort options
+                    let queryOptions =
+                        { QueryOptions.empty with
+                            Sort = options.Sort }
 
-                let! maybeDoc = collection |> findOneWith filter queryOptions
+                    let! maybeDoc = collection |> findOneWith filter queryOptions
 
-                match maybeDoc with
-                | Some existingDoc ->
-                    // Replace document data (preserve Id and CreatedAt)
-                    let dataJson = Serialization.serialize doc
-                    let now = Timestamp.now ()
+                    match maybeDoc with
+                    | Some existingDoc ->
+                        // Replace document data (preserve Id and CreatedAt)
+                        let dataJson = Serialization.serialize doc
+                        let now = Timestamp.now ()
 
-                    // Update the document in database
-                    let sql =
-                        $"
-                        UPDATE {collection.Name}
-                        SET body = @body, updatedAt = @updatedAt
-                        WHERE _id = @id"
+                        // Update the document in database
+                        let sql =
+                            $"
+                            UPDATE {collection.Name}
+                            SET body = @body, updatedAt = @updatedAt
+                            WHERE _id = @id"
 
-                    let params' =
-                        [ "@body", SqlType.String dataJson
-                          "@updatedAt", SqlType.Int64 now
-                          "@id", SqlType.String existingDoc.Id ]
+                        let params' =
+                            [ "@body", SqlType.String dataJson
+                              "@updatedAt", SqlType.Int64 now
+                              "@id", SqlType.String existingDoc.Id ]
 
-                    collection.Connection
-                    |> Db.newCommand sql
-                    |> Db.setParams params'
-                    |> Db.exec
-                    |> ignore
+                        collection.Connection
+                        |> Db.newCommand sql
+                        |> Db.setParams params'
+                        |> Db.exec
+                        |> ignore
 
-                    transaction.Commit()
+                        transaction.Commit()
 
-                    // Return document based on options
-                    match options.ReturnDocument with
-                    | ReturnDocument.Before -> return Ok(Some existingDoc)
-                    | ReturnDocument.After ->
-                        let replacedDoc =
-                            { Id = existingDoc.Id
+                        // Return document based on options
+                        match options.ReturnDocument with
+                        | ReturnDocument.Before -> return Ok(Some existingDoc)
+                        | ReturnDocument.After ->
+                            let replacedDoc =
+                                { Id = existingDoc.Id
+                                  Data = doc
+                                  CreatedAt = existingDoc.CreatedAt
+                                  UpdatedAt = now }
+
+                            return Ok(Some replacedDoc)
+
+                    | None when options.Upsert ->
+                        // No document found, but upsert is enabled - insert new document
+                        let dataJson = Serialization.serialize doc
+                        let now = Timestamp.now ()
+                        let newId = IdGenerator.generate ()
+
+                        let sql =
+                            $"
+                            INSERT INTO {collection.Name} (_id, body, createdAt, updatedAt)
+                            VALUES (@id, @body, @createdAt, @updatedAt)"
+
+                        let params' =
+                            [ "@id", SqlType.String newId
+                              "@body", SqlType.String dataJson
+                              "@createdAt", SqlType.Int64 now
+                              "@updatedAt", SqlType.Int64 now ]
+
+                        collection.Connection
+                        |> Db.newCommand sql
+                        |> Db.setParams params'
+                        |> Db.exec
+                        |> ignore
+
+                        transaction.Commit()
+
+                        let newDoc =
+                            { Id = newId
                               Data = doc
-                              CreatedAt = existingDoc.CreatedAt
+                              CreatedAt = now
                               UpdatedAt = now }
 
-                        return Ok(Some replacedDoc)
+                        return Ok(Some newDoc)
 
-                | None when options.Upsert ->
-                    // No document found, but upsert is enabled - insert new document
-                    let dataJson = Serialization.serialize doc
-                    let now = Timestamp.now ()
-                    let newId = IdGenerator.generate ()
+                    | None ->
+                        // No document found and upsert is false
+                        transaction.Commit()
+                        return Ok None
 
-                    let sql =
-                        $"
-                        INSERT INTO {collection.Name} (_id, body, createdAt, updatedAt)
-                        VALUES (@id, @body, @createdAt, @updatedAt)"
-
-                    let params' =
-                        [ "@id", SqlType.String newId
-                          "@body", SqlType.String dataJson
-                          "@createdAt", SqlType.Int64 now
-                          "@updatedAt", SqlType.Int64 now ]
-
-                    collection.Connection
-                    |> Db.newCommand sql
-                    |> Db.setParams params'
-                    |> Db.exec
-                    |> ignore
-
-                    transaction.Commit()
-
-                    let newDoc =
-                        { Id = newId
-                          Data = doc
-                          CreatedAt = now
-                          UpdatedAt = now }
-
-                    return Ok(Some newDoc)
-
-                | None ->
-                    // No document found and upsert is false
-                    transaction.Commit()
-                    return Ok None
-
-            with
-            | :? DbExecutionException as ex ->
-                match ex.InnerException with
-                | :? SqliteException as sqlEx when sqlEx.SqliteErrorCode = 19 ->
-                    // SQLITE_CONSTRAINT
-                    return Error(FractalError.UniqueConstraint("_id", obj ()))
-                | _ ->
-                    let msg = $"Database error during findOneAndReplace: {ex.Message}"
+                with
+                | :? DbExecutionException as ex ->
+                    // Map Donald exception to FractalError for proper retry handling
+                    let error = mapDonaldException ex
+                    return Error error
+                | ex ->
+                    let msg = $"Unexpected error during findOneAndReplace: {ex.Message}"
                     return Error(FractalError.InvalidOperation(msg))
-            | ex ->
-                let msg = $"Unexpected error during findOneAndReplace: {ex.Message}"
-                return Error(FractalError.InvalidOperation(msg))
-        }
+            }
+
+        // Wrap with retry logic
+        Retry.executeAsync collection.Resilience doFindAndReplace
 
     // ═══════════════════════════════════════════════════════════════
     // UTILITY OPERATIONS

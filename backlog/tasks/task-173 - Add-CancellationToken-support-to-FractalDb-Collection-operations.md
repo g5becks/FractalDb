@@ -1,11 +1,11 @@
 ---
 id: task-173
 title: Add CancellationToken support to FractalDb Collection operations
-status: In Progress
+status: Done
 assignee:
   - '@claude'
 created_date: '2025-12-31 17:50'
-updated_date: '2025-12-31 18:09'
+updated_date: '2025-12-31 18:13'
 labels: []
 dependencies: []
 priority: high

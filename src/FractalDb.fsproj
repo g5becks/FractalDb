@@ -6,6 +6,10 @@
     </PropertyGroup>
 
     <ItemGroup>
+        <InternalsVisibleTo Include="FractalDb.Tests" />
+    </ItemGroup>
+
+    <ItemGroup>
         <Compile Include="Types.fs" />
         <Compile Include="Errors.fs" />
         <Compile Include="Operators.fs" />

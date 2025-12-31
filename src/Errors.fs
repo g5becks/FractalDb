@@ -1,6 +1,7 @@
 module FractalDb.Errors
 
 open System
+open System.Threading
 open System.Threading.Tasks
 open Donald
 open Microsoft.Data.Sqlite
@@ -134,6 +135,83 @@ type FractalError =
     /// </example>
     | InvalidOperation of message: string
 
+    // --- Transient errors (may succeed on retry) ---
+
+    /// <summary>
+    /// Database is busy - another connection holds a lock (SQLITE_BUSY, error code 5).
+    /// </summary>
+    /// <param name="message">A description of the busy condition.</param>
+    /// <remarks>
+    /// This is a transient error that may succeed on retry. Common when multiple
+    /// connections are writing to the same database simultaneously.
+    /// </remarks>
+    /// <example>
+    /// <code>
+    /// FractalError.Busy "database is locked"
+    /// </code>
+    /// </example>
+    | Busy of message: string
+
+    /// <summary>
+    /// Table or row is locked (SQLITE_LOCKED, error code 6).
+    /// </summary>
+    /// <param name="message">A description of the lock condition.</param>
+    /// <remarks>
+    /// This is a transient error that may succeed on retry. Occurs during write
+    /// conflicts within the same connection or transaction deadlocks.
+    /// </remarks>
+    /// <example>
+    /// <code>
+    /// FractalError.Locked "database table is locked"
+    /// </code>
+    /// </example>
+    | Locked of message: string
+
+    /// <summary>
+    /// I/O error occurred (SQLITE_IOERR, error code 10).
+    /// </summary>
+    /// <param name="message">A description of the I/O error.</param>
+    /// <remarks>
+    /// This is a transient error that may succeed on retry. Can occur with
+    /// network drives, disk issues, or temporary file system problems.
+    /// </remarks>
+    /// <example>
+    /// <code>
+    /// FractalError.IOError "disk I/O error"
+    /// </code>
+    /// </example>
+    | IOError of message: string
+
+    /// <summary>
+    /// Database file could not be opened (SQLITE_CANTOPEN, error code 14).
+    /// </summary>
+    /// <param name="message">A description of the open failure.</param>
+    /// <remarks>
+    /// This is a transient error that may succeed on retry. Can occur when
+    /// the file is temporarily unavailable or locked by another process.
+    /// </remarks>
+    /// <example>
+    /// <code>
+    /// FractalError.CantOpen "unable to open database file"
+    /// </code>
+    /// </example>
+    | CantOpen of message: string
+
+    /// <summary>
+    /// Database disk is full (SQLITE_FULL, error code 13).
+    /// </summary>
+    /// <param name="message">A description of the disk full condition.</param>
+    /// <remarks>
+    /// This is a transient error that may succeed on retry if disk space
+    /// is freed. Occurs when the database file cannot grow.
+    /// </remarks>
+    /// <example>
+    /// <code>
+    /// FractalError.DiskFull "database or disk is full"
+    /// </code>
+    /// </example>
+    | DiskFull of message: string
+
     /// <summary>
     /// Gets a human-readable error message describing the error.
     /// </summary>
@@ -163,6 +241,11 @@ type FractalError =
         | NotFound id -> $"Document not found: {id}"
         | Serialization msg -> $"Serialization error: {msg}"
         | InvalidOperation msg -> $"Invalid operation: {msg}"
+        | Busy msg -> $"Database busy: {msg}"
+        | Locked msg -> $"Database locked: {msg}"
+        | IOError msg -> $"I/O error: {msg}"
+        | CantOpen msg -> $"Cannot open database: {msg}"
+        | DiskFull msg -> $"Disk full: {msg}"
 
     /// <summary>
     /// Gets the category of the error for grouping and filtering.
@@ -209,6 +292,11 @@ type FractalError =
         | NotFound _ -> "query"
         | Serialization _ -> "serialization"
         | InvalidOperation _ -> "operation"
+        | Busy _ -> "transient"
+        | Locked _ -> "transient"
+        | IOError _ -> "transient"
+        | CantOpen _ -> "transient"
+        | DiskFull _ -> "transient"
 
 /// <summary>
 /// Type alias for Result with FractalError as the error type.
@@ -575,6 +663,168 @@ module FractalResult =
         | _, Error e -> Error e
 
 /// <summary>
+/// Errors that can be configured to trigger automatic retry.
+/// </summary>
+///
+/// <remarks>
+/// RetryableError represents categories of transient errors that may succeed
+/// if retried. Users can configure which error types should trigger retries
+/// using ResilienceOptions.
+/// </remarks>
+[<RequireQualifiedAccess>]
+type RetryableError =
+    /// Database is busy (SQLITE_BUSY) - another connection holds a lock
+    | Busy
+    /// Table/row is locked (SQLITE_LOCKED) - write conflict
+    | Locked
+    /// I/O error (SQLITE_IOERR) - transient disk/network issues
+    | IOError
+    /// Cannot open database (SQLITE_CANTOPEN) - file temporarily unavailable
+    | CantOpen
+    /// Connection error - transient connection issues
+    | Connection
+    /// Transaction error - deadlock or timeout
+    | Transaction
+
+/// <summary>
+/// Functions for working with RetryableError values.
+/// </summary>
+module RetryableError =
+    /// <summary>
+    /// Default set of errors to retry (most common transient errors).
+    /// </summary>
+    /// <remarks>
+    /// Includes Busy and Locked errors which are the most common
+    /// transient errors in SQLite concurrent access scenarios.
+    /// </remarks>
+    let defaults = set [ RetryableError.Busy; RetryableError.Locked ]
+
+    /// <summary>
+    /// Extended set including I/O errors (for network drives, etc.).
+    /// </summary>
+    let extended =
+        set [ RetryableError.Busy; RetryableError.Locked; RetryableError.IOError; RetryableError.CantOpen ]
+
+    /// <summary>
+    /// All retryable errors.
+    /// </summary>
+    let all =
+        set [
+            RetryableError.Busy
+            RetryableError.Locked
+            RetryableError.IOError
+            RetryableError.CantOpen
+            RetryableError.Connection
+            RetryableError.Transaction
+        ]
+
+    /// <summary>
+    /// Check if a FractalError matches a RetryableError.
+    /// </summary>
+    /// <param name="retryable">The retryable error type to check for.</param>
+    /// <param name="error">The FractalError to check.</param>
+    /// <returns>True if the FractalError matches the RetryableError type.</returns>
+    let matches (retryable: RetryableError) (error: FractalError) : bool =
+        match retryable, error with
+        | RetryableError.Busy, FractalError.Busy _ -> true
+        | RetryableError.Locked, FractalError.Locked _ -> true
+        | RetryableError.IOError, FractalError.IOError _ -> true
+        | RetryableError.CantOpen, FractalError.CantOpen _ -> true
+        | RetryableError.Connection, FractalError.Connection _ -> true
+        | RetryableError.Transaction, FractalError.Transaction _ -> true
+        | _ -> false
+
+    /// <summary>
+    /// Check if a FractalError should be retried given a set of retryable errors.
+    /// </summary>
+    /// <param name="retryableSet">The set of errors configured for retry.</param>
+    /// <param name="error">The FractalError to check.</param>
+    /// <returns>True if the error matches any error in the retryable set.</returns>
+    let shouldRetry (retryableSet: Set<RetryableError>) (error: FractalError) : bool =
+        retryableSet |> Set.exists (fun r -> matches r error)
+
+/// <summary>
+/// Configuration for automatic retry of transient database errors.
+/// </summary>
+///
+/// <remarks>
+/// ResilienceOptions controls how FractalDb handles transient errors by automatically
+/// retrying failed operations. Configure this at the database level via DbOptions.
+/// </remarks>
+///
+/// <example>
+/// <code>
+/// // Use default resilience (retry Busy and Locked errors, 2 retries)
+/// let options = { DbOptions.defaults with Resilience = Some ResilienceOptions.defaults }
+///
+/// // Custom configuration
+/// let customResilience = {
+///     ResilienceOptions.defaults with
+///         RetryOn = RetryableError.extended
+///         MaxRetries = 5
+/// }
+/// </code>
+/// </example>
+type ResilienceOptions =
+    {
+        /// Which errors should trigger a retry
+        RetryOn: Set<RetryableError>
+
+        /// Maximum retry attempts (default: 2)
+        MaxRetries: int
+
+        /// Initial delay between retries (default: 100ms)
+        BaseDelay: TimeSpan
+
+        /// Maximum delay cap (default: 5s)
+        MaxDelay: TimeSpan
+
+        /// Use exponential backoff (default: true)
+        ExponentialBackoff: bool
+
+        /// Add random jitter to delays (default: true)
+        Jitter: bool
+    }
+
+/// <summary>
+/// Functions for creating and working with ResilienceOptions.
+/// </summary>
+module ResilienceOptions =
+    /// <summary>
+    /// Default resilience configuration: retry Busy and Locked errors with 2 retries.
+    /// </summary>
+    let defaults =
+        {
+            RetryOn = RetryableError.defaults
+            MaxRetries = 2
+            BaseDelay = TimeSpan.FromMilliseconds(100.0)
+            MaxDelay = TimeSpan.FromSeconds(5.0)
+            ExponentialBackoff = true
+            Jitter = true
+        }
+
+    /// <summary>
+    /// No retry - disables resilience.
+    /// </summary>
+    let none = { defaults with MaxRetries = 0; RetryOn = Set.empty }
+
+    /// <summary>
+    /// Extended resilience: also retry I/O errors.
+    /// </summary>
+    let extended = { defaults with RetryOn = RetryableError.extended }
+
+    /// <summary>
+    /// Aggressive resilience: retry all transient errors with more attempts.
+    /// </summary>
+    let aggressive =
+        {
+            defaults with
+                RetryOn = RetryableError.all
+                MaxRetries = 5
+                MaxDelay = TimeSpan.FromSeconds(10.0)
+        }
+
+/// <summary>
 /// Provides utilities for converting Donald exceptions to FractalError.
 /// </summary>
 ///
@@ -741,14 +991,18 @@ module DonaldExceptions =
 
             // Check for specific SQLite errors in InnerException
             match e.InnerException with
-            | :? SqliteException as sqlEx when sqlEx.SqliteErrorCode = 19 ->
-                // SQLITE_CONSTRAINT (19) - UNIQUE constraint violation
-                let field = parseUniqueConstraintField sqlEx.Message
-                FractalError.UniqueConstraint(field, box "<value>")
-
-            | :? SqliteException as sqlEx when sqlEx.SqliteErrorCode = 5 ->
-                // SQLITE_BUSY (5) - Database is locked
-                FractalError.Connection $"Database is locked: {sqlEx.Message}"
+            | :? SqliteException as sqlEx ->
+                match sqlEx.SqliteErrorCode with
+                | 5 -> FractalError.Busy sqlEx.Message // SQLITE_BUSY
+                | 6 -> FractalError.Locked sqlEx.Message // SQLITE_LOCKED
+                | 10 -> FractalError.IOError sqlEx.Message // SQLITE_IOERR
+                | 13 -> FractalError.DiskFull sqlEx.Message // SQLITE_FULL
+                | 14 -> FractalError.CantOpen sqlEx.Message // SQLITE_CANTOPEN
+                | 19 ->
+                    // SQLITE_CONSTRAINT - UNIQUE constraint violation
+                    let field = parseUniqueConstraintField sqlEx.Message
+                    FractalError.UniqueConstraint(field, box "<value>")
+                | _ -> FractalError.Query(e.Message, Some sql)
 
             | _ ->
                 // Generic execution error
@@ -910,4 +1164,141 @@ module DonaldExceptions =
             | :? DbReaderException
             | :? DbTransactionException as ex -> return Error(mapDonaldException ex)
             | ex -> return Error(FractalError.Query(ex.Message, None))
+        }
+
+/// <summary>
+/// Internal module for retry logic with exponential backoff.
+/// </summary>
+/// <remarks>
+/// This module is used internally by FractalDb to implement automatic retry
+/// for transient database errors. It is not exposed to users - retry is
+/// configured via ResilienceOptions and happens automatically.
+/// </remarks>
+module internal Retry =
+    /// Thread-safe random instance for jitter calculation
+    let private random = Random()
+
+    /// Calculate delay for a retry attempt with optional exponential backoff and jitter
+    let private calculateDelay (opts: ResilienceOptions) (attempt: int) : TimeSpan =
+        let baseMs = opts.BaseDelay.TotalMilliseconds
+
+        // Apply exponential backoff: delay = base * 2^attempt
+        let delayMs =
+            if opts.ExponentialBackoff then
+                baseMs * (pown 2.0 attempt)
+            else
+                baseMs
+
+        // Add random jitter (up to 20% of delay)
+        let withJitter =
+            if opts.Jitter then
+                let jitter = random.NextDouble() * 0.2 * delayMs
+                delayMs + jitter
+            else
+                delayMs
+
+        // Cap at MaxDelay
+        TimeSpan.FromMilliseconds(min withJitter opts.MaxDelay.TotalMilliseconds)
+
+    /// <summary>
+    /// Execute an operation with automatic retry for transient errors.
+    /// </summary>
+    /// <param name="opts">Optional resilience configuration. If None, no retry is performed.</param>
+    /// <param name="operation">The operation to execute.</param>
+    /// <returns>Task containing the FractalResult from the operation.</returns>
+    let executeAsync<'T>
+        (opts: ResilienceOptions option)
+        (operation: unit -> Task<FractalResult<'T>>)
+        : Task<FractalResult<'T>> =
+        task {
+            match opts with
+            | None ->
+                // No resilience configured - execute directly
+                return! operation ()
+
+            | Some res when res.MaxRetries <= 0 || Set.isEmpty res.RetryOn ->
+                // Retry disabled - execute directly
+                return! operation ()
+
+            | Some res ->
+                let mutable attempt = 0
+                let mutable lastResult = Unchecked.defaultof<FractalResult<'T>>
+                let mutable shouldContinue = true
+
+                while shouldContinue && attempt <= res.MaxRetries do
+                    let! result = operation ()
+
+                    match result with
+                    | Ok _ ->
+                        // Success - return immediately
+                        lastResult <- result
+                        shouldContinue <- false
+
+                    | Error err when attempt < res.MaxRetries && RetryableError.shouldRetry res.RetryOn err ->
+                        // Retryable error and we have retries left - wait and retry
+                        let delay = calculateDelay res attempt
+                        do! Task.Delay(delay)
+                        attempt <- attempt + 1
+                        lastResult <- result
+
+                    | Error _ ->
+                        // Non-retryable error or max retries exceeded - return error
+                        lastResult <- result
+                        shouldContinue <- false
+
+                return lastResult
+        }
+
+    /// <summary>
+    /// Execute an operation with automatic retry, supporting CancellationToken.
+    /// </summary>
+    /// <param name="opts">Optional resilience configuration. If None, no retry is performed.</param>
+    /// <param name="ct">CancellationToken to observe for cancellation.</param>
+    /// <param name="operation">The operation to execute.</param>
+    /// <returns>Task containing the FractalResult from the operation.</returns>
+    let executeCancellableAsync<'T>
+        (opts: ResilienceOptions option)
+        (ct: CancellationToken)
+        (operation: unit -> Task<FractalResult<'T>>)
+        : Task<FractalResult<'T>> =
+        task {
+            match opts with
+            | None ->
+                // No resilience configured - execute directly
+                return! operation ()
+
+            | Some res when res.MaxRetries <= 0 || Set.isEmpty res.RetryOn ->
+                // Retry disabled - execute directly
+                return! operation ()
+
+            | Some res ->
+                let mutable attempt = 0
+                let mutable lastResult = Unchecked.defaultof<FractalResult<'T>>
+                let mutable shouldContinue = true
+
+                while shouldContinue && attempt <= res.MaxRetries do
+                    // Check cancellation before each attempt
+                    ct.ThrowIfCancellationRequested()
+
+                    let! result = operation ()
+
+                    match result with
+                    | Ok _ ->
+                        // Success - return immediately
+                        lastResult <- result
+                        shouldContinue <- false
+
+                    | Error err when attempt < res.MaxRetries && RetryableError.shouldRetry res.RetryOn err ->
+                        // Retryable error and we have retries left - wait and retry
+                        let delay = calculateDelay res attempt
+                        do! Task.Delay(delay, ct) // Pass CT to delay for responsive cancellation
+                        attempt <- attempt + 1
+                        lastResult <- result
+
+                    | Error _ ->
+                        // Non-retryable error or max retries exceeded - return error
+                        lastResult <- result
+                        shouldContinue <- false
+
+                return lastResult
         }
