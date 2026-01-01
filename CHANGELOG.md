@@ -9,6 +9,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## FractalDb (F# Port)
 
+### [1.2.1] - 2025-01-01
+
+#### Fixed
+
+- **CancellableTaskResult module now accessible after `open FractalDb`** - Previously, `CancellableTaskResult.mapError` and `bimap` required fully qualified access. Now works correctly:
+  ```fsharp
+  open FractalDb
+  
+  // Now works!
+  collection.InsertOneAsync(doc)
+  |> CancellableTaskResult.mapError toMyError
+  ```
+
+---
+
 ### [1.2.0] - 2025-01-01
 
 #### Added

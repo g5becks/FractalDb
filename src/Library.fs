@@ -696,7 +696,51 @@ module Collection = FractalDb.Collection.Collection
 
 module Cancellable = FractalDb.Cancellable
 
-module CancellableTaskResult = FractalDb.Cancellable.CancellableTaskResult
+/// <summary>
+/// Utility functions for working with CancellableTask&lt;Result&lt;'T, 'E&gt;&gt;.
+/// </summary>
+/// <remarks>
+/// FsToolkit.ErrorHandling.IcedTasks provides CancellableTaskResult.map but not mapError.
+/// This module fills that gap for common error transformation patterns.
+///
+/// After <c>open FractalDb</c>, use as:
+/// <code>
+/// collection.InsertOneAsync(doc)
+/// |> CancellableTaskResult.mapError toMyError
+/// </code>
+/// </remarks>
+[<RequireQualifiedAccess>]
+module CancellableTaskResult =
+    open IcedTasks
+    open System.Threading.Tasks
+
+    /// <summary>
+    /// Maps the error value of a CancellableTask&lt;Result&lt;'a, 'e1&gt;&gt; to a new error type.
+    /// </summary>
+    let inline mapError (f: 'e1 -> 'e2) (ctr: CancellableTask<Result<'a, 'e1>>) : CancellableTask<Result<'a, 'e2>> =
+        fun ct ->
+            task {
+                let! result = ctr ct
+                return Result.mapError f result
+            }
+
+    /// <summary>
+    /// Maps both success and error values of a CancellableTask&lt;Result&lt;'a, 'e1&gt;&gt;.
+    /// </summary>
+    let inline bimap
+        (fOk: 'a -> 'b)
+        (fError: 'e1 -> 'e2)
+        (ctr: CancellableTask<Result<'a, 'e1>>)
+        : CancellableTask<Result<'b, 'e2>> =
+        fun ct ->
+            task {
+                let! result = ctr ct
+
+                return
+                    match result with
+                    | Ok a -> Ok(fOk a)
+                    | Error e -> Error(fError e)
+            }
 
 // =============================================================================
 // Database (from Database.fs)
