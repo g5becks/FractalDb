@@ -31,7 +31,6 @@ open FractalDb.Errors
 open FractalDb.Schema
 open FractalDb.Collection
 open FractalDb.SqlTranslator
-open FractalDb.TableBuilder
 open FractalDb.Transaction
 
 /// <summary>

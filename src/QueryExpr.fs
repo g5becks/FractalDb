@@ -540,7 +540,7 @@ type TranslatedQuery<'T> =
     /// </code>
     /// </example>
     static member (<+>)(left: TranslatedQuery<'T>, right: TranslatedQuery<'T>) : TranslatedQuery<'T> =
-        left.compose (right)
+        left.compose right
 
 /// <summary>
 /// Pipeline-style functions for composing queries using |> operator.
@@ -579,7 +579,7 @@ module QueryOps =
     /// |> QueryOps.where (Query.Field("active", FieldOp.Compare(box (CompareOp.Eq true))))
     /// </code>
     /// </example>
-    let where (predicate: Query<'T>) (query: TranslatedQuery<'T>) : TranslatedQuery<'T> = query.where (predicate)
+    let where (predicate: Query<'T>) (query: TranslatedQuery<'T>) : TranslatedQuery<'T> = query.where predicate
 
     /// <summary>
     /// Adds or appends a sort specification to the query.
@@ -611,7 +611,7 @@ module QueryOps =
     /// baseQuery |> QueryOps.skip 20 |> QueryOps.limit 10  // Page 3, size 10
     /// </code>
     /// </example>
-    let skip (count: int) (query: TranslatedQuery<'T>) : TranslatedQuery<'T> = query.skip (count)
+    let skip (count: int) (query: TranslatedQuery<'T>) : TranslatedQuery<'T> = query.skip count
 
     /// <summary>
     /// Sets the maximum number of documents to return.
@@ -625,7 +625,7 @@ module QueryOps =
     /// baseQuery |> QueryOps.limit 10
     /// </code>
     /// </example>
-    let limit (count: int) (query: TranslatedQuery<'T>) : TranslatedQuery<'T> = query.limit (count)
+    let limit (count: int) (query: TranslatedQuery<'T>) : TranslatedQuery<'T> = query.limit count
 
     /// <summary>
     /// Composes two queries into a single query, merging their clauses.
@@ -670,7 +670,7 @@ module QueryOps =
     /// let fullQuery = baseQuery &lt;+&gt; sortQuery &lt;+&gt; pagingQuery
     /// </code>
     /// </example>
-    let compose (right: TranslatedQuery<'T>) (left: TranslatedQuery<'T>) : TranslatedQuery<'T> = left.compose (right)
+    let compose (right: TranslatedQuery<'T>) (left: TranslatedQuery<'T>) : TranslatedQuery<'T> = left.compose right
 
 /// <summary>
 /// Computation expression builder for LINQ-style queries using F# quotations.
@@ -2603,11 +2603,11 @@ module internal QueryTranslator =
         | SpecificCall <@ not @> (_, _, [ inner ]) -> Query.Not(translatePredicate inner)
 
         // F# compiler desugars && to: if cond1 then cond2 else false
-        | IfThenElse(cond, thenExpr, Value((:? bool as falseBool), _)) when not falseBool ->
+        | IfThenElse(cond, thenExpr, Value(:? bool as falseBool, _)) when not falseBool ->
             Query.And [ translatePredicate cond; translatePredicate thenExpr ]
 
         // F# compiler desugars || to: if cond1 then true else cond2
-        | IfThenElse(cond, Value((:? bool as trueBool), _), elseExpr) when trueBool ->
+        | IfThenElse(cond, Value(:? bool as trueBool, _), elseExpr) when trueBool ->
             Query.Or [ translatePredicate cond; translatePredicate elseExpr ]
 
         // F# compiler may desugar not as PropertyGet on bool property
@@ -2633,6 +2633,20 @@ module internal QueryTranslator =
             let field = extractPropertyName receiver
             let value = evaluateExpr arg :?> string
             Query.Field(field, FieldOp.String(StringOp.EndsWith value))
+
+        // List/Array.Contains for IN queries: [1;2;3].Contains(field) or list.Contains(field)
+        // Matches: someList.Contains(record.Field)
+        | Call(Some receiver, methodInfo, [ arg ]) when methodInfo.Name = "Contains" && not (receiver.Type = typeof<string>) ->
+            let field = extractPropertyName arg
+            let values = evaluateExpr receiver :?> System.Collections.IEnumerable |> Seq.cast<obj> |> Seq.toList
+            Query.Field(field, FieldOp.Compare(box (CompareOp.In values)))
+
+        // List.contains / Seq.contains / Array.contains: List.contains field list
+        // F# module functions: List.contains value list, Seq.contains value seq, Array.contains value array
+        | Call(None, methodInfo, [ fieldExpr; listExpr ]) when methodInfo.Name = "Contains" || methodInfo.Name = "contains" ->
+            let field = extractPropertyName fieldExpr
+            let values = evaluateExpr listExpr :?> System.Collections.IEnumerable |> Seq.cast<obj> |> Seq.toList
+            Query.Field(field, FieldOp.Compare(box (CompareOp.In values)))
 
         // Unsupported pattern
         | _ -> failwith $"Unsupported predicate expression: {expr}"

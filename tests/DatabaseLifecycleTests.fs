@@ -461,7 +461,7 @@ let ``Execute returns result from function`` () : Task =
                 })
 
         // Assert - Should return tuple of IDs
-        let (id1, id2) = result
+        let id1, id2 = result
         id1 |> should not' (equal id2)
 
         // Both should be persisted

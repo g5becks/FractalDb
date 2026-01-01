@@ -13,9 +13,7 @@
 module FractalDb.Builders
 
 open System.Threading.Tasks
-open FractalDb.Types
 open FractalDb.Errors
-open FractalDb.Operators
 open FractalDb.Schema
 open FractalDb.Options
 open FractalDb.Database
@@ -57,7 +55,7 @@ type SchemaBuilder<'T>() =
     /// </summary>
     /// <param name="x">The unit value (ignored).</param>
     /// <returns>An empty schema definition with no fields, indexes, or validation.</returns>
-    member _.Yield(_) =
+    member _.Yield _ =
         { Fields = []
           Indexes = []
           Timestamps = false
@@ -461,7 +459,7 @@ type OptionsBuilder<'T>() =
     /// </summary>
     /// <param name="x">The unit value (ignored).</param>
     /// <returns>Empty query options.</returns>
-    member _.Yield(_) = QueryOptions.empty<'T>
+    member _.Yield _ = QueryOptions.empty<'T>
 
     /// <summary>
     /// Zero operation for computation expression (returns empty options).

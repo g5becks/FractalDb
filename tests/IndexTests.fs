@@ -2,12 +2,8 @@ module FractalDb.Tests.IndexTests
 
 open System
 open System.Data
-open System.Threading.Tasks
 open Xunit
 open FsUnit.Xunit
-open Microsoft.Data.Sqlite
-open FractalDb
-open FractalDb.Types
 open FractalDb.Schema
 open FractalDb.Database
 open FractalDb.Errors

@@ -6,7 +6,6 @@ open Xunit
 open FsUnit.Xunit
 open FractalDb.Types
 open FractalDb.Errors
-open FractalDb.Operators
 open FractalDb.Schema
 open FractalDb.Options
 open FractalDb.Builders
@@ -190,7 +189,7 @@ let ``OptionsBuilder sortBy adds sort field`` () =
     let opts = options<TestUser> { sortBy "age" SortDirection.Descending }
 
     opts.Sort |> should haveLength 1
-    let (field, dir) = opts.Sort.[0]
+    let field, dir = opts.Sort.[0]
     field |> should equal "age"
     dir |> should equal SortDirection.Descending
 
@@ -199,7 +198,7 @@ let ``OptionsBuilder sortAsc adds ascending sort`` () =
     let opts = options<TestUser> { sortAsc "name" }
 
     opts.Sort |> should haveLength 1
-    let (field, dir) = opts.Sort.[0]
+    let field, dir = opts.Sort.[0]
     field |> should equal "name"
     dir |> should equal SortDirection.Ascending
 
@@ -208,7 +207,7 @@ let ``OptionsBuilder sortDesc adds descending sort`` () =
     let opts = options<TestUser> { sortDesc "createdAt" }
 
     opts.Sort |> should haveLength 1
-    let (field, dir) = opts.Sort.[0]
+    let field, dir = opts.Sort.[0]
     field |> should equal "createdAt"
     dir |> should equal SortDirection.Descending
 
@@ -221,8 +220,8 @@ let ``OptionsBuilder multiple sortBy preserves order`` () =
         }
 
     opts.Sort |> should haveLength 2
-    let (field1, dir1) = opts.Sort.[0]
-    let (field2, dir2) = opts.Sort.[1]
+    let field1, dir1 = opts.Sort.[0]
+    let field2, dir2 = opts.Sort.[1]
     field1 |> should equal "role"
     dir1 |> should equal SortDirection.Ascending
     field2 |> should equal "age"

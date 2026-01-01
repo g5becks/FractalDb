@@ -248,7 +248,7 @@ type TextSearchSpec =
 type QueryOptions<'T> =
     {
         /// <summary>Sort order: list of (field, direction) tuples.</summary>
-        Sort: list<(string * SortDirection)>
+        Sort: list<string * SortDirection>
 
         /// <summary>Maximum number of results (None = all results).</summary>
         Limit: option<int>

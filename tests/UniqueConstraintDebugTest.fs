@@ -1,8 +1,6 @@
 module FractalDb.Tests.UniqueConstraintDebugTest
 
-open System
 open Xunit
-open FractalDb.Types
 open FractalDb.Schema
 open FractalDb.Database
 open FractalDb.Collection

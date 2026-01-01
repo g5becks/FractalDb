@@ -20,7 +20,7 @@ type TranslatorResult =
         Sql: string
 
         /// <summary>List of parameter bindings as (name, value) tuples.</summary>
-        Parameters: list<(string * obj)>
+        Parameters: list<string * obj>
     }
 
 /// <summary>
@@ -60,7 +60,7 @@ module TranslatorResult =
     /// let result = TranslatorResult.create "_name = @p0" [("@p0", box "Alice")]
     /// </code>
     /// </example>
-    let create (sql: string) (params': list<(string * obj)>) : TranslatorResult = { Sql = sql; Parameters = params' }
+    let create (sql: string) (params': list<string * obj>) : TranslatorResult = { Sql = sql; Parameters = params' }
 
 /// <summary>
 /// Translates FractalDb Query expressions to parameterized SQLite SQL.
@@ -868,7 +868,7 @@ type SqlTranslator<'T>(schema: FractalDb.Schema.SchemaDef<'T>, enableCache: bool
         // Check if this is an F# union type (Query discriminated union)
         if Microsoft.FSharp.Reflection.FSharpType.IsUnion(queryType) then
             // Get the union case and fields
-            let (unionCase, fields) =
+            let unionCase, fields =
                 Microsoft.FSharp.Reflection.FSharpValue.GetUnionFields(query, queryType)
 
             match unionCase.Name with
@@ -984,7 +984,7 @@ type SqlTranslator<'T>(schema: FractalDb.Schema.SchemaDef<'T>, enableCache: bool
         // Check if this is an F# union type (Query discriminated union)
         if Microsoft.FSharp.Reflection.FSharpType.IsUnion(queryType) then
             // Get the union case and fields
-            let (unionCase, fields) =
+            let unionCase, fields =
                 Microsoft.FSharp.Reflection.FSharpValue.GetUnionFields(query, queryType)
 
             match unionCase.Name with
@@ -1285,7 +1285,7 @@ type SqlTranslator<'T>(schema: FractalDb.Schema.SchemaDef<'T>, enableCache: bool
     /// // params3 = []
     /// </code>
     /// </example>
-    member this.TranslateOptions(options: FractalDb.Options.QueryOptions<'T>) : string * list<(string * obj)> =
+    member this.TranslateOptions(options: FractalDb.Options.QueryOptions<'T>) : string * list<string * obj> =
         let mutable optionParamCounter = 0
 
         let nextOptionParam () =

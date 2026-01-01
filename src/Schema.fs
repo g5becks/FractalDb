@@ -479,5 +479,5 @@ type SchemaDef<'T> = {
     /// - Before updateOne/updateMany/replaceOne (on updated data)
     /// - NOT called on findOneAndUpdate/Replace (user responsible)
     /// </remarks>
-    Validate: option<('T -> Result<'T, string>)>
+    Validate: option<'T -> Result<'T, string>>
 }

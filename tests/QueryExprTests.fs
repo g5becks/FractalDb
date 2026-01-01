@@ -4,14 +4,12 @@ module FractalDb.Tests.QueryExprTests
 // fsharplint:disable FL0072
 
 open System
-open System.Threading.Tasks
 open Xunit
 open FsUnit.Xunit
 open FractalDb.Types
 open FractalDb.Schema
 open FractalDb.Operators
 open FractalDb.QueryExpr
-open FractalDb.QueryExpr.QueryBuilderInstance
 open FractalDb.Collection
 open FractalDb.Database
 
@@ -555,6 +553,83 @@ type QueryExprTests(fixture: QueryExprTestFixture) =
         | _ -> failwith "Expected Query.Field with String operator"
 
     // ═══════════════════════════════════════════════════════════════
+    // IN Operator - List.contains
+    // ═══════════════════════════════════════════════════════════════
+
+    [<Fact>]
+    member _.``Query expression with List.contains translates to CompareOp.In``() =
+        let validAges = [ 18L; 21L; 25L; 30L ]
+
+        let result =
+            query {
+                for user in users do
+                    where (List.contains user.Age validAges)
+            }
+
+        result.Source |> should equal "users"
+
+        match result.Where with
+        | Some(Query.Field(field, FieldOp.Compare op)) ->
+            field |> should equal "age"
+
+            match op :?> CompareOp<obj> with
+            | CompareOp.In values ->
+                values |> should haveLength 4
+                values |> should contain (box 18L)
+                values |> should contain (box 21L)
+                values |> should contain (box 25L)
+                values |> should contain (box 30L)
+            | _ -> failwith "Expected CompareOp.In"
+        | _ -> failwith "Expected Query.Field with Compare operator"
+
+    [<Fact>]
+    member _.``Query expression with inline List.contains translates to CompareOp.In``() =
+        let result =
+            query {
+                for user in users do
+                    where (List.contains user.Email [ "alice@test.com"; "bob@test.com" ])
+            }
+
+        result.Source |> should equal "users"
+
+        match result.Where with
+        | Some(Query.Field(field, FieldOp.Compare op)) ->
+            field |> should equal "email"
+
+            match op :?> CompareOp<obj> with
+            | CompareOp.In values ->
+                values |> should haveLength 2
+                values |> should contain (box "alice@test.com")
+                values |> should contain (box "bob@test.com")
+            | _ -> failwith "Expected CompareOp.In"
+        | _ -> failwith "Expected Query.Field with Compare operator"
+
+    [<Fact>]
+    member _.``Query expression with Array.contains translates to CompareOp.In``() =
+        let validNames = [| "Alice"; "Bob"; "Charlie" |]
+
+        let result =
+            query {
+                for user in users do
+                    where (Array.contains user.Name validNames)
+            }
+
+        result.Source |> should equal "users"
+
+        match result.Where with
+        | Some(Query.Field(field, FieldOp.Compare op)) ->
+            field |> should equal "name"
+
+            match op :?> CompareOp<obj> with
+            | CompareOp.In values ->
+                values |> should haveLength 3
+                values |> should contain (box "Alice")
+                values |> should contain (box "Bob")
+                values |> should contain (box "Charlie")
+            | _ -> failwith "Expected CompareOp.In"
+        | _ -> failwith "Expected Query.Field with Compare operator"
+
+    // ═══════════════════════════════════════════════════════════════
     // Sorting - sortBy
     // ═══════════════════════════════════════════════════════════════
 
@@ -913,7 +988,7 @@ type QueryExprTests(fixture: QueryExprTestFixture) =
                         ()
                 }
 
-            let! results = queryExpr.exec (users)
+            let! results = queryExpr.exec users
 
             results |> should haveLength 3
         }
@@ -927,7 +1002,7 @@ type QueryExprTests(fixture: QueryExprTestFixture) =
                         where (user.Active = true)
                 }
 
-            let! results = queryExpr.exec (users)
+            let! results = queryExpr.exec users
 
             results |> should haveLength 2
 
@@ -949,7 +1024,7 @@ type QueryExprTests(fixture: QueryExprTestFixture) =
                         where (user.Age >= 30L)
                 }
 
-            let! results = queryExpr.exec (users)
+            let! results = queryExpr.exec users
 
             results |> should haveLength 1
             results.[0].Data.Name |> should equal "Bob"
@@ -965,7 +1040,7 @@ type QueryExprTests(fixture: QueryExprTestFixture) =
                         sortBy user.Age
                 }
 
-            let! results = queryExpr.exec (users)
+            let! results = queryExpr.exec users
 
             results |> should haveLength 3
 
@@ -983,7 +1058,7 @@ type QueryExprTests(fixture: QueryExprTestFixture) =
                         sortByDescending user.Age
                 }
 
-            let! results = queryExpr.exec (users)
+            let! results = queryExpr.exec users
 
             results |> should haveLength 3
 
@@ -1001,7 +1076,7 @@ type QueryExprTests(fixture: QueryExprTestFixture) =
                         take 2
                 }
 
-            let! results = queryExpr.exec (users)
+            let! results = queryExpr.exec users
 
             results |> should haveLength 2
         }
@@ -1017,7 +1092,7 @@ type QueryExprTests(fixture: QueryExprTestFixture) =
                         take 1
                 }
 
-            let! results = queryExpr.exec (users)
+            let! results = queryExpr.exec users
 
             results |> should haveLength 1
             results.[0].Data.Age |> should equal 30L
@@ -1035,7 +1110,7 @@ type QueryExprTests(fixture: QueryExprTestFixture) =
                         take 1
                 }
 
-            let! results = queryExpr.exec (users)
+            let! results = queryExpr.exec users
 
             results |> should haveLength 1
             results.[0].Data.Name |> should equal "Bob"
@@ -1053,7 +1128,7 @@ type QueryExprTests(fixture: QueryExprTestFixture) =
                 }
 
             let! moduleResults = users |> Collection.exec queryExpr
-            let! fluentResults = queryExpr.exec (users)
+            let! fluentResults = queryExpr.exec users
 
             moduleResults |> should haveLength 2
             fluentResults |> should haveLength 2
@@ -1063,6 +1138,49 @@ type QueryExprTests(fixture: QueryExprTestFixture) =
             let fluentNames = fluentResults |> List.map (fun doc -> doc.Data.Name)
 
             moduleNames |> should equal fluentNames
+        }
+
+    [<Fact>]
+    member _.``TranslatedQuery.exec with List.contains IN query works end-to-end``() =
+        task {
+            let targetAges = [ 25L; 30L ]
+
+            let queryExpr =
+                query {
+                    for user: TestUser in users do
+                        where (List.contains user.Age targetAges)
+                        sortBy user.Name
+                }
+
+            let! results = queryExpr.exec users
+
+            // Alice (25) and Bob (30) should match, Charlie (20) should not
+            results |> should haveLength 2
+            results.[0].Data.Name |> should equal "Alice"
+            results.[1].Data.Name |> should equal "Bob"
+        }
+
+    [<Fact>]
+    member _.``TranslatedQuery.exec with Array.contains IN query works end-to-end``() =
+        task {
+            let targetNames = [| "Alice"; "Charlie" |]
+
+            let queryExpr =
+                query {
+                    for user: TestUser in users do
+                        where (Array.contains user.Name targetNames)
+                        sortByDescending user.Age
+                }
+
+            let! results = queryExpr.exec users
+
+            // Alice (25) and Charlie (35) should match, Bob should not
+            // Sorted descending by age: Charlie (35), Alice (25)
+            results |> should haveLength 2
+            results.[0].Data.Name |> should equal "Charlie"
+            results.[0].Data.Age |> should equal 35L
+            results.[1].Data.Name |> should equal "Alice"
+            results.[1].Data.Age |> should equal 25L
         }
 
     // ═══════════════════════════════════════════════════════════════
@@ -1080,7 +1198,7 @@ type QueryExprTests(fixture: QueryExprTestFixture) =
 
             let filter = Query.Field("active", FieldOp.Compare(box (CompareOp.Eq true)))
 
-            let! results = baseQuery.where(filter).exec (users)
+            let! results = baseQuery.where(filter).exec users
 
             results |> should haveLength 2
             results |> List.forall (fun doc -> doc.Data.Active) |> should equal true
@@ -1098,7 +1216,7 @@ type QueryExprTests(fixture: QueryExprTestFixture) =
             let filter1 = Query.Field("active", FieldOp.Compare(box (CompareOp.Eq true)))
             let filter2 = Query.Field("age", FieldOp.Compare(box (CompareOp.Gte 30L)))
 
-            let! results = baseQuery.where(filter1).where(filter2).exec (users)
+            let! results = baseQuery.where(filter1).where(filter2).exec users
 
             results |> should haveLength 1
             results.[0].Data.Name |> should equal "Bob"
@@ -1118,7 +1236,7 @@ type QueryExprTests(fixture: QueryExprTestFixture) =
             let additionalFilter =
                 Query.Field("active", FieldOp.Compare(box (CompareOp.Eq true)))
 
-            let! results = queryWithFilter.where(additionalFilter).exec (users)
+            let! results = queryWithFilter.where(additionalFilter).exec users
 
             // Should have Age >= 25 AND Active = true
             results |> should haveLength 2
@@ -1145,7 +1263,7 @@ type QueryExprTests(fixture: QueryExprTestFixture) =
                     .where(Query.Field("active", FieldOp.Compare(box (CompareOp.Eq true))))
                     .where(Query.Field("age", FieldOp.Compare(box (CompareOp.Gte 25L))))
                     .where(Query.Field("age", FieldOp.Compare(box (CompareOp.Lte 30L))))
-                    .exec (users)
+                    .exec users
 
             results |> should haveLength 2
             let names = results |> List.map (fun doc -> doc.Data.Name) |> List.sort
@@ -1161,7 +1279,7 @@ type QueryExprTests(fixture: QueryExprTestFixture) =
                         ()
                 }
 
-            let! results = baseQuery.orderBy("age", FractalDb.QueryExpr.SortDirection.Asc).exec (users)
+            let! results = baseQuery.orderBy("age", FractalDb.QueryExpr.SortDirection.Asc).exec users
 
             results |> should haveLength 3
             let ages = results |> List.map (fun doc -> doc.Data.Age)
@@ -1177,7 +1295,7 @@ type QueryExprTests(fixture: QueryExprTestFixture) =
                         ()
                 }
 
-            let! results = baseQuery.orderBy("age", FractalDb.QueryExpr.SortDirection.Desc).exec (users)
+            let! results = baseQuery.orderBy("age", FractalDb.QueryExpr.SortDirection.Desc).exec users
 
             results |> should haveLength 3
             let ages = results |> List.map (fun doc -> doc.Data.Age)
@@ -1207,7 +1325,7 @@ type QueryExprTests(fixture: QueryExprTestFixture) =
                     baseQuery
                         .orderBy("age", FractalDb.QueryExpr.SortDirection.Asc)
                         .orderBy("name", FractalDb.QueryExpr.SortDirection.Asc)
-                        .exec (users)
+                        .exec users
 
                 results |> should not' (be Empty)
                 // Age 30: Bob, Zack (alphabetical)
@@ -1237,7 +1355,7 @@ type QueryExprTests(fixture: QueryExprTestFixture) =
                 }
 
             // Adding orderBy should append to existing sorts
-            let! results = queryWithSort.orderBy("age", FractalDb.QueryExpr.SortDirection.Desc).exec (users)
+            let! results = queryWithSort.orderBy("age", FractalDb.QueryExpr.SortDirection.Desc).exec users
 
             results |> should haveLength 3
             // Should be sorted by Name first, then Age desc
@@ -1254,7 +1372,7 @@ type QueryExprTests(fixture: QueryExprTestFixture) =
                         sortBy user.Age
                 }
 
-            let! results = baseQuery.skip(1).exec (users)
+            let! results = baseQuery.skip(1).exec users
 
             results |> should haveLength 2
             results.[0].Data.Age |> should equal 30L
@@ -1272,7 +1390,7 @@ type QueryExprTests(fixture: QueryExprTestFixture) =
                 }
 
             // Should replace skip 2 with skip 1
-            let! results = queryWithSkip.skip(1).exec (users)
+            let! results = queryWithSkip.skip(1).exec users
 
             results |> should haveLength 2
             results.[0].Data.Age |> should equal 30L
@@ -1287,7 +1405,7 @@ type QueryExprTests(fixture: QueryExprTestFixture) =
                         ()
                 }
 
-            let! results = baseQuery.skip(0).exec (users)
+            let! results = baseQuery.skip(0).exec users
 
             results |> should haveLength 3
         }
@@ -1301,7 +1419,7 @@ type QueryExprTests(fixture: QueryExprTestFixture) =
                         ()
                 }
 
-            let! results = baseQuery.skip(100).exec (users)
+            let! results = baseQuery.skip(100).exec users
 
             results |> should be Empty
         }
@@ -1315,7 +1433,7 @@ type QueryExprTests(fixture: QueryExprTestFixture) =
                         sortBy user.Age
                 }
 
-            let! results = baseQuery.limit(2).exec (users)
+            let! results = baseQuery.limit(2).exec users
 
             results |> should haveLength 2
             results.[0].Data.Age |> should equal 25L
@@ -1333,7 +1451,7 @@ type QueryExprTests(fixture: QueryExprTestFixture) =
                 }
 
             // Should replace take 1 with limit 2
-            let! results = queryWithTake.limit(2).exec (users)
+            let! results = queryWithTake.limit(2).exec users
 
             results |> should haveLength 2
         }
@@ -1347,7 +1465,7 @@ type QueryExprTests(fixture: QueryExprTestFixture) =
                         ()
                 }
 
-            let! results = baseQuery.limit(0).exec (users)
+            let! results = baseQuery.limit(0).exec users
 
             results |> should be Empty
         }
@@ -1361,7 +1479,7 @@ type QueryExprTests(fixture: QueryExprTestFixture) =
                         ()
                 }
 
-            let! results = baseQuery.limit(100).exec (users)
+            let! results = baseQuery.limit(100).exec users
 
             results |> should haveLength 3
         }
@@ -1376,7 +1494,7 @@ type QueryExprTests(fixture: QueryExprTestFixture) =
                 }
 
             // Page 2, size 1
-            let! results = baseQuery.skip(1).limit(1).exec (users)
+            let! results = baseQuery.skip(1).limit(1).exec users
 
             results |> should haveLength 1
             results.[0].Data.Age |> should equal 30L
@@ -1397,7 +1515,7 @@ type QueryExprTests(fixture: QueryExprTestFixture) =
                     .orderBy("age", FractalDb.QueryExpr.SortDirection.Desc)
                     .skip(0)
                     .limit(1)
-                    .exec (users)
+                    .exec users
 
             results |> should haveLength 1
             results.[0].Data.Name |> should equal "Bob"
@@ -1416,19 +1534,19 @@ type QueryExprTests(fixture: QueryExprTestFixture) =
 
             let filter = Query.Field("active", FieldOp.Compare(box (CompareOp.Eq true)))
 
-            let query1 = baseQuery.where (filter)
-            let query2 = query1.skip (1)
+            let query1 = baseQuery.where filter
+            let query2 = query1.skip 1
 
             // Original should be unchanged
-            let! baseResults = baseQuery.exec (users)
+            let! baseResults = baseQuery.exec users
             baseResults |> should haveLength 3
 
             // query1 should have filter
-            let! query1Results = query1.exec (users)
+            let! query1Results = query1.exec users
             query1Results |> should haveLength 2
 
             // query2 should have filter + skip
-            let! query2Results = query2.exec (users)
+            let! query2Results = query2.exec users
             query2Results |> should haveLength 1
         }
 
@@ -1444,7 +1562,7 @@ type QueryExprTests(fixture: QueryExprTestFixture) =
 
             // Extend with composition
             let! results =
-                queryExpr.where(Query.Field("active", FieldOp.Compare(box (CompareOp.Eq true)))).limit(1).exec (users)
+                queryExpr.where(Query.Field("active", FieldOp.Compare(box (CompareOp.Eq true)))).limit(1).exec users
 
             results |> should haveLength 1
             results.[0].Data.Active |> should equal true
@@ -1468,7 +1586,7 @@ type QueryExprTests(fixture: QueryExprTestFixture) =
 
             let composedQuery = baseQuery |> QueryOps.where filter
 
-            let! results = composedQuery.exec (users)
+            let! results = composedQuery.exec users
 
             results |> should haveLength 2
             results |> List.forall (fun doc -> doc.Data.Active) |> should equal true
@@ -1485,7 +1603,7 @@ type QueryExprTests(fixture: QueryExprTestFixture) =
 
             let composedQuery = baseQuery |> QueryOps.orderBy "age" SortDirection.Desc
 
-            let! results = composedQuery.exec (users)
+            let! results = composedQuery.exec users
 
             results |> should haveLength 3
             let ages = results |> List.map (fun doc -> doc.Data.Age)
@@ -1503,7 +1621,7 @@ type QueryExprTests(fixture: QueryExprTestFixture) =
 
             let composedQuery = baseQuery |> QueryOps.skip 1 |> QueryOps.limit 1
 
-            let! results = composedQuery.exec (users)
+            let! results = composedQuery.exec users
 
             results |> should haveLength 1
             results.[0].Data.Age |> should equal 30L
@@ -1527,7 +1645,7 @@ type QueryExprTests(fixture: QueryExprTestFixture) =
                 |> QueryOps.skip 0
                 |> QueryOps.limit 1
 
-            let! results = composedQuery.exec (users)
+            let! results = composedQuery.exec users
 
             results |> should haveLength 1
             results.[0].Data.Name |> should equal "Bob"
@@ -1552,10 +1670,10 @@ type QueryExprTests(fixture: QueryExprTestFixture) =
                 |> QueryOps.orderBy "name" SortDirection.Asc
                 |> QueryOps.limit 1
 
-            let! pipelineResults = pipelineQuery.exec (users)
+            let! pipelineResults = pipelineQuery.exec users
 
             // Fluent style
-            let! fluentResults = baseQuery.where(filter).orderBy("name", SortDirection.Asc).limit(1).exec (users)
+            let! fluentResults = baseQuery.where(filter).orderBy("name", SortDirection.Asc).limit(1).exec users
 
             pipelineResults |> should haveLength 1
             fluentResults |> should haveLength 1
@@ -1582,7 +1700,7 @@ type QueryExprTests(fixture: QueryExprTestFixture) =
                 }
 
             let combined = filters <+> sorting
-            let! results = combined.exec (users)
+            let! results = combined.exec users
 
             results |> should haveLength 2
             // Should be filtered (active only) and sorted by name
@@ -1612,7 +1730,7 @@ type QueryExprTests(fixture: QueryExprTestFixture) =
                 }
 
             let combined = filters <+> sorting <+> pagination
-            let! results = combined.exec (users)
+            let! results = combined.exec users
 
             results |> should haveLength 1
             // Active users sorted by age desc, take 1 = Bob (age 30)
@@ -1635,7 +1753,7 @@ type QueryExprTests(fixture: QueryExprTestFixture) =
                 }
 
             let combined = activeFilter <+> ageFilter
-            let! results = combined.exec (users)
+            let! results = combined.exec users
 
             // Active AND Age >= 30 = only Bob (age 30, active)
             results |> should haveLength 1
@@ -1668,7 +1786,7 @@ type QueryExprTests(fixture: QueryExprTestFixture) =
                     }
 
                 let combined = sortByAge <+> sortByName
-                let! results = combined.exec (users)
+                let! results = combined.exec users
 
                 // Should be sorted by Age ASC, then Name DESC
                 // Age 25: Alice
@@ -1708,7 +1826,7 @@ type QueryExprTests(fixture: QueryExprTestFixture) =
                 }
 
             let combined = firstPage <+> secondPage
-            let! results = combined.exec (users)
+            let! results = combined.exec users
 
             // Later skip/take wins: skip 1, take 2
             results |> should haveLength 2
@@ -1733,12 +1851,12 @@ type QueryExprTests(fixture: QueryExprTestFixture) =
                 }
 
             // Using compose method
-            let composed = filters.compose (sorting)
-            let! (composeResults: list<Document<TestUser>>) = composed.exec (users)
+            let composed = filters.compose sorting
+            let! (composeResults: list<Document<TestUser>>) = composed.exec users
 
             // Using <+> operator
             let operated = filters <+> sorting
-            let! (operatorResults: list<Document<TestUser>>) = operated.exec (users)
+            let! (operatorResults: list<Document<TestUser>>) = operated.exec users
 
             composeResults |> should haveLength 2
             operatorResults |> should haveLength 2
@@ -1769,9 +1887,9 @@ type QueryExprTests(fixture: QueryExprTestFixture) =
                 }
 
             // Compose in different ways
-            let! (activeNamedResults: list<Document<TestUser>>) = (activeOnly <+> sortedByName).exec (users)
-            let! (activeLimitedResults: list<Document<TestUser>>) = (activeOnly <+> firstTwo).exec (users)
-            let! (allThreeResults: list<Document<TestUser>>) = (activeOnly <+> sortedByName <+> firstTwo).exec (users)
+            let! (activeNamedResults: list<Document<TestUser>>) = (activeOnly <+> sortedByName).exec users
+            let! (activeLimitedResults: list<Document<TestUser>>) = (activeOnly <+> firstTwo).exec users
+            let! (allThreeResults: list<Document<TestUser>>) = (activeOnly <+> sortedByName <+> firstTwo).exec users
 
             activeNamedResults |> should haveLength 2
             activeLimitedResults |> should haveLength 2

@@ -1,10 +1,7 @@
 module FractalDb.Tests.NestedFieldsTests
 
-open System
-open System.Threading.Tasks
 open Xunit
 open FsUnit.Xunit
-open FractalDb
 open FractalDb.Types
 open FractalDb.Schema
 open FractalDb.Database

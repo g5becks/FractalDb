@@ -5,8 +5,6 @@ module FractalDb.Tests.TableBuilderTests
 /// Verifies correct SQL generation for tables, indexes, and constraints.
 /// </summary>
 
-open System
-open System.Data
 open Xunit
 open FsUnit.Xunit
 open Microsoft.Data.Sqlite

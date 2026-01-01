@@ -803,10 +803,8 @@ let ``UniqueConstraint error from SQLite is not retryable`` () =
 
 open FractalDb.Types
 open FractalDb.Schema
-open FractalDb.Operators
 open FractalDb.Collection
 open FractalDb.Database
-open IcedTasks
 
 type ResilienceTestUser =
     { Name: string

@@ -712,7 +712,6 @@ module Cancellable = FractalDb.Cancellable
 [<RequireQualifiedAccess>]
 module CancellableTaskResult =
     open IcedTasks
-    open System.Threading.Tasks
 
     /// <summary>
     /// Maps the error value of a CancellableTask&lt;Result&lt;'a, 'e1&gt;&gt; to a new error type.

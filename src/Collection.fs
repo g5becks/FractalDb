@@ -23,7 +23,6 @@ open System.Threading
 open System.Threading.Tasks
 open Donald
 open FSharp.Control
-open Microsoft.Data.Sqlite
 open FractalDb.Types
 open FractalDb.Errors
 open FractalDb.Errors.DonaldExceptions
@@ -32,7 +31,6 @@ open FractalDb.Operators
 open FractalDb.Options
 open FractalDb.SqlTranslator
 open FractalDb.Serialization
-open FractalDb.Transaction
 
 /// <summary>
 /// Represents a typed document collection with schema, connection, and configuration.
@@ -630,7 +628,7 @@ module Collection =
             else
                 $"WHERE {translated.Sql}"
 
-        let (optionsSql, optionsParams) = collection.Translator.TranslateOptions(options)
+        let optionsSql, optionsParams = collection.Translator.TranslateOptions(options)
 
         let sql =
             $"SELECT _id, json(body) as body, createdAt, updatedAt 
@@ -770,7 +768,7 @@ module Collection =
             else
                 $"WHERE {translated.Sql}"
 
-        let (optionsSql, optionsParams) = collection.Translator.TranslateOptions(options)
+        let optionsSql, optionsParams = collection.Translator.TranslateOptions(options)
 
         let sql =
             $"SELECT _id, json(body) as body, createdAt, updatedAt 
@@ -1153,7 +1151,7 @@ module Collection =
             else
                 $"WHERE {likeConditions}"
 
-        let (optionsSql, optionsParams) = collection.Translator.TranslateOptions(options)
+        let optionsSql, optionsParams = collection.Translator.TranslateOptions(options)
 
         let sql =
             $"SELECT _id, json(body) as body, createdAt, updatedAt 

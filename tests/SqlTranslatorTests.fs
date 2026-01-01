@@ -69,7 +69,7 @@ let ``Indexed field uses generated column name`` () =
     result.Sql |> should equal "_name = @p0"
     result.Parameters |> should haveLength 1
 
-    let (paramName, paramValue) = result.Parameters.[0]
+    let paramName, paramValue = result.Parameters.[0]
     paramName |> should equal "@p0"
     (unbox<string> paramValue) |> should equal "Alice"
 
@@ -364,7 +364,7 @@ let ``TranslateOptions with Sort generates ORDER BY`` () =
           Search = None
           Cursor = None }
 
-    let (sql, params') = translator.TranslateOptions(options)
+    let sql, params' = translator.TranslateOptions(options)
 
     sql |> should equal " ORDER BY _name ASC, _age DESC"
     params' |> should be Empty
@@ -382,7 +382,7 @@ let ``TranslateOptions with Limit generates LIMIT`` () =
           Search = None
           Cursor = None }
 
-    let (sql, params') = translator.TranslateOptions(options)
+    let sql, params' = translator.TranslateOptions(options)
 
     sql |> should equal " LIMIT @opt0"
     params' |> should haveLength 1
@@ -402,7 +402,7 @@ let ``TranslateOptions with Skip generates OFFSET`` () =
           Search = None
           Cursor = None }
 
-    let (sql, params') = translator.TranslateOptions(options)
+    let sql, params' = translator.TranslateOptions(options)
 
     // SQLite requires LIMIT with OFFSET, so LIMIT -1 is added for unlimited
     sql |> should equal " LIMIT -1 OFFSET @opt0"
@@ -421,7 +421,7 @@ let ``TranslateOptions with Sort, Limit, Skip`` () =
           Search = None
           Cursor = None }
 
-    let (sql, params') = translator.TranslateOptions(options)
+    let sql, params' = translator.TranslateOptions(options)
 
     sql |> should equal " ORDER BY _age DESC LIMIT @opt0 OFFSET @opt1"
     params' |> should haveLength 2
@@ -430,7 +430,7 @@ let ``TranslateOptions with Sort, Limit, Skip`` () =
 let ``TranslateOptions with empty options returns empty string`` () =
     let translator = SqlTranslator<TestUser>(testSchema, false)
     let options = QueryOptions.empty<TestUser>
-    let (sql, params') = translator.TranslateOptions(options)
+    let sql, params' = translator.TranslateOptions(options)
 
     sql |> should equal ""
     params' |> should be Empty
@@ -525,7 +525,7 @@ let ``Special characters in string values are parameterized`` () =
     result.Sql |> should equal "_name = @p0"
     result.Parameters |> should haveLength 1
 
-    let (paramName, paramValue) = result.Parameters.[0]
+    let paramName, paramValue = result.Parameters.[0]
     (unbox<string> paramValue) |> should equal specialValue
 
 [<Fact>]
@@ -602,7 +602,7 @@ let ``Empty string value is handled correctly`` () =
     result.Sql |> should equal "_name = @p0"
     result.Parameters |> should haveLength 1
 
-    let (_, paramValue) = result.Parameters.[0]
+    let _, paramValue = result.Parameters.[0]
     (unbox<string> paramValue) |> should equal ""
 
 [<Fact>]

@@ -3,8 +3,6 @@ module FractalDb.Tests.ErrorTests
 open System
 open Xunit
 open FsUnit.Xunit
-open Donald
-open Microsoft.Data.Sqlite
 open FractalDb.Errors
 
 /// <summary>

@@ -9,8 +9,6 @@ open System
 open System.Threading.Tasks
 open Xunit
 open FsUnit.Xunit
-open Microsoft.Data.Sqlite
-open Donald
 open FractalDb.Types
 open FractalDb.Schema
 open FractalDb.Operators
@@ -18,8 +16,6 @@ open FractalDb.Collection
 open FractalDb.Database
 open FractalDb.Builders
 open FractalDb.Errors
-open FractalDb.Transaction
-
 // =============================================================================
 // Test Data
 // =============================================================================
@@ -172,12 +168,12 @@ let ``Invalid field in query is handled gracefully``() : Task =
             
             // SQLite might not error on unknown fields in JSON queries
             // Just verify we get a result (even if empty)
-            results |> should be (instanceOfType<list<Document<TestUser>>>)
+            results |> should be instanceOfType<list<Document<TestUser>>>
         with
         | ex ->
             // If it throws, it should be a database-related exception
-            ex |> should be (instanceOfType<Exception>)
-        
+            ex |> should be instanceOfType<Exception>
+
         db.Close()
     }
 

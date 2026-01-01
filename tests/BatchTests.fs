@@ -8,7 +8,6 @@ open FractalDb.Schema
 open FractalDb.Collection
 open FractalDb.Operators
 open FractalDb.Types
-open FractalDb.Errors
 
 type Product =
     { Name: string

@@ -6,7 +6,6 @@ module FractalDb.Tests.PropertyTests
 /// </summary>
 
 open System
-open Xunit
 open FsCheck
 open FsCheck.Xunit
 open FractalDb.Types

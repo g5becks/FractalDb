@@ -224,6 +224,17 @@ where (user.Active = true)
 where (user.Role = "admin" || user.Role = "mod")
 where (user.Name.Contains("Alice"))
 where (not (user.Status = "deleted"))
+
+// IN operator - check if field value is in a list/array
+where (List.contains user.Age [18L; 21L; 25L])
+where (Array.contains user.Status [| "active"; "pending" |])
+
+// Example: select users with specific IDs
+let targetIds = ["id1"; "id2"; "id3"]
+query {
+    for user in users do
+    where (List.contains user.Id targetIds)
+}
 ```
 
 OPERATION: sortBy

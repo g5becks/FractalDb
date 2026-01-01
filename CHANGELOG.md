@@ -9,6 +9,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## FractalDb (F# Port)
 
+### [1.3.0] - 2025-01-01
+
+#### Added
+
+- **IN operator support in query expressions** - Use `List.contains` or `Array.contains` to filter by set membership:
+  ```fsharp
+  query {
+      for user in users do
+      where (List.contains user.Age [18L; 21L; 25L])
+  }
+  
+  // Or with arrays
+  let validStatuses = [| "active"; "pending" |]
+  query {
+      for user in users do
+      where (Array.contains user.Status validStatuses)
+  }
+  ```
+  Translates to SQL `IN (...)` clause for efficient set membership queries.
+
+---
+
 ### [1.2.1] - 2025-01-01
 
 #### Fixed

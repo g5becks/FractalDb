@@ -1,7 +1,6 @@
 module FractalDb.Benchmarks.QueryBenchmarks
 
 open BenchmarkDotNet.Attributes
-open FractalDb.Types
 open FractalDb.Schema
 open FractalDb.Operators
 open FractalDb.Options

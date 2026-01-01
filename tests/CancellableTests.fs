@@ -16,7 +16,6 @@ open FractalDb.Schema
 open FractalDb.Operators
 open FractalDb.Collection
 open FractalDb.Database
-open FractalDb.Options
 
 /// <summary>
 /// Tests for FractalDb.Cancellable module.
@@ -104,7 +103,7 @@ type CancellableTests(fixture: CancellableTestFixture) =
             use cts = new CancellationTokenSource()
 
             let operation =
-                FractalDb.Cancellable.insertOne
+                Cancellable.insertOne
                     { Name = "CancellableAlice"
                       Email = $"alice-{Guid.NewGuid()}@test.com"
                       Age = 30
@@ -127,7 +126,7 @@ type CancellableTests(fixture: CancellableTestFixture) =
             cts.Cancel()
 
             let operation =
-                FractalDb.Cancellable.insertOne
+                Cancellable.insertOne
                     { Name = "ShouldFail"
                       Email = "fail@test.com"
                       Age = 25
@@ -160,7 +159,7 @@ type CancellableTests(fixture: CancellableTestFixture) =
                     Age = 30
                     Active = false } ]
 
-            let operation = FractalDb.Cancellable.insertMany docs users
+            let operation = Cancellable.insertMany docs users
             let! result = operation cts.Token
 
             match result with
@@ -191,7 +190,7 @@ type CancellableTests(fixture: CancellableTestFixture) =
             let doc = Result.defaultWith (fun _ -> failwith "Insert failed") insertResult
 
             // Now find it with cancellable operation
-            let operation = FractalDb.Cancellable.findById doc.Id users
+            let operation = Cancellable.findById doc.Id users
             let! found = operation cts.Token
 
             found.IsSome |> should be True
@@ -203,7 +202,7 @@ type CancellableTests(fixture: CancellableTestFixture) =
         task {
             use cts = new CancellationTokenSource()
 
-            let operation = FractalDb.Cancellable.findById "non-existent-id" users
+            let operation = Cancellable.findById "non-existent-id" users
             let! found = operation cts.Token
 
             found.IsNone |> should be True
@@ -225,7 +224,7 @@ type CancellableTests(fixture: CancellableTestFixture) =
                       Active = true }
 
             let operation =
-                FractalDb.Cancellable.findOne
+                Cancellable.findOne
                     (Query.Field("email", FieldOp.Compare(box (CompareOp.Eq uniqueEmail))))
                     users
 
@@ -260,7 +259,7 @@ type CancellableTests(fixture: CancellableTestFixture) =
                       Active = true }
 
             let operation =
-                FractalDb.Cancellable.find
+                Cancellable.find
                     (Query.Field("name", FieldOp.Compare(box (CompareOp.Eq $"Active-{uniquePrefix}"))))
                     users
 
@@ -301,7 +300,7 @@ type CancellableTests(fixture: CancellableTestFixture) =
                       Active = true }
 
             let operation =
-                FractalDb.Cancellable.count (Query.Field("name", FieldOp.Compare(box (CompareOp.Eq uniqueName)))) users
+                Cancellable.count (Query.Field("name", FieldOp.Compare(box (CompareOp.Eq uniqueName)))) users
 
             let! count = operation cts.Token
 
@@ -313,7 +312,7 @@ type CancellableTests(fixture: CancellableTestFixture) =
         task {
             use cts = new CancellationTokenSource()
 
-            let operation = FractalDb.Cancellable.estimatedCount users
+            let operation = Cancellable.estimatedCount users
             let! count = operation cts.Token
 
             count |> should be (greaterThanOrEqualTo 0)
@@ -339,7 +338,7 @@ type CancellableTests(fixture: CancellableTestFixture) =
             let doc = Result.defaultWith (fun _ -> failwith "Insert failed") insertResult
 
             let operation =
-                FractalDb.Cancellable.updateById doc.Id (fun u -> { u with Age = 26 }) users
+                Cancellable.updateById doc.Id (fun u -> { u with Age = 26 }) users
 
             let! updateResult = operation cts.Token
 
@@ -365,7 +364,7 @@ type CancellableTests(fixture: CancellableTestFixture) =
                       Active = true }
 
             let operation =
-                FractalDb.Cancellable.updateOne
+                Cancellable.updateOne
                     (Query.Field("email", FieldOp.Compare(box (CompareOp.Eq uniqueEmail))))
                     (fun u -> { u with Active = false })
                     users
@@ -402,7 +401,7 @@ type CancellableTests(fixture: CancellableTestFixture) =
                       Active = true }
 
             let operation =
-                FractalDb.Cancellable.updateMany
+                Cancellable.updateMany
                     (Query.Field("name", FieldOp.Compare(box (CompareOp.Eq uniqueName))))
                     (fun u -> { u with Active = false })
                     users
@@ -432,7 +431,7 @@ type CancellableTests(fixture: CancellableTestFixture) =
                       Active = true }
 
             let operation =
-                FractalDb.Cancellable.replaceOne
+                Cancellable.replaceOne
                     (Query.Field("email", FieldOp.Compare(box (CompareOp.Eq uniqueEmail))))
                     { Name = "Replaced"
                       Email = uniqueEmail
@@ -469,7 +468,7 @@ type CancellableTests(fixture: CancellableTestFixture) =
 
             let doc = Result.defaultWith (fun _ -> failwith "Insert failed") insertResult
 
-            let operation = FractalDb.Cancellable.deleteById doc.Id users
+            let operation = Cancellable.deleteById doc.Id users
             let! deleted = operation cts.Token
 
             deleted |> should be True
@@ -495,7 +494,7 @@ type CancellableTests(fixture: CancellableTestFixture) =
                       Active = true }
 
             let operation =
-                FractalDb.Cancellable.deleteOne
+                Cancellable.deleteOne
                     (Query.Field("email", FieldOp.Compare(box (CompareOp.Eq uniqueEmail))))
                     users
 
@@ -536,7 +535,7 @@ type CancellableTests(fixture: CancellableTestFixture) =
                       Active = true }
 
             let operation =
-                FractalDb.Cancellable.deleteMany
+                Cancellable.deleteMany
                     (Query.Field("name", FieldOp.Compare(box (CompareOp.Eq uniqueName))))
                     users
 
@@ -565,7 +564,7 @@ type CancellableTests(fixture: CancellableTestFixture) =
                       Active = true }
 
             let operation =
-                FractalDb.Cancellable.findOneAndDelete
+                Cancellable.findOneAndDelete
                     (Query.Field("email", FieldOp.Compare(box (CompareOp.Eq uniqueEmail))))
                     users
 
@@ -603,7 +602,7 @@ type CancellableTests(fixture: CancellableTestFixture) =
                   ReturnDocument = ReturnDocument.After }
 
             let operation =
-                FractalDb.Cancellable.findOneAndUpdate
+                Cancellable.findOneAndUpdate
                     (Query.Field("email", FieldOp.Compare(box (CompareOp.Eq uniqueEmail))))
                     (fun u -> { u with Age = 31 })
                     options
@@ -638,7 +637,7 @@ type CancellableTests(fixture: CancellableTestFixture) =
                   ReturnDocument = ReturnDocument.After }
 
             let operation =
-                FractalDb.Cancellable.findOneAndReplace
+                Cancellable.findOneAndReplace
                     (Query.Field("email", FieldOp.Compare(box (CompareOp.Eq uniqueEmail))))
                     { Name = "Replaced"
                       Email = uniqueEmail
@@ -676,7 +675,7 @@ type CancellableTests(fixture: CancellableTestFixture) =
                       Age = 30
                       Active = true }
 
-            let operation = FractalDb.Cancellable.search uniqueSearchName [ "name" ] users
+            let operation = Cancellable.search uniqueSearchName [ "name" ] users
             let! results = operation cts.Token
 
             results |> List.isEmpty |> should be False
@@ -715,7 +714,7 @@ type CancellableTests(fixture: CancellableTestFixture) =
                       Active = true }
 
             let operation =
-                FractalDb.Cancellable.distinct<TestUser, int>
+                Cancellable.distinct<TestUser, int>
                     "age"
                     (Query.Field("name", FieldOp.Compare(box (CompareOp.Eq $"Dist-{uniquePrefix}"))))
                     users
@@ -744,7 +743,7 @@ type CancellableTests(fixture: CancellableTestFixture) =
             let mutable cancelled = false
 
             try
-                let! _ = (FractalDb.Cancellable.findById "id" users) cts.Token
+                let! _ = (Cancellable.findById "id" users) cts.Token
                 ()
             with :? OperationCanceledException ->
                 cancelled <- true
@@ -755,7 +754,7 @@ type CancellableTests(fixture: CancellableTestFixture) =
             cancelled <- false
 
             try
-                let! _ = (FractalDb.Cancellable.findOne Query.Empty users) cts.Token
+                let! _ = (Cancellable.findOne Query.Empty users) cts.Token
                 ()
             with :? OperationCanceledException ->
                 cancelled <- true
@@ -766,7 +765,7 @@ type CancellableTests(fixture: CancellableTestFixture) =
             cancelled <- false
 
             try
-                let! _ = (FractalDb.Cancellable.find Query.Empty users) cts.Token
+                let! _ = (Cancellable.find Query.Empty users) cts.Token
                 ()
             with :? OperationCanceledException ->
                 cancelled <- true
@@ -777,7 +776,7 @@ type CancellableTests(fixture: CancellableTestFixture) =
             cancelled <- false
 
             try
-                let! _ = (FractalDb.Cancellable.count Query.Empty users) cts.Token
+                let! _ = (Cancellable.count Query.Empty users) cts.Token
                 ()
             with :? OperationCanceledException ->
                 cancelled <- true
@@ -796,7 +795,7 @@ type CancellableTests(fixture: CancellableTestFixture) =
 
             try
                 let! _ =
-                    (FractalDb.Cancellable.insertOne
+                    (Cancellable.insertOne
                         { Name = "Test"
                           Email = "test@test.com"
                           Age = 25
@@ -814,7 +813,7 @@ type CancellableTests(fixture: CancellableTestFixture) =
             cancelled <- false
 
             try
-                let! _ = (FractalDb.Cancellable.updateById "id" id users) cts.Token
+                let! _ = (Cancellable.updateById "id" id users) cts.Token
                 ()
             with :? OperationCanceledException ->
                 cancelled <- true
@@ -825,7 +824,7 @@ type CancellableTests(fixture: CancellableTestFixture) =
             cancelled <- false
 
             try
-                let! _ = (FractalDb.Cancellable.deleteById "id" users) cts.Token
+                let! _ = (Cancellable.deleteById "id" users) cts.Token
                 ()
             with :? OperationCanceledException ->
                 cancelled <- true
@@ -844,7 +843,7 @@ type CancellableTests(fixture: CancellableTestFixture) =
 
             // Module function returns CancellableTask, invoke with token
             let! result =
-                (FractalDb.Cancellable.insertOne
+                (Cancellable.insertOne
                     { Name = "ModuleUser"
                       Email = $"mod-{Guid.NewGuid()}@test.com"
                       Age = 25
@@ -864,7 +863,7 @@ type CancellableTests(fixture: CancellableTestFixture) =
 
             // First insert
             let! insertResult =
-                (FractalDb.Cancellable.insertOne
+                (Cancellable.insertOne
                     { Name = "FindByIdMod"
                       Email = $"findbyidmod-{Guid.NewGuid()}@test.com"
                       Age = 30
@@ -875,7 +874,7 @@ type CancellableTests(fixture: CancellableTestFixture) =
             let doc = Result.defaultWith (fun _ -> failwith "Insert failed") insertResult
 
             // Find using module function
-            let! found = (FractalDb.Cancellable.findById doc.Id users) cts.Token
+            let! found = (Cancellable.findById doc.Id users) cts.Token
 
             found.IsSome |> should be True
             found.Value.Data.Name |> should equal "FindByIdMod"
@@ -887,7 +886,7 @@ type CancellableTests(fixture: CancellableTestFixture) =
             use cts = new CancellationTokenSource()
 
             let! insertResult =
-                (FractalDb.Cancellable.insertOne
+                (Cancellable.insertOne
                     { Name = "UpdateMod"
                       Email = $"updatemod-{Guid.NewGuid()}@test.com"
                       Age = 25
@@ -897,7 +896,7 @@ type CancellableTests(fixture: CancellableTestFixture) =
 
             let doc = Result.defaultWith (fun _ -> failwith "Insert failed") insertResult
 
-            let! updateResult = (FractalDb.Cancellable.updateById doc.Id (fun u -> { u with Age = 26 }) users) cts.Token
+            let! updateResult = (Cancellable.updateById doc.Id (fun u -> { u with Age = 26 }) users) cts.Token
 
             match updateResult with
             | Ok(Some updated) -> updated.Data.Age |> should equal 26
@@ -911,7 +910,7 @@ type CancellableTests(fixture: CancellableTestFixture) =
             use cts = new CancellationTokenSource()
 
             let! insertResult =
-                (FractalDb.Cancellable.insertOne
+                (Cancellable.insertOne
                     { Name = "DeleteMod"
                       Email = $"deletemod-{Guid.NewGuid()}@test.com"
                       Age = 25
@@ -921,7 +920,7 @@ type CancellableTests(fixture: CancellableTestFixture) =
 
             let doc = Result.defaultWith (fun _ -> failwith "Insert failed") insertResult
 
-            let! deleted = (FractalDb.Cancellable.deleteById doc.Id users) cts.Token
+            let! deleted = (Cancellable.deleteById doc.Id users) cts.Token
 
             deleted |> should be True
         }
@@ -931,7 +930,7 @@ type CancellableTests(fixture: CancellableTestFixture) =
         task {
             use cts = new CancellationTokenSource()
 
-            let! count = (FractalDb.Cancellable.count Query.Empty users) cts.Token
+            let! count = (Cancellable.count Query.Empty users) cts.Token
 
             count |> should be (greaterThanOrEqualTo 0)
         }
@@ -948,7 +947,7 @@ type CancellableTests(fixture: CancellableTestFixture) =
             let workflow =
                 cancellableTask {
                     let! insertResult =
-                        FractalDb.Cancellable.insertOne
+                        Cancellable.insertOne
                             { Name = "CEUser"
                               Email = $"ce-{Guid.NewGuid()}@test.com"
                               Age = 30
@@ -957,7 +956,7 @@ type CancellableTests(fixture: CancellableTestFixture) =
 
                     match insertResult with
                     | Ok doc ->
-                        let! found = FractalDb.Cancellable.findById doc.Id users
+                        let! found = Cancellable.findById doc.Id users
                         return found
                     | Error _ -> return None
                 }
@@ -977,7 +976,7 @@ type CancellableTests(fixture: CancellableTestFixture) =
             let workflow =
                 cancellableTask {
                     let! _ =
-                        FractalDb.Cancellable.insertOne
+                        Cancellable.insertOne
                             { Name = "ShouldNotRun"
                               Email = "norun@test.com"
                               Age = 25
@@ -1006,7 +1005,7 @@ type CancellableTests(fixture: CancellableTestFixture) =
             let workflow =
                 cancellableTask {
                     let! insertResult =
-                        FractalDb.Cancellable.insertOne
+                        Cancellable.insertOne
                             { Name = "ExtCEUser"
                               Email = $"extce-{Guid.NewGuid()}@test.com"
                               Age = 35
@@ -1015,7 +1014,7 @@ type CancellableTests(fixture: CancellableTestFixture) =
 
                     match insertResult with
                     | Ok doc ->
-                        let! updated = FractalDb.Cancellable.updateById doc.Id (fun u -> { u with Age = 36 }) users
+                        let! updated = Cancellable.updateById doc.Id (fun u -> { u with Age = 36 }) users
                         return updated
                     | Error err -> return Error err
                 }
@@ -1037,7 +1036,7 @@ type CancellableTests(fixture: CancellableTestFixture) =
                 cancellableTask {
                     // Insert multiple users
                     let! r1 =
-                        FractalDb.Cancellable.insertOne
+                        Cancellable.insertOne
                             { Name = "Workflow1"
                               Email = $"wf1-{Guid.NewGuid()}@test.com"
                               Age = 20
@@ -1045,7 +1044,7 @@ type CancellableTests(fixture: CancellableTestFixture) =
                             users
 
                     let! r2 =
-                        FractalDb.Cancellable.insertOne
+                        Cancellable.insertOne
                             { Name = "Workflow2"
                               Email = $"wf2-{Guid.NewGuid()}@test.com"
                               Age = 25
@@ -1053,7 +1052,7 @@ type CancellableTests(fixture: CancellableTestFixture) =
                             users
 
                     let! r3 =
-                        FractalDb.Cancellable.insertOne
+                        Cancellable.insertOne
                             { Name = "Workflow3"
                               Email = $"wf3-{Guid.NewGuid()}@test.com"
                               Age = 30
@@ -1063,20 +1062,20 @@ type CancellableTests(fixture: CancellableTestFixture) =
                     match r1, r2, r3 with
                     | Ok d1, Ok d2, Ok d3 ->
                         // Update one
-                        let! _ = FractalDb.Cancellable.updateById d2.Id (fun u -> { u with Age = 26 }) users
+                        let! _ = Cancellable.updateById d2.Id (fun u -> { u with Age = 26 }) users
 
                         // Delete one
-                        let! _ = FractalDb.Cancellable.deleteById d3.Id users
+                        let! _ = Cancellable.deleteById d3.Id users
 
                         // Find remaining
-                        let! found = FractalDb.Cancellable.findById d1.Id users
-                        let! count = FractalDb.Cancellable.count Query.Empty users
+                        let! found = Cancellable.findById d1.Id users
+                        let! count = Cancellable.count Query.Empty users
 
                         return (found, count)
                     | _ -> return (None, 0)
                 }
 
-            let! (found, count) = workflow cts.Token
+            let! found, count = workflow cts.Token
 
             found.IsSome |> should be True
             count |> should be (greaterThan 0)
@@ -1132,7 +1131,7 @@ type CancellableTests(fixture: CancellableTestFixture) =
 
             // Insert a document, then map the error type
             let operation =
-                FractalDb.Cancellable.insertOne
+                Cancellable.insertOne
                     { Name = "MapErrorTest"
                       Email = $"maperror-{Guid.NewGuid()}@test.com"
                       Age = 25
@@ -1188,7 +1187,7 @@ type CancellableTests(fixture: CancellableTestFixture) =
             let workflow =
                 cancellableTask {
                     let! result =
-                        FractalDb.Cancellable.insertOne
+                        Cancellable.insertOne
                             { Name = "CEMapError"
                               Email = $"cemaperror-{Guid.NewGuid()}@test.com"
                               Age = 30
@@ -1213,7 +1212,7 @@ type CancellableTests(fixture: CancellableTestFixture) =
             cts.Cancel()
 
             let operation =
-                FractalDb.Cancellable.insertOne
+                Cancellable.insertOne
                     { Name = "ShouldNotRun"
                       Email = "shouldnotrun@test.com"
                       Age = 25

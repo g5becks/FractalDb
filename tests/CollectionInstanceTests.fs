@@ -8,7 +8,6 @@ module FractalDb.Tests.CollectionInstanceTests
 
 open System
 open System.Threading
-open System.Threading.Tasks
 open Xunit
 open FsUnit.Xunit
 open FractalDb.Types
@@ -17,7 +16,6 @@ open FractalDb.Operators
 open FractalDb.Options
 open FractalDb.Collection
 open FractalDb.Database
-open FractalDb.Errors
 
 // Helper to create unique collection names without hyphens (SQLite-safe)
 let private uniqueName prefix =
