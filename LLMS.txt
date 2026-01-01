@@ -1221,8 +1221,11 @@ let runWithTimeout () = task {
 ### CancellableTaskResult Utilities
 Utilities for working with `CancellableTask<Result<'a, 'e>>`. Fills gaps in FsToolkit.ErrorHandling.IcedTasks.
 
+Available after `open FractalDb` (no additional imports needed):
+
 ```fsharp
-open FractalDb.Cancellable
+open FractalDb
+open IcedTasks
 
 // mapError: Transform error type while preserving success value
 // Signature: ('e1 -> 'e2) -> CancellableTask<Result<'a, 'e1>> -> CancellableTask<Result<'a, 'e2>>
