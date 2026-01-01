@@ -2,12 +2,12 @@
 
 Summary:
 
-| Section            | Lines      | Content                                            |
-|--------------------|------------|---------------------------------------------------|
-| Header             | 1-27       | This summary and grep instructions                |
-| Quick Reference    | 28-1151    | Computation expressions, common patterns, examples |
-| Full API Reference | 1152-3867  | Extracted XML docs for all modules                |
-| **Total**          | **3867**   | Complete documentation                            |
+| Section            | Lines       | Content                                            |
+|--------------------|-------------|---------------------------------------------------|
+| Header             | 1-32        | This summary and grep instructions                |
+| Quick Reference    | 33-1300     | Computation expressions, common patterns, examples |
+| Full API Reference | 1301-4658   | Extracted XML docs for all modules                |
+| **Total**          | **4658**    | Complete documentation                            |
 
 Grepable patterns:
 
@@ -22,12 +22,13 @@ grep -A5 "InsertOne" LLMS.txt         # Find specific API with context
 grep -i "transaction" LLMS.txt        # Search for any term
 grep -i "composition" LLMS.txt        # Find query composition docs
 grep -i "resilience" LLMS.txt         # Find resilience/retry docs
+grep -i "cancell" LLMS.txt            # Find cancellation/CancellableTask docs
 ```
 
 Documented items:
-- 30 modules (including RetryableError, ResilienceOptions)
+- 94 modules (including RetryableError, ResilienceOptions, Cancellable)
 - 55+ types (including new transient error types)
-- 151 functions
+- 182 functions + 48 instance methods
 - Parameters, return types, and examples included
 
 FractalDb is a lightweight F# document database built on SQLite.
@@ -46,6 +47,7 @@ open FractalDb.Types        // Document<'T>, DocumentMeta
 open FractalDb.Errors       // FractalError, FractalResult
 open FractalDb.Operators    // Query<'T>, FieldOp, CompareOp (low-level)
 open FractalDb.Options      // QueryOptions, SortDirection
+open FractalDb.Cancellable  // CancellableTask functions (requires IcedTasks)
 ```
 
 ================================================================================
@@ -1008,6 +1010,196 @@ Write operations in Collection module:
 - deleteById, deleteOne, deleteMany
 
 Read operations (find, count, etc.) do not retry.
+
+================================================================================
+## CANCELLABLE OPERATIONS (IcedTasks Integration)
+================================================================================
+
+FractalDb provides CancellableTask-returning functions for seamless integration with
+IcedTasks `cancellableTask` computation expressions. CancellationToken is automatically
+propagated through the computation.
+
+### Import
+```fsharp
+open IcedTasks
+open FractalDb.Cancellable
+```
+
+### Usage with cancellableTask
+```fsharp
+open IcedTasks
+open FractalDb.Cancellable
+
+// CancellationToken is automatically propagated
+let operation = cancellableTask {
+    let! doc = Cancellable.findById "id123" collection
+    let! updated = Cancellable.updateById "id123" (fun d -> { d with Name = "New" }) collection
+    return updated
+}
+
+// Execute with explicit CancellationToken
+use cts = new CancellationTokenSource()
+let! result = operation cts.Token
+```
+
+### Module Functions (FractalDb.Cancellable)
+
+All Collection operations have cancellable equivalents in the `Cancellable` module.
+They return `CancellableTask<'T>` (alias for `CancellationToken -> Task<'T>`).
+
+#### Read Operations
+```fsharp
+Cancellable.findById id collection          // CancellableTask<option<Document<'T>>>
+Cancellable.findOne filter collection       // CancellableTask<option<Document<'T>>>
+Cancellable.findOneWith filter opts coll    // CancellableTask<option<Document<'T>>>
+Cancellable.find filter collection          // CancellableTask<list<Document<'T>>>
+Cancellable.findWith filter opts collection // CancellableTask<list<Document<'T>>>
+Cancellable.count filter collection         // CancellableTask<int>
+Cancellable.estimatedCount collection       // CancellableTask<int>
+Cancellable.search text fields collection   // CancellableTask<list<Document<'T>>>
+Cancellable.searchWith text fields opts col // CancellableTask<list<Document<'T>>>
+Cancellable.distinct field filter coll      // CancellableTask<FractalResult<list<'V>>>
+Cancellable.exec query collection           // CancellableTask<list<Document<'T>>>
+```
+
+#### Insert Operations
+```fsharp
+Cancellable.insertOne doc collection        // CancellableTask<FractalResult<Document<'T>>>
+Cancellable.insertMany docs collection      // CancellableTask<FractalResult<InsertManyResult<'T>>>
+Cancellable.insertManyWith docs ord coll    // CancellableTask<FractalResult<InsertManyResult<'T>>>
+```
+
+#### Update Operations
+```fsharp
+Cancellable.updateById id update collection       // CancellableTask<FractalResult<option<Document<'T>>>>
+Cancellable.updateOne filter update collection    // CancellableTask<FractalResult<option<Document<'T>>>>
+Cancellable.updateOneWith filter upd upsert coll  // CancellableTask<FractalResult<option<Document<'T>>>>
+Cancellable.replaceOne filter doc collection      // CancellableTask<FractalResult<option<Document<'T>>>>
+Cancellable.updateMany filter update collection   // CancellableTask<FractalResult<UpdateResult>>
+```
+
+#### Delete Operations
+```fsharp
+Cancellable.deleteById id collection        // CancellableTask<bool>
+Cancellable.deleteOne filter collection     // CancellableTask<bool>
+Cancellable.deleteMany filter collection    // CancellableTask<DeleteResult>
+```
+
+#### Atomic Find-and-Modify
+```fsharp
+Cancellable.findOneAndDelete filter coll              // CancellableTask<option<Document<'T>>>
+Cancellable.findOneAndDeleteWith filter opts coll     // CancellableTask<option<Document<'T>>>
+Cancellable.findOneAndUpdate filter upd opts coll     // CancellableTask<FractalResult<option<Document<'T>>>>
+Cancellable.findOneAndReplace filter doc opts coll    // CancellableTask<FractalResult<option<Document<'T>>>>
+```
+
+#### Utility
+```fsharp
+Cancellable.drop collection                 // CancellableTask<unit>
+```
+
+### Instance Methods (*Async suffix)
+
+Collection<'T> also provides `*Async` instance methods that return CancellableTask:
+
+```fsharp
+// Inside cancellableTask block - CT auto-propagated
+cancellableTask {
+    let! result = collection.InsertOneAsync(doc)
+    let! found = collection.FindByIdAsync(id)
+    let! updated = collection.UpdateByIdAsync(id, fun d -> { d with Age = d.Age + 1 })
+    let! deleted = collection.DeleteByIdAsync(id)
+    return result
+}
+```
+
+#### Available Instance Methods
+```fsharp
+// Insert
+collection.InsertOneAsync(doc)              // CancellableTask<FractalResult<Document<'T>>>
+collection.InsertManyAsync(docs)            // CancellableTask<FractalResult<InsertManyResult<'T>>>
+collection.InsertManyAsync(docs, ordered)   // CancellableTask<FractalResult<InsertManyResult<'T>>>
+
+// Find
+collection.FindByIdAsync(id)                // CancellableTask<option<Document<'T>>>
+collection.FindOneAsync(filter)             // CancellableTask<option<Document<'T>>>
+collection.FindOneAsync(filter, options)    // CancellableTask<option<Document<'T>>>
+collection.FindAsync(filter)                // CancellableTask<list<Document<'T>>>
+collection.FindAsync(filter, options)       // CancellableTask<list<Document<'T>>>
+collection.CountAsync(filter)               // CancellableTask<int>
+collection.EstimatedCountAsync()            // CancellableTask<int>
+
+// Search
+collection.SearchAsync(text, fields)        // CancellableTask<list<Document<'T>>>
+collection.SearchAsync(text, fields, opts)  // CancellableTask<list<Document<'T>>>
+collection.DistinctAsync<'V>(field, filter) // CancellableTask<FractalResult<list<'V>>>
+
+// Update
+collection.UpdateByIdAsync(id, update)      // CancellableTask<FractalResult<option<Document<'T>>>>
+collection.UpdateOneAsync(filter, update)   // CancellableTask<FractalResult<option<Document<'T>>>>
+collection.UpdateOneAsync(filter, upd, ups) // CancellableTask<FractalResult<option<Document<'T>>>>
+collection.ReplaceOneAsync(filter, doc)     // CancellableTask<FractalResult<option<Document<'T>>>>
+collection.UpdateManyAsync(filter, update)  // CancellableTask<FractalResult<UpdateResult>>
+
+// Delete
+collection.DeleteByIdAsync(id)              // CancellableTask<bool>
+collection.DeleteOneAsync(filter)           // CancellableTask<bool>
+collection.DeleteManyAsync(filter)          // CancellableTask<DeleteResult>
+
+// Atomic
+collection.FindOneAndDeleteAsync(filter)              // CancellableTask<option<Document<'T>>>
+collection.FindOneAndDeleteAsync(filter, opts)        // CancellableTask<option<Document<'T>>>
+collection.FindOneAndUpdateAsync(filter, upd, opts)   // CancellableTask<FractalResult<option<Document<'T>>>>
+collection.FindOneAndReplaceAsync(filter, doc, opts)  // CancellableTask<FractalResult<option<Document<'T>>>>
+
+// Utility
+collection.DropAsync()                      // CancellableTask<unit>
+collection.ExecAsync(query)                 // CancellableTask<list<Document<'T>>>
+```
+
+### Complete Example
+```fsharp
+open System.Threading
+open IcedTasks
+open FractalDb
+open FractalDb.Cancellable
+
+type User = { Name: string; Email: string; Age: int }
+
+let processUsers (db: FractalDb) (ct: CancellationToken) =
+    cancellableTask {
+        let users = db.Collection<User>("users", userSchema)
+        
+        // All operations automatically use the CancellationToken
+        let! inserted = Cancellable.insertOne { Name = "Alice"; Email = "a@b.com"; Age = 30 } users
+        
+        match inserted with
+        | Ok doc ->
+            let! updated = users.UpdateByIdAsync(doc.Id, fun u -> { u with Age = u.Age + 1 })
+            return updated
+        | Error err ->
+            return Error err
+    } ct  // Pass token at execution
+
+// Usage with timeout
+let runWithTimeout () = task {
+    use cts = new CancellationTokenSource(TimeSpan.FromSeconds(5.0))
+    use db = FractalDb.InMemory()
+    
+    try
+        let! result = processUsers db cts.Token
+        printfn "Result: %A" result
+    with
+    | :? OperationCanceledException ->
+        printfn "Operation was cancelled"
+}
+```
+
+### Cancellation Behavior
+- All operations check cancellation before executing database operations
+- Cancellation is checked at the start of each operation
+- If cancelled, throws `OperationCanceledException`
+- Resilience retry delays also respect CancellationToken
 
 ================================================================================
 ## UTILITY MODULES
@@ -3866,3 +4058,601 @@ FUNCTION: toDateTimeOffset
   Example:
     let dto = Timestamp.toDateTimeOffset 1704067200000L
     // dto = 2024-01-01 00:00:00.000 +00:00
+
+--------------------------------------------------------------------------------
+MODULE: FractalDb.Cancellable
+--------------------------------------------------------------------------------
+
+  Module providing cancellable versions of all Collection operations.
+  Note: This module mirrors FractalDb.Collection but returns CancellableTask<'T> instead of Task<'T>.
+  CancellableTask is an alias for CancellationToken -> Task<'T>, providing:
+  - Seamless integration with IcedTasks cancellableTask computation expression
+  - Implicit CancellationToken propagation
+  - Cancellation checks before each operation
+
+  Usage with IcedTasks:
+    open IcedTasks
+    open FractalDb.Cancellable
+
+    let operation = cancellableTask {
+        let! doc = Cancellable.findById "id123" collection
+        let! updated = Cancellable.updateById "id123" (fun d -> { d with Name = "New" }) collection
+        return updated
+    }
+
+    // Execute with cancellation token
+    let! result = operation ct
+
+  All operations check for cancellation before executing database operations.
+
+--------------------------------------------------------------------------------
+MODULE: FractalDb.Cancellable (Read Operations)
+--------------------------------------------------------------------------------
+
+FUNCTION: findById
+  Finds a document by its unique identifier with cancellation support.
+  @param id: The document ID to search for.
+  @param collection: The collection to search in.
+  @returns: CancellableTask containing Some document if found, None if not found.
+  Example:
+    cancellableTask {
+        let! maybeUser = Cancellable.findById "user123" users
+        match maybeUser with
+        | Some doc -> printfn $"Found: {doc.Data.Name}"
+        | None -> printfn "User not found"
+    }
+
+FUNCTION: findOne
+  Finds the first document matching the filter with cancellation support.
+  @param filter: Query filter to match documents.
+  @param collection: The collection to search in.
+  @returns: CancellableTask containing Some document if found, None if no match.
+  Example:
+    cancellableTask {
+        let! maybeUser =
+            Cancellable.findOne
+                (Query.Field("active", FieldOp.Compare (box (CompareOp.Eq true))))
+                users
+        return maybeUser
+    }
+
+FUNCTION: findOneWith
+  Finds the first document matching the filter with options and cancellation support.
+  @param filter: Query filter to match documents.
+  @param options: Query options for sorting, limiting, etc.
+  @param collection: The collection to search in.
+  @returns: CancellableTask containing Some document if found, None if no match.
+  Example:
+    cancellableTask {
+        let opts = QueryOptions.empty |> QueryOptions.sortDesc "createdAt"
+        let! newest = Cancellable.findOneWith Query.Empty opts users
+        return newest
+    }
+
+FUNCTION: find
+  Finds all documents matching the filter with cancellation support.
+  @param filter: Query filter to match documents.
+  @param collection: The collection to search in.
+  @returns: CancellableTask containing list of matching documents.
+  Example:
+    cancellableTask {
+        let! activeUsers =
+            Cancellable.find
+                (Query.Field("active", FieldOp.Compare (box (CompareOp.Eq true))))
+                users
+        for doc in activeUsers do
+            printfn $"{doc.Data.Name}"
+    }
+
+FUNCTION: findWith
+  Finds all documents matching the filter with options and cancellation support.
+  @param filter: Query filter to match documents.
+  @param options: Query options for sorting, limiting, skipping, etc.
+  @param collection: The collection to search in.
+  @returns: CancellableTask containing list of matching documents.
+  Example:
+    cancellableTask {
+        let opts = QueryOptions.empty |> QueryOptions.limit 10 |> QueryOptions.sortAsc "name"
+        let! page = Cancellable.findWith Query.Empty opts users
+        return page
+    }
+
+FUNCTION: count
+  Counts documents matching the filter with cancellation support.
+  @param filter: Query filter to match documents.
+  @param collection: The collection to count in.
+  @returns: CancellableTask containing count of matching documents.
+  Example:
+    cancellableTask {
+        let! total = Cancellable.count Query.Empty users
+        printfn $"Total users: {total}"
+    }
+
+FUNCTION: estimatedCount
+  Gets estimated total document count with cancellation support.
+  @param collection: The collection to count.
+  @returns: CancellableTask containing estimated count.
+  Example:
+    cancellableTask {
+        let! approx = Cancellable.estimatedCount users
+        printfn $"Approximately {approx} users"
+    }
+
+FUNCTION: search
+  Full-text search across specified fields with cancellation support.
+  @param text: Search text.
+  @param fields: Fields to search in.
+  @param collection: The collection to search.
+  @returns: CancellableTask containing list of matching documents.
+  Example:
+    cancellableTask {
+        let! results = Cancellable.search "alice" ["name"; "email"] users
+        printfn $"Found {List.length results} matches"
+    }
+
+FUNCTION: searchWith
+  Full-text search with options and cancellation support.
+  @param text: Search text.
+  @param fields: Fields to search in.
+  @param options: Query options.
+  @param collection: The collection to search.
+  @returns: CancellableTask containing list of matching documents.
+  Example:
+    cancellableTask {
+        let opts = QueryOptions.empty |> QueryOptions.limit 20
+        let! results = Cancellable.searchWith "product" ["title"; "description"] opts catalog
+        return results
+    }
+
+FUNCTION: distinct
+  Gets distinct values for a field with cancellation support.
+  @param field: Field name.
+  @param filter: Query filter.
+  @param collection: The collection to query.
+  @returns: CancellableTask with Result containing list of distinct values.
+  Example:
+    cancellableTask {
+        let! result = Cancellable.distinct<User, string> "email" Query.Empty users
+        match result with
+        | Ok emails -> printfn $"Found {List.length emails} unique emails"
+        | Error err -> printfn $"Error: {err.Message}"
+    }
+
+FUNCTION: exec
+  Executes a translated query with cancellation support.
+  @param query: The translated query to execute.
+  @param collection: The collection to execute against.
+  @returns: CancellableTask containing list of matching documents.
+  Example:
+    cancellableTask {
+        let q = query { for u in users do where (u.Age >= 18) take 10 }
+        let! results = Cancellable.exec q users
+        return results
+    }
+
+--------------------------------------------------------------------------------
+MODULE: FractalDb.Cancellable (Insert Operations)
+--------------------------------------------------------------------------------
+
+FUNCTION: insertOne
+  Inserts a single document with cancellation support.
+  @param doc: The document data to insert.
+  @param collection: The collection to insert into.
+  @returns: CancellableTask with Result containing the inserted Document or error.
+  Example:
+    cancellableTask {
+        let! result = Cancellable.insertOne { Name = "Alice"; Email = "a@b.com"; Age = 30 } users
+        match result with
+        | Ok doc -> printfn $"Inserted with ID: {doc.Id}"
+        | Error err -> printfn $"Error: {err.Message}"
+    }
+
+FUNCTION: insertMany
+  Inserts multiple documents with cancellation support.
+  @param docs: List of documents to insert.
+  @param collection: The collection to insert into.
+  @returns: CancellableTask with Result containing InsertManyResult or error.
+  Example:
+    cancellableTask {
+        let newUsers = [
+            { Name = "Bob"; Email = "bob@example.com"; Age = 25 }
+            { Name = "Carol"; Email = "carol@example.com"; Age = 28 }
+        ]
+        let! result = Cancellable.insertMany newUsers users
+        match result with
+        | Ok batch -> printfn $"Inserted {batch.InsertedCount} users"
+        | Error err -> printfn $"Error: {err.Message}"
+    }
+
+FUNCTION: insertManyWith
+  Inserts multiple documents with ordering control and cancellation support.
+  @param docs: List of documents to insert.
+  @param ordered: If true, stops on first error; if false, continues.
+  @param collection: The collection to insert into.
+  @returns: CancellableTask with Result containing InsertManyResult or error.
+  Example:
+    cancellableTask {
+        // Continue inserting even if some fail (unordered)
+        let! result = Cancellable.insertManyWith newUsers false users
+        return result
+    }
+
+--------------------------------------------------------------------------------
+MODULE: FractalDb.Cancellable (Update Operations)
+--------------------------------------------------------------------------------
+
+FUNCTION: updateById
+  Updates a document by ID with cancellation support.
+  @param id: Document ID.
+  @param update: Update function.
+  @param collection: The collection to update in.
+  @returns: CancellableTask with Result containing Some updated document if found, None otherwise.
+  Example:
+    cancellableTask {
+        let! result = Cancellable.updateById "user123" (fun u -> { u with Age = u.Age + 1 }) users
+        match result with
+        | Ok (Some doc) -> printfn $"Updated: {doc.Data.Name}"
+        | Ok None -> printfn "User not found"
+        | Error err -> printfn $"Error: {err.Message}"
+    }
+
+FUNCTION: updateOne
+  Updates the first document matching the filter with cancellation support.
+  @param filter: Query filter.
+  @param update: Update function.
+  @param collection: The collection to update in.
+  @returns: CancellableTask with Result containing Some updated document if found, None otherwise.
+  Example:
+    cancellableTask {
+        let filter = Query.Field("status", FieldOp.Compare (box (CompareOp.Eq "pending")))
+        let! result = Cancellable.updateOne filter (fun u -> { u with Status = "active" }) users
+        return result
+    }
+
+FUNCTION: updateOneWith
+  Updates the first document matching the filter with upsert option and cancellation support.
+  @param filter: Query filter.
+  @param update: Update function.
+  @param upsert: If true, inserts if no match found.
+  @param collection: The collection to update in.
+  @returns: CancellableTask with Result containing Some document if found/created, None otherwise.
+  Example:
+    cancellableTask {
+        let filter = Query.Field("email", FieldOp.Compare (box (CompareOp.Eq "alice@example.com")))
+        let! result = Cancellable.updateOneWith filter (fun u -> { u with LastLogin = now }) true users
+        return result
+    }
+
+FUNCTION: replaceOne
+  Replaces the first document matching the filter with cancellation support.
+  @param filter: Query filter.
+  @param doc: Replacement document.
+  @param collection: The collection to update in.
+  @returns: CancellableTask with Result containing Some replaced document if found, None otherwise.
+  Example:
+    cancellableTask {
+        let newData = { Name = "Alice Smith"; Email = "alice@newdomain.com"; Age = 31 }
+        let filter = Query.Field("email", FieldOp.Compare (box (CompareOp.Eq "alice@example.com")))
+        let! result = Cancellable.replaceOne filter newData users
+        return result
+    }
+
+FUNCTION: updateMany
+  Updates all documents matching the filter with cancellation support.
+  @param filter: Query filter.
+  @param update: Update function.
+  @param collection: The collection to update in.
+  @returns: CancellableTask with Result containing UpdateResult with match and modify counts.
+  Example:
+    cancellableTask {
+        let filter = Query.Field("active", FieldOp.Compare (box (CompareOp.Eq false)))
+        let! result = Cancellable.updateMany filter (fun u -> { u with Status = "archived" }) users
+        match result with
+        | Ok ur -> printfn $"Updated {ur.ModifiedCount} of {ur.MatchedCount} matched"
+        | Error err -> printfn $"Error: {err.Message}"
+    }
+
+--------------------------------------------------------------------------------
+MODULE: FractalDb.Cancellable (Delete Operations)
+--------------------------------------------------------------------------------
+
+FUNCTION: deleteById
+  Deletes a document by ID with cancellation support.
+  @param id: Document ID.
+  @param collection: The collection to delete from.
+  @returns: CancellableTask containing true if deleted, false if not found.
+  Example:
+    cancellableTask {
+        let! deleted = Cancellable.deleteById "user123" users
+        if deleted then printfn "Deleted" else printfn "Not found"
+    }
+
+FUNCTION: deleteOne
+  Deletes the first document matching the filter with cancellation support.
+  @param filter: Query filter.
+  @param collection: The collection to delete from.
+  @returns: CancellableTask containing true if deleted, false if not found.
+  Example:
+    cancellableTask {
+        let filter = Query.Field("status", FieldOp.Compare (box (CompareOp.Eq "deleted")))
+        let! deleted = Cancellable.deleteOne filter users
+        return deleted
+    }
+
+FUNCTION: deleteMany
+  Deletes all documents matching the filter with cancellation support.
+  @param filter: Query filter.
+  @param collection: The collection to delete from.
+  @returns: CancellableTask containing DeleteResult with deleted count.
+  Example:
+    cancellableTask {
+        let filter = Query.Field("active", FieldOp.Compare (box (CompareOp.Eq false)))
+        let! result = Cancellable.deleteMany filter users
+        printfn $"Deleted {result.DeletedCount} inactive users"
+    }
+
+--------------------------------------------------------------------------------
+MODULE: FractalDb.Cancellable (Atomic Find-and-Modify Operations)
+--------------------------------------------------------------------------------
+
+FUNCTION: findOneAndDelete
+  Atomically finds and deletes a document with cancellation support.
+  @param filter: Query filter.
+  @param collection: The collection to operate on.
+  @returns: CancellableTask containing Some deleted document if found, None otherwise.
+  Example:
+    cancellableTask {
+        let filter = Query.Field("status", FieldOp.Compare (box (CompareOp.Eq "pending")))
+        let! work = Cancellable.findOneAndDelete filter workQueue
+        match work with
+        | Some doc -> printfn $"Processing: {doc.Data}"
+        | None -> printfn "No pending work"
+    }
+
+FUNCTION: findOneAndDeleteWith
+  Atomically finds and deletes a document with options and cancellation support.
+  @param filter: Query filter.
+  @param options: Find options (sort).
+  @param collection: The collection to operate on.
+  @returns: CancellableTask containing Some deleted document if found, None otherwise.
+  Example:
+    cancellableTask {
+        // FIFO queue - oldest first
+        let options = { Sort = [("createdAt", Ascending)] }
+        let filter = Query.Field("status", FieldOp.Compare (box (CompareOp.Eq "pending")))
+        let! work = Cancellable.findOneAndDeleteWith filter options workQueue
+        return work
+    }
+
+FUNCTION: findOneAndUpdate
+  Atomically finds and updates a document with cancellation support.
+  @param filter: Query filter.
+  @param update: Update function.
+  @param options: Find and modify options.
+  @param collection: The collection to operate on.
+  @returns: CancellableTask with Result containing Some document if found, None otherwise.
+  Example:
+    cancellableTask {
+        let options = { Sort = []; ReturnDocument = After; Upsert = false }
+        let filter = Query.Field("status", FieldOp.Compare (box (CompareOp.Eq "pending")))
+        let! result = Cancellable.findOneAndUpdate filter (fun w -> { w with Status = "processing" }) options workQueue
+        return result
+    }
+
+FUNCTION: findOneAndReplace
+  Atomically finds and replaces a document with cancellation support.
+  @param filter: Query filter.
+  @param doc: Replacement document.
+  @param options: Find and modify options.
+  @param collection: The collection to operate on.
+  @returns: CancellableTask with Result containing Some document if found, None otherwise.
+  Example:
+    cancellableTask {
+        let options = { Sort = []; ReturnDocument = After; Upsert = true }
+        let newProfile = { UserId = "user123"; Bio = "Updated bio"; Theme = "dark" }
+        let filter = Query.Field("userId", FieldOp.Compare (box (CompareOp.Eq "user123")))
+        let! result = Cancellable.findOneAndReplace filter newProfile options profiles
+        return result
+    }
+
+--------------------------------------------------------------------------------
+MODULE: FractalDb.Cancellable (Utility Operations)
+--------------------------------------------------------------------------------
+
+FUNCTION: drop
+  Drops the collection with cancellation support.
+  @param collection: The collection to drop.
+  @returns: CancellableTask that completes when collection is dropped.
+  Example:
+    cancellableTask {
+        do! Cancellable.drop tempCollection
+        printfn "Collection dropped"
+    }
+
+--------------------------------------------------------------------------------
+MODULE: FractalDb.Cancellable (Collection Extension Methods)
+--------------------------------------------------------------------------------
+
+  Extension methods for Collection<'T> that return CancellableTask for
+  seamless integration with IcedTasks cancellableTask computation expression.
+  
+  These methods provide automatic CancellationToken propagation when used
+  inside cancellableTask blocks. Methods are suffixed with "Async" to 
+  distinguish from Task-returning methods.
+
+INSTANCE: collection.InsertOneAsync(doc)
+  Inserts a document with automatic cancellation propagation.
+  @param doc: The document data to insert.
+  @returns: CancellableTask<FractalResult<Document<'T>>>
+  Example:
+    cancellableTask {
+        let! result = collection.InsertOneAsync({ Name = "Alice"; Age = 30 })
+        return result
+    }
+
+INSTANCE: collection.InsertManyAsync(docs)
+  Inserts multiple documents with automatic cancellation propagation.
+  @param docs: List of documents to insert.
+  @returns: CancellableTask<FractalResult<InsertManyResult<'T>>>
+
+INSTANCE: collection.InsertManyAsync(docs, ordered)
+  Inserts multiple documents with ordering control and automatic cancellation propagation.
+  @param docs: List of documents to insert.
+  @param ordered: If true, stops on first error; if false, continues.
+  @returns: CancellableTask<FractalResult<InsertManyResult<'T>>>
+
+INSTANCE: collection.FindByIdAsync(id)
+  Finds a document by ID with automatic cancellation propagation.
+  @param id: The document ID to find.
+  @returns: CancellableTask<option<Document<'T>>>
+  Example:
+    cancellableTask {
+        let! maybeDoc = collection.FindByIdAsync("id123")
+        return maybeDoc
+    }
+
+INSTANCE: collection.FindOneAsync(filter)
+  Finds the first matching document with automatic cancellation propagation.
+  @param filter: Query filter to match.
+  @returns: CancellableTask<option<Document<'T>>>
+
+INSTANCE: collection.FindOneAsync(filter, options)
+  Finds the first matching document with options and automatic cancellation propagation.
+  @param filter: Query filter to match.
+  @param options: Query options.
+  @returns: CancellableTask<option<Document<'T>>>
+
+INSTANCE: collection.FindAsync(filter)
+  Finds all matching documents with automatic cancellation propagation.
+  @param filter: Query filter to match.
+  @returns: CancellableTask<list<Document<'T>>>
+
+INSTANCE: collection.FindAsync(filter, options)
+  Finds all matching documents with options and automatic cancellation propagation.
+  @param filter: Query filter to match.
+  @param options: Query options.
+  @returns: CancellableTask<list<Document<'T>>>
+
+INSTANCE: collection.CountAsync(filter)
+  Counts matching documents with automatic cancellation propagation.
+  @param filter: Query filter to match.
+  @returns: CancellableTask<int>
+
+INSTANCE: collection.EstimatedCountAsync()
+  Gets estimated document count with automatic cancellation propagation.
+  @returns: CancellableTask<int>
+
+INSTANCE: collection.SearchAsync(text, fields)
+  Full-text search with automatic cancellation propagation.
+  @param text: Search text.
+  @param fields: Fields to search.
+  @returns: CancellableTask<list<Document<'T>>>
+
+INSTANCE: collection.SearchAsync(text, fields, options)
+  Full-text search with options and automatic cancellation propagation.
+  @param text: Search text.
+  @param fields: Fields to search.
+  @param options: Query options.
+  @returns: CancellableTask<list<Document<'T>>>
+
+INSTANCE: collection.DistinctAsync<'V>(field, filter)
+  Gets distinct field values with automatic cancellation propagation.
+  @param field: Field name.
+  @param filter: Query filter.
+  @returns: CancellableTask<FractalResult<list<'V>>>
+
+INSTANCE: collection.UpdateByIdAsync(id, update)
+  Updates a document by ID with automatic cancellation propagation.
+  @param id: Document ID.
+  @param update: Update function.
+  @returns: CancellableTask<FractalResult<option<Document<'T>>>>
+  Example:
+    cancellableTask {
+        let! result = collection.UpdateByIdAsync("id123", fun u -> { u with Age = u.Age + 1 })
+        return result
+    }
+
+INSTANCE: collection.UpdateOneAsync(filter, update)
+  Updates the first matching document with automatic cancellation propagation.
+  @param filter: Query filter.
+  @param update: Update function.
+  @returns: CancellableTask<FractalResult<option<Document<'T>>>>
+
+INSTANCE: collection.UpdateOneAsync(filter, update, upsert)
+  Updates the first matching document with upsert and automatic cancellation propagation.
+  @param filter: Query filter.
+  @param update: Update function.
+  @param upsert: Whether to insert if no match.
+  @returns: CancellableTask<FractalResult<option<Document<'T>>>>
+
+INSTANCE: collection.ReplaceOneAsync(filter, doc)
+  Replaces the first matching document with automatic cancellation propagation.
+  @param filter: Query filter.
+  @param doc: Replacement document.
+  @returns: CancellableTask<FractalResult<option<Document<'T>>>>
+
+INSTANCE: collection.UpdateManyAsync(filter, update)
+  Updates all matching documents with automatic cancellation propagation.
+  @param filter: Query filter.
+  @param update: Update function.
+  @returns: CancellableTask<FractalResult<UpdateResult>>
+
+INSTANCE: collection.DeleteByIdAsync(id)
+  Deletes a document by ID with automatic cancellation propagation.
+  @param id: Document ID.
+  @returns: CancellableTask<bool>
+  Example:
+    cancellableTask {
+        let! deleted = collection.DeleteByIdAsync("id123")
+        return deleted
+    }
+
+INSTANCE: collection.DeleteOneAsync(filter)
+  Deletes the first matching document with automatic cancellation propagation.
+  @param filter: Query filter.
+  @returns: CancellableTask<bool>
+
+INSTANCE: collection.DeleteManyAsync(filter)
+  Deletes all matching documents with automatic cancellation propagation.
+  @param filter: Query filter.
+  @returns: CancellableTask<DeleteResult>
+
+INSTANCE: collection.FindOneAndDeleteAsync(filter)
+  Atomically finds and deletes with automatic cancellation propagation.
+  @param filter: Query filter.
+  @returns: CancellableTask<option<Document<'T>>>
+
+INSTANCE: collection.FindOneAndDeleteAsync(filter, options)
+  Atomically finds and deletes with options and automatic cancellation propagation.
+  @param filter: Query filter.
+  @param options: Find options.
+  @returns: CancellableTask<option<Document<'T>>>
+
+INSTANCE: collection.FindOneAndUpdateAsync(filter, update, options)
+  Atomically finds and updates with automatic cancellation propagation.
+  @param filter: Query filter.
+  @param update: Update function.
+  @param options: Find and modify options.
+  @returns: CancellableTask<FractalResult<option<Document<'T>>>>
+
+INSTANCE: collection.FindOneAndReplaceAsync(filter, doc, options)
+  Atomically finds and replaces with automatic cancellation propagation.
+  @param filter: Query filter.
+  @param doc: Replacement document.
+  @param options: Find and modify options.
+  @returns: CancellableTask<FractalResult<option<Document<'T>>>>
+
+INSTANCE: collection.DropAsync()
+  Drops the collection with automatic cancellation propagation.
+  @returns: CancellableTask<unit>
+
+INSTANCE: collection.ExecAsync(query)
+  Executes a translated query with automatic cancellation propagation.
+  @param query: The translated query.
+  @returns: CancellableTask<list<Document<'T>>>
+  Example:
+    cancellableTask {
+        let q = query { for u in users do where (u.Active = true) take 10 }
+        let! results = collection.ExecAsync(q)
+        return results
+    }

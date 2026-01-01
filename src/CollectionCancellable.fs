@@ -28,7 +28,6 @@
 [<RequireQualifiedAccess>]
 module FractalDb.Cancellable
 
-open System
 open System.Threading
 open System.Threading.Tasks
 open IcedTasks
@@ -43,10 +42,10 @@ open FractalDb.Collection
 // ═══════════════════════════════════════════════════════════════════════════
 
 /// Checks cancellation and throws if requested
-let inline private checkCancellation (ct: CancellationToken) = ct.ThrowIfCancellationRequested()
+let inline internal checkCancellation (ct: CancellationToken) = ct.ThrowIfCancellationRequested()
 
 /// Wraps a Task-returning function with cancellation check
-let inline private wrapWithCancellation (operation: unit -> Task<'T>) : CancellableTask<'T> =
+let inline internal wrapWithCancellation (operation: unit -> Task<'T>) : CancellableTask<'T> =
     fun ct ->
         task {
             checkCancellation ct
@@ -395,8 +394,9 @@ let findOneAndReplace
 let drop (collection: Collection<'T>) : CancellableTask<unit> =
     wrapWithCancellation (fun () -> Collection.drop collection)
 
+
 // ═══════════════════════════════════════════════════════════════════════════
-// COLLECTION TYPE EXTENSION - CancellableTask-returning instance methods
+// AUTO-OPEN EXTENSION MODULE
 // ═══════════════════════════════════════════════════════════════════════════
 
 /// <summary>
@@ -404,151 +404,168 @@ let drop (collection: Collection<'T>) : CancellableTask<unit> =
 /// seamless integration with IcedTasks cancellableTask computation expression.
 /// </summary>
 /// <remarks>
-/// These methods provide automatic CancellationToken propagation when used
-/// inside cancellableTask blocks:
+/// This module is auto-opened, making extension methods available on Collection&lt;'T&gt;
+/// without requiring explicit import. Methods are suffixed with "Async" to distinguish
+/// from Task-returning methods.
+///
+/// Usage:
 /// <code>
+/// open IcedTasks
+/// open FractalDb.Cancellable
+///
 /// cancellableTask {
 ///     let! result = collection.InsertOneAsync(doc)  // CT auto-propagated
 ///     let! found = collection.FindByIdAsync(id)     // CT auto-propagated
 ///     return result
 /// }
 /// </code>
-/// Methods are suffixed with "Async" to distinguish from Task-returning methods.
 /// </remarks>
-type Collection<'T> with
+[<AutoOpen>]
+module Extensions =
 
-    // ════════════════════════════════════════════════════════════════════════
-    // INSERT OPERATIONS
-    // ════════════════════════════════════════════════════════════════════════
+    /// Extension methods for Collection<'T> returning CancellableTask
+    type Collection<'T> with
 
-    /// <summary>Inserts a document with automatic cancellation propagation.</summary>
-    member this.InsertOneAsync(doc: 'T) : CancellableTask<FractalResult<Document<'T>>> = insertOne doc this
+        // ════════════════════════════════════════════════════════════════════════
+        // INSERT OPERATIONS
+        // ════════════════════════════════════════════════════════════════════════
 
-    /// <summary>Inserts multiple documents with automatic cancellation propagation.</summary>
-    member this.InsertManyAsync(docs: list<'T>) : CancellableTask<FractalResult<InsertManyResult<'T>>> =
-        insertMany docs this
+        /// <summary>Inserts a document with automatic cancellation propagation.</summary>
+        member this.InsertOneAsync(doc: 'T) : CancellableTask<FractalResult<Document<'T>>> = insertOne doc this
 
-    /// <summary>Inserts multiple documents with ordering control and automatic cancellation propagation.</summary>
-    member this.InsertManyAsync(docs: list<'T>, ordered: bool) : CancellableTask<FractalResult<InsertManyResult<'T>>> =
-        insertManyWith docs ordered this
+        /// <summary>Inserts multiple documents with automatic cancellation propagation.</summary>
+        member this.InsertManyAsync(docs: list<'T>) : CancellableTask<FractalResult<InsertManyResult<'T>>> =
+            insertMany docs this
 
-    // ════════════════════════════════════════════════════════════════════════
-    // FIND OPERATIONS
-    // ════════════════════════════════════════════════════════════════════════
+        /// <summary>Inserts multiple documents with ordering control and automatic cancellation propagation.</summary>
+        member this.InsertManyAsync
+            (docs: list<'T>, ordered: bool)
+            : CancellableTask<FractalResult<InsertManyResult<'T>>> =
+            insertManyWith docs ordered this
 
-    /// <summary>Finds a document by ID with automatic cancellation propagation.</summary>
-    member this.FindByIdAsync(id: string) : CancellableTask<option<Document<'T>>> = findById id this
+        // ════════════════════════════════════════════════════════════════════════
+        // FIND OPERATIONS
+        // ════════════════════════════════════════════════════════════════════════
 
-    /// <summary>Finds the first matching document with automatic cancellation propagation.</summary>
-    member this.FindOneAsync(filter: Query<'T>) : CancellableTask<option<Document<'T>>> = findOne filter this
+        /// <summary>Finds a document by ID with automatic cancellation propagation.</summary>
+        member this.FindByIdAsync(id: string) : CancellableTask<option<Document<'T>>> = findById id this
 
-    /// <summary>Finds the first matching document with options and automatic cancellation propagation.</summary>
-    member this.FindOneAsync(filter: Query<'T>, options: QueryOptions<'T>) : CancellableTask<option<Document<'T>>> =
-        findOneWith filter options this
+        /// <summary>Finds the first matching document with automatic cancellation propagation.</summary>
+        member this.FindOneAsync(filter: Query<'T>) : CancellableTask<option<Document<'T>>> = findOne filter this
 
-    /// <summary>Finds all matching documents with automatic cancellation propagation.</summary>
-    member this.FindAsync(filter: Query<'T>) : CancellableTask<list<Document<'T>>> = find filter this
+        /// <summary>Finds the first matching document with options and automatic cancellation propagation.</summary>
+        member this.FindOneAsync(filter: Query<'T>, options: QueryOptions<'T>) : CancellableTask<option<Document<'T>>> =
+            findOneWith filter options this
 
-    /// <summary>Finds all matching documents with options and automatic cancellation propagation.</summary>
-    member this.FindAsync(filter: Query<'T>, options: QueryOptions<'T>) : CancellableTask<list<Document<'T>>> =
-        findWith filter options this
+        /// <summary>Finds all matching documents with automatic cancellation propagation.</summary>
+        member this.FindAsync(filter: Query<'T>) : CancellableTask<list<Document<'T>>> = find filter this
 
-    /// <summary>Counts matching documents with automatic cancellation propagation.</summary>
-    member this.CountAsync(filter: Query<'T>) : CancellableTask<int> = count filter this
+        /// <summary>Finds all matching documents with options and automatic cancellation propagation.</summary>
+        member this.FindAsync(filter: Query<'T>, options: QueryOptions<'T>) : CancellableTask<list<Document<'T>>> =
+            findWith filter options this
 
-    /// <summary>Gets estimated document count with automatic cancellation propagation.</summary>
-    member this.EstimatedCountAsync() : CancellableTask<int> = estimatedCount this
+        /// <summary>Counts matching documents with automatic cancellation propagation.</summary>
+        member this.CountAsync(filter: Query<'T>) : CancellableTask<int> = count filter this
 
-    // ════════════════════════════════════════════════════════════════════════
-    // SEARCH OPERATIONS
-    // ════════════════════════════════════════════════════════════════════════
+        /// <summary>Gets estimated document count with automatic cancellation propagation.</summary>
+        member this.EstimatedCountAsync() : CancellableTask<int> = estimatedCount this
 
-    /// <summary>Full-text search with automatic cancellation propagation.</summary>
-    member this.SearchAsync(text: string, fields: list<string>) : CancellableTask<list<Document<'T>>> =
-        search text fields this
+        // ════════════════════════════════════════════════════════════════════════
+        // SEARCH OPERATIONS
+        // ════════════════════════════════════════════════════════════════════════
 
-    /// <summary>Full-text search with options and automatic cancellation propagation.</summary>
-    member this.SearchAsync
-        (text: string, fields: list<string>, options: QueryOptions<'T>)
-        : CancellableTask<list<Document<'T>>> =
-        searchWith text fields options this
+        /// <summary>Full-text search with automatic cancellation propagation.</summary>
+        member this.SearchAsync(text: string, fields: list<string>) : CancellableTask<list<Document<'T>>> =
+            search text fields this
 
-    /// <summary>Gets distinct field values with automatic cancellation propagation.</summary>
-    member this.DistinctAsync<'V>(field: string, filter: Query<'T>) : CancellableTask<FractalResult<list<'V>>> =
-        distinct<'T, 'V> field filter this
+        /// <summary>Full-text search with options and automatic cancellation propagation.</summary>
+        member this.SearchAsync
+            (text: string, fields: list<string>, options: QueryOptions<'T>)
+            : CancellableTask<list<Document<'T>>> =
+            searchWith text fields options this
 
-    // ════════════════════════════════════════════════════════════════════════
-    // UPDATE OPERATIONS
-    // ════════════════════════════════════════════════════════════════════════
+        /// <summary>Gets distinct field values with automatic cancellation propagation.</summary>
+        member this.DistinctAsync<'V>(field: string, filter: Query<'T>) : CancellableTask<FractalResult<list<'V>>> =
+            distinct<'T, 'V> field filter this
 
-    /// <summary>Updates a document by ID with automatic cancellation propagation.</summary>
-    member this.UpdateByIdAsync(id: string, update: 'T -> 'T) : CancellableTask<FractalResult<option<Document<'T>>>> =
-        updateById id update this
+        // ════════════════════════════════════════════════════════════════════════
+        // UPDATE OPERATIONS
+        // ════════════════════════════════════════════════════════════════════════
 
-    /// <summary>Updates the first matching document with automatic cancellation propagation.</summary>
-    member this.UpdateOneAsync
-        (filter: Query<'T>, update: 'T -> 'T)
-        : CancellableTask<FractalResult<option<Document<'T>>>> =
-        updateOne filter update this
+        /// <summary>Updates a document by ID with automatic cancellation propagation.</summary>
+        member this.UpdateByIdAsync
+            (id: string, update: 'T -> 'T)
+            : CancellableTask<FractalResult<option<Document<'T>>>> =
+            updateById id update this
 
-    /// <summary>Updates the first matching document with upsert and automatic cancellation propagation.</summary>
-    member this.UpdateOneAsync
-        (filter: Query<'T>, update: 'T -> 'T, upsert: bool)
-        : CancellableTask<FractalResult<option<Document<'T>>>> =
-        updateOneWith filter update upsert this
+        /// <summary>Updates the first matching document with automatic cancellation propagation.</summary>
+        member this.UpdateOneAsync
+            (filter: Query<'T>, update: 'T -> 'T)
+            : CancellableTask<FractalResult<option<Document<'T>>>> =
+            updateOne filter update this
 
-    /// <summary>Replaces the first matching document with automatic cancellation propagation.</summary>
-    member this.ReplaceOneAsync(filter: Query<'T>, doc: 'T) : CancellableTask<FractalResult<option<Document<'T>>>> =
-        replaceOne filter doc this
+        /// <summary>Updates the first matching document with upsert and automatic cancellation propagation.</summary>
+        member this.UpdateOneAsync
+            (filter: Query<'T>, update: 'T -> 'T, upsert: bool)
+            : CancellableTask<FractalResult<option<Document<'T>>>> =
+            updateOneWith filter update upsert this
 
-    /// <summary>Updates all matching documents with automatic cancellation propagation.</summary>
-    member this.UpdateManyAsync(filter: Query<'T>, update: 'T -> 'T) : CancellableTask<FractalResult<UpdateResult>> =
-        updateMany filter update this
+        /// <summary>Replaces the first matching document with automatic cancellation propagation.</summary>
+        member this.ReplaceOneAsync(filter: Query<'T>, doc: 'T) : CancellableTask<FractalResult<option<Document<'T>>>> =
+            replaceOne filter doc this
 
-    // ════════════════════════════════════════════════════════════════════════
-    // DELETE OPERATIONS
-    // ════════════════════════════════════════════════════════════════════════
+        /// <summary>Updates all matching documents with automatic cancellation propagation.</summary>
+        member this.UpdateManyAsync
+            (filter: Query<'T>, update: 'T -> 'T)
+            : CancellableTask<FractalResult<UpdateResult>> =
+            updateMany filter update this
 
-    /// <summary>Deletes a document by ID with automatic cancellation propagation.</summary>
-    member this.DeleteByIdAsync(id: string) : CancellableTask<bool> = deleteById id this
+        // ════════════════════════════════════════════════════════════════════════
+        // DELETE OPERATIONS
+        // ════════════════════════════════════════════════════════════════════════
 
-    /// <summary>Deletes the first matching document with automatic cancellation propagation.</summary>
-    member this.DeleteOneAsync(filter: Query<'T>) : CancellableTask<bool> = deleteOne filter this
+        /// <summary>Deletes a document by ID with automatic cancellation propagation.</summary>
+        member this.DeleteByIdAsync(id: string) : CancellableTask<bool> = deleteById id this
 
-    /// <summary>Deletes all matching documents with automatic cancellation propagation.</summary>
-    member this.DeleteManyAsync(filter: Query<'T>) : CancellableTask<DeleteResult> = deleteMany filter this
+        /// <summary>Deletes the first matching document with automatic cancellation propagation.</summary>
+        member this.DeleteOneAsync(filter: Query<'T>) : CancellableTask<bool> = deleteOne filter this
 
-    // ════════════════════════════════════════════════════════════════════════
-    // ATOMIC FIND-AND-MODIFY OPERATIONS
-    // ════════════════════════════════════════════════════════════════════════
+        /// <summary>Deletes all matching documents with automatic cancellation propagation.</summary>
+        member this.DeleteManyAsync(filter: Query<'T>) : CancellableTask<DeleteResult> = deleteMany filter this
 
-    /// <summary>Atomically finds and deletes with automatic cancellation propagation.</summary>
-    member this.FindOneAndDeleteAsync(filter: Query<'T>) : CancellableTask<option<Document<'T>>> =
-        findOneAndDelete filter this
+        // ════════════════════════════════════════════════════════════════════════
+        // ATOMIC FIND-AND-MODIFY OPERATIONS
+        // ════════════════════════════════════════════════════════════════════════
 
-    /// <summary>Atomically finds and deletes with options and automatic cancellation propagation.</summary>
-    member this.FindOneAndDeleteAsync(filter: Query<'T>, options: FindOptions) : CancellableTask<option<Document<'T>>> =
-        findOneAndDeleteWith filter options this
+        /// <summary>Atomically finds and deletes with automatic cancellation propagation.</summary>
+        member this.FindOneAndDeleteAsync(filter: Query<'T>) : CancellableTask<option<Document<'T>>> =
+            findOneAndDelete filter this
 
-    /// <summary>Atomically finds and updates with automatic cancellation propagation.</summary>
-    member this.FindOneAndUpdateAsync
-        (filter: Query<'T>, update: 'T -> 'T, options: FindAndModifyOptions)
-        : CancellableTask<FractalResult<option<Document<'T>>>> =
-        findOneAndUpdate filter update options this
+        /// <summary>Atomically finds and deletes with options and automatic cancellation propagation.</summary>
+        member this.FindOneAndDeleteAsync
+            (filter: Query<'T>, options: FindOptions)
+            : CancellableTask<option<Document<'T>>> =
+            findOneAndDeleteWith filter options this
 
-    /// <summary>Atomically finds and replaces with automatic cancellation propagation.</summary>
-    member this.FindOneAndReplaceAsync
-        (filter: Query<'T>, doc: 'T, options: FindAndModifyOptions)
-        : CancellableTask<FractalResult<option<Document<'T>>>> =
-        findOneAndReplace filter doc options this
+        /// <summary>Atomically finds and updates with automatic cancellation propagation.</summary>
+        member this.FindOneAndUpdateAsync
+            (filter: Query<'T>, update: 'T -> 'T, options: FindAndModifyOptions)
+            : CancellableTask<FractalResult<option<Document<'T>>>> =
+            findOneAndUpdate filter update options this
 
-    // ════════════════════════════════════════════════════════════════════════
-    // UTILITY OPERATIONS
-    // ════════════════════════════════════════════════════════════════════════
+        /// <summary>Atomically finds and replaces with automatic cancellation propagation.</summary>
+        member this.FindOneAndReplaceAsync
+            (filter: Query<'T>, doc: 'T, options: FindAndModifyOptions)
+            : CancellableTask<FractalResult<option<Document<'T>>>> =
+            findOneAndReplace filter doc options this
 
-    /// <summary>Drops the collection with automatic cancellation propagation.</summary>
-    member this.DropAsync() : CancellableTask<unit> = drop this
+        // ════════════════════════════════════════════════════════════════════════
+        // UTILITY OPERATIONS
+        // ════════════════════════════════════════════════════════════════════════
 
-    /// <summary>Executes a translated query with automatic cancellation propagation.</summary>
-    member this.ExecAsync(query: FractalDb.QueryExpr.TranslatedQuery<'T>) : CancellableTask<list<Document<'T>>> =
-        exec query this
+        /// <summary>Drops the collection with automatic cancellation propagation.</summary>
+        member this.DropAsync() : CancellableTask<unit> = drop this
+
+        /// <summary>Executes a translated query with automatic cancellation propagation.</summary>
+        member this.ExecAsync(query: FractalDb.QueryExpr.TranslatedQuery<'T>) : CancellableTask<list<Document<'T>>> =
+            exec query this
