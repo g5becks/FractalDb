@@ -9,6 +9,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## FractalDb (F# Port)
 
+### [1.1.1] - 2025-12-31
+
+#### Fixed
+
+- **Cancellable extension methods now accessible** - Restructured `FractalDb.Cancellable` module to use nested `[<AutoOpen>]` Extensions submodule, making `*Async` extension methods on `Collection<'T>` (like `InsertOneAsync`, `FindByIdAsync`, etc.) available when importing the module with `open FractalDb.Cancellable`
+
+#### Changed
+
+- Updated LLMS.txt documentation to reflect the new module structure
+
+---
+
 ### [1.1.0] - 2025-12-31
 
 #### Added
