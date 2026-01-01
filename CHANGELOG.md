@@ -9,6 +9,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## FractalDb (F# Port)
 
+### [1.2.0] - 2025-01-01
+
+#### Added
+
+- **CancellableTaskResult.mapError** - Maps the error type of a `CancellableTask<Result<'a, 'e1>>` to a new error type, filling a gap in FsToolkit.ErrorHandling.IcedTasks:
+  ```fsharp
+  open FractalDb.Cancellable
+  
+  // Transform FractalError to your application's error type
+  let result = 
+      collection.InsertOneAsync(doc) 
+      |> CancellableTaskResult.mapError toStoreError
+  ```
+- **CancellableTaskResult.bimap** - Maps both success and error values in a single operation for efficiency:
+  ```fsharp
+  let result = 
+      operation 
+      |> CancellableTaskResult.bimap transformData transformError
+  ```
+
+---
+
 ### [1.1.1] - 2025-12-31
 
 #### Fixed

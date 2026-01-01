@@ -1218,6 +1218,40 @@ let runWithTimeout () = task {
 - If cancelled, throws `OperationCanceledException`
 - Resilience retry delays also respect CancellationToken
 
+### CancellableTaskResult Utilities
+Utilities for working with `CancellableTask<Result<'a, 'e>>`. Fills gaps in FsToolkit.ErrorHandling.IcedTasks.
+
+```fsharp
+open FractalDb.Cancellable
+
+// mapError: Transform error type while preserving success value
+// Signature: ('e1 -> 'e2) -> CancellableTask<Result<'a, 'e1>> -> CancellableTask<Result<'a, 'e2>>
+type StoreError = NotFound | DatabaseError of string | Unknown
+
+let toStoreError = function
+    | FractalError.NotFound _ -> StoreError.NotFound
+    | FractalError.Query(msg, _) -> StoreError.DatabaseError msg
+    | _ -> StoreError.Unknown
+
+cancellableTask {
+    let! result = 
+        collection.InsertOneAsync(doc)
+        |> CancellableTaskResult.mapError toStoreError
+    // result : Result<Document<'T>, StoreError>
+    return result
+}
+
+// bimap: Transform both success and error in single operation
+// Signature: ('a -> 'b) -> ('e1 -> 'e2) -> CancellableTask<Result<'a, 'e1>> -> CancellableTask<Result<'b, 'e2>>
+cancellableTask {
+    let! result =
+        collection.InsertOneAsync(doc)
+        |> CancellableTaskResult.bimap (fun doc -> doc.Data) toStoreError
+    // result : Result<'T, StoreError>
+    return result
+}
+```
+
 ================================================================================
 ## UTILITY MODULES
 ================================================================================

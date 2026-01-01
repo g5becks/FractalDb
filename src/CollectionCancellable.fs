@@ -53,6 +53,88 @@ let inline internal wrapWithCancellation (operation: unit -> Task<'T>) : Cancell
         }
 
 // ═══════════════════════════════════════════════════════════════════════════
+// CANCELLABLE TASK RESULT UTILITIES
+// ═══════════════════════════════════════════════════════════════════════════
+
+/// <summary>
+/// Utility functions for working with CancellableTask&lt;Result&lt;'T, 'E&gt;&gt;.
+/// </summary>
+/// <remarks>
+/// FsToolkit.ErrorHandling.IcedTasks provides CancellableTaskResult.map but not mapError.
+/// This module fills that gap for common error transformation patterns.
+/// </remarks>
+[<RequireQualifiedAccess>]
+module CancellableTaskResult =
+
+    /// <summary>
+    /// Maps the error value of a CancellableTask&lt;Result&lt;'a, 'e1&gt;&gt; to a new error type.
+    /// </summary>
+    /// <param name="f">Function to transform the error value.</param>
+    /// <param name="ctr">The CancellableTask containing a Result.</param>
+    /// <returns>CancellableTask with the error mapped to the new type.</returns>
+    /// <remarks>
+    /// This is the dual of CancellableTaskResult.map - it transforms the error type
+    /// while leaving the success value unchanged.
+    ///
+    /// Useful when you need to convert FractalError to your application's error type:
+    /// <code>
+    /// // FractalDb returns: CancellableTask&lt;Result&lt;Document&lt;'T&gt;, FractalError&gt;&gt;
+    /// // You want: CancellableTask&lt;Result&lt;Document&lt;'T&gt;, StoreError&gt;&gt;
+    ///
+    /// let toStoreError = function
+    ///     | FractalError.NotFound _ -> StoreError.NotFound
+    ///     | FractalError.DatabaseError (_, msg) -> StoreError.Database msg
+    ///     | _ -> StoreError.Unknown
+    ///
+    /// let result = collection.InsertOneAsync(doc) |> CancellableTaskResult.mapError toStoreError
+    /// </code>
+    /// </remarks>
+    /// <example>
+    /// <code>
+    /// open FractalDb.Cancellable
+    ///
+    /// cancellableTask {
+    ///     let! result =
+    ///         collection.InsertOneAsync(doc)
+    ///         |> CancellableTaskResult.mapError toMyError
+    ///     return result
+    /// }
+    /// </code>
+    /// </example>
+    let inline mapError (f: 'e1 -> 'e2) (ctr: CancellableTask<Result<'a, 'e1>>) : CancellableTask<Result<'a, 'e2>> =
+        fun ct ->
+            task {
+                let! result = ctr ct
+                return Result.mapError f result
+            }
+
+    /// <summary>
+    /// Maps both success and error values of a CancellableTask&lt;Result&lt;'a, 'e1&gt;&gt;.
+    /// </summary>
+    /// <param name="fOk">Function to transform the success value.</param>
+    /// <param name="fError">Function to transform the error value.</param>
+    /// <param name="ctr">The CancellableTask containing a Result.</param>
+    /// <returns>CancellableTask with both values mapped.</returns>
+    /// <remarks>
+    /// Combines map and mapError into a single operation for efficiency when
+    /// transforming both success and error types.
+    /// </remarks>
+    let inline bimap
+        (fOk: 'a -> 'b)
+        (fError: 'e1 -> 'e2)
+        (ctr: CancellableTask<Result<'a, 'e1>>)
+        : CancellableTask<Result<'b, 'e2>> =
+        fun ct ->
+            task {
+                let! result = ctr ct
+
+                return
+                    match result with
+                    | Ok a -> Ok(fOk a)
+                    | Error e -> Error(fError e)
+            }
+
+// ═══════════════════════════════════════════════════════════════════════════
 // READ OPERATIONS
 // ═══════════════════════════════════════════════════════════════════════════
 

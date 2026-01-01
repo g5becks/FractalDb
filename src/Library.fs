@@ -696,6 +696,8 @@ module Collection = FractalDb.Collection.Collection
 
 module Cancellable = FractalDb.Cancellable
 
+module CancellableTaskResult = FractalDb.Cancellable.CancellableTaskResult
+
 // =============================================================================
 // Database (from Database.fs)
 // =============================================================================
