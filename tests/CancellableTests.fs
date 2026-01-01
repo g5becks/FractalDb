@@ -9,6 +9,7 @@ open System.Threading.Tasks
 open Xunit
 open FsUnit.Xunit
 open IcedTasks
+open FractalDb
 open FractalDb.Types
 open FractalDb.Errors
 open FractalDb.Schema
@@ -1095,7 +1096,7 @@ type CancellableTests(fixture: CancellableTestFixture) =
                 fun _ -> Task.FromResult(Error(FractalError.NotFound "test-id"))
 
             let mapped =
-                FractalDb.Cancellable.CancellableTaskResult.mapError toMapErrorTestError errorTask
+                CancellableTaskResult.mapError toMapErrorTestError errorTask
 
             let! result = mapped cts.Token
 
@@ -1115,7 +1116,7 @@ type CancellableTests(fixture: CancellableTestFixture) =
                 fun _ -> Task.FromResult(Ok "success-value")
 
             let mapped =
-                FractalDb.Cancellable.CancellableTaskResult.mapError toMapErrorTestError okTask
+                CancellableTaskResult.mapError toMapErrorTestError okTask
 
             let! result = mapped cts.Token
 
@@ -1137,7 +1138,7 @@ type CancellableTests(fixture: CancellableTestFixture) =
                       Age = 25
                       Active = true }
                     users
-                |> FractalDb.Cancellable.CancellableTaskResult.mapError toMapErrorTestError
+                |> CancellableTaskResult.mapError toMapErrorTestError
 
             let! result = operation cts.Token
 
@@ -1156,7 +1157,7 @@ type CancellableTests(fixture: CancellableTestFixture) =
                 fun _ -> Task.FromResult(Ok 42)
 
             let mappedOk =
-                FractalDb.Cancellable.CancellableTaskResult.bimap (fun x -> x * 2) toMapErrorTestError okTask
+                CancellableTaskResult.bimap (fun x -> x * 2) toMapErrorTestError okTask
 
             let! okResult = mappedOk cts.Token
 
@@ -1169,7 +1170,7 @@ type CancellableTests(fixture: CancellableTestFixture) =
                 fun _ -> Task.FromResult(Error(FractalError.Query("db error", None)))
 
             let mappedError =
-                FractalDb.Cancellable.CancellableTaskResult.bimap (fun x -> x * 2) toMapErrorTestError errorTask
+                CancellableTaskResult.bimap (fun x -> x * 2) toMapErrorTestError errorTask
 
             let! errorResult = mappedError cts.Token
 
@@ -1193,7 +1194,7 @@ type CancellableTests(fixture: CancellableTestFixture) =
                               Age = 30
                               Active = true }
                             users
-                        |> FractalDb.Cancellable.CancellableTaskResult.mapError toMapErrorTestError
+                        |> CancellableTaskResult.mapError toMapErrorTestError
 
                     return result
                 }
@@ -1218,7 +1219,7 @@ type CancellableTests(fixture: CancellableTestFixture) =
                       Age = 25
                       Active = true }
                     users
-                |> FractalDb.Cancellable.CancellableTaskResult.mapError toMapErrorTestError
+                |> CancellableTaskResult.mapError toMapErrorTestError
 
             let mutable cancelled = false
 
