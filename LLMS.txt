@@ -1022,8 +1022,15 @@ propagated through the computation.
 ### Import
 ```fsharp
 open IcedTasks
-open FractalDb.Cancellable
+open FractalDb.Cancellable  // Provides both module functions AND extension methods
 ```
+
+### Module Structure
+`FractalDb.Cancellable` contains:
+- Module functions: `Cancellable.findById`, `Cancellable.insertOne`, etc. (RequireQualifiedAccess)
+- Extension methods: `.InsertOneAsync()`, `.FindByIdAsync()`, etc. (auto-opened via nested Extensions module)
+
+Opening `FractalDb.Cancellable` gives you access to BOTH styles automatically.
 
 ### Usage with cancellableTask
 ```fsharp
@@ -1032,8 +1039,14 @@ open FractalDb.Cancellable
 
 // CancellationToken is automatically propagated
 let operation = cancellableTask {
+    // Style 1: Module functions (pipeline-friendly)
     let! doc = Cancellable.findById "id123" collection
     let! updated = Cancellable.updateById "id123" (fun d -> { d with Name = "New" }) collection
+    
+    // Style 2: Extension methods (OOP-style, same CT propagation)
+    let! found = collection.FindByIdAsync("id456")
+    let! inserted = collection.InsertOneAsync({ Name = "Bob"; Age = 25 })
+    
     return updated
 }
 
@@ -1098,11 +1111,15 @@ Cancellable.findOneAndReplace filter doc opts coll    // CancellableTask<Fractal
 Cancellable.drop collection                 // CancellableTask<unit>
 ```
 
-### Instance Methods (*Async suffix)
+### Instance Methods (*Async suffix) - Auto-Opened Extensions
 
-Collection<'T> also provides `*Async` instance methods that return CancellableTask:
+Collection<'T> extension methods returning CancellableTask are automatically available
+when you `open FractalDb.Cancellable`. No additional import needed.
 
 ```fsharp
+open IcedTasks
+open FractalDb.Cancellable  // Extension methods are auto-opened
+
 // Inside cancellableTask block - CT auto-propagated
 cancellableTask {
     let! result = collection.InsertOneAsync(doc)
