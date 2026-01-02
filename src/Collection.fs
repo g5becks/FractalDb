@@ -849,23 +849,96 @@ module Collection =
         // Extract the filter (Where clause), defaulting to Empty if none
         let filter = translatedQuery.Where |> Option.defaultValue Query.Empty
 
-        // Convert QueryExpr.SortDirection to Options.SortDirection
-        let convertSortDir (dir: FractalDb.QueryExpr.SortDirection) : SortDirection =
-            match dir with
-            | FractalDb.QueryExpr.SortDirection.Asc -> SortDirection.Ascending
-            | FractalDb.QueryExpr.SortDirection.Desc -> SortDirection.Descending
+        // Check if any sort direction uses nullable variants
+        let hasNullableSort =
+            translatedQuery.OrderBy
+            |> List.exists (fun (_, dir) ->
+                match dir with
+                | FractalDb.QueryExpr.SortDirection.AscNullsLast
+                | FractalDb.QueryExpr.SortDirection.DescNullsLast -> true
+                | _ -> false)
 
-        // Build QueryOptions from the TranslatedQuery components
-        let options =
-            { QueryOptions.empty<'T> with
-                Sort =
+        // Generate ORDER BY clause with nullable support
+        let generateOrderByClause () =
+            if List.isEmpty translatedQuery.OrderBy then
+                ""
+            else
+                let orderParts =
                     translatedQuery.OrderBy
-                    |> List.map (fun (field, dir) -> (field, convertSortDir dir))
-                Skip = translatedQuery.Skip
-                Limit = translatedQuery.Take }
+                    |> List.map (fun (field, dir) ->
+                        let fieldPath = $"json_extract(body, '$.{field}')"
 
-        // Execute using findWith
-        findWith filter options collection
+                        match dir with
+                        | FractalDb.QueryExpr.SortDirection.Asc -> $"{fieldPath} ASC"
+                        | FractalDb.QueryExpr.SortDirection.Desc -> $"{fieldPath} DESC"
+                        | FractalDb.QueryExpr.SortDirection.AscNullsLast -> $"{fieldPath} IS NULL, {fieldPath} ASC"
+                        | FractalDb.QueryExpr.SortDirection.DescNullsLast -> $"{fieldPath} IS NULL, {fieldPath} DESC")
+
+                let orderByStr = orderParts |> String.concat ", "
+                $"ORDER BY {orderByStr}"
+
+        // If Distinct or nullable sort, generate SQL directly
+        if translatedQuery.Distinct || hasNullableSort then
+            let translated = collection.Translator.Translate(filter)
+
+            let whereClause =
+                if translated.Sql = "" then
+                    ""
+                else
+                    $"WHERE {translated.Sql}"
+
+            let orderByClause = generateOrderByClause ()
+
+            let skipClause =
+                match translatedQuery.Skip with
+                | Some n -> $"OFFSET {n}"
+                | None -> ""
+
+            let limitClause =
+                match translatedQuery.Take with
+                | Some n -> $"LIMIT {n}"
+                | None -> ""
+
+            let distinctKeyword = if translatedQuery.Distinct then "DISTINCT " else ""
+
+            let sql =
+                $"SELECT {distinctKeyword}_id, json(body) as body, createdAt, updatedAt 
+                        FROM {collection.Name} {whereClause} {orderByClause} {limitClause} {skipClause}"
+
+            let params' =
+                translated.Parameters |> List.map (fun (name, value) -> name, toSqlType value)
+
+            task {
+                let! dbResult =
+                    collection.Connection
+                    |> Db.newCommand sql
+                    |> Db.setParams params'
+                    |> Db.Async.query (fun rd ->
+                        rd.ReadString "_id", rd.ReadString "body", rd.ReadInt64 "createdAt", rd.ReadInt64 "updatedAt")
+
+                let result = dbResult |> List.map rowToDocument
+
+                return result
+            }
+        else
+            // Convert QueryExpr.SortDirection to Options.SortDirection (standard sorts only)
+            let convertSortDir (dir: FractalDb.QueryExpr.SortDirection) : SortDirection =
+                match dir with
+                | FractalDb.QueryExpr.SortDirection.Asc -> SortDirection.Ascending
+                | FractalDb.QueryExpr.SortDirection.Desc -> SortDirection.Descending
+                | _ -> SortDirection.Ascending // Should never hit due to hasNullableSort check
+
+            // Build QueryOptions from the TranslatedQuery components
+            let options =
+                { QueryOptions.empty<'T> with
+                    Sort =
+                        translatedQuery.OrderBy
+                        |> List.map (fun (field, dir) -> (field, convertSortDir dir))
+                    Skip = translatedQuery.Skip
+                    Limit = translatedQuery.Take }
+
+            // Execute using findWith (original behavior)
+            findWith filter options collection
 
     /// <summary>
     /// Counts the number of documents matching the specified filter.
@@ -999,6 +1072,992 @@ module Collection =
             |> Db.scalar Convert.ToInt32
 
         Task.FromResult(dbResult)
+
+    /// <summary>
+    /// Executes an aggregate query and returns the scalar result.
+    /// </summary>
+    /// <param name="aggregate">The aggregate operation to perform.</param>
+    /// <param name="filter">The query filter to apply before aggregation.</param>
+    /// <param name="collection">The collection to aggregate over.</param>
+    /// <returns>
+    /// Task containing the aggregate result as a boxed value.
+    /// The result type depends on the aggregate operation:
+    /// - Min/Max: Same type as the field (or null if no matching documents)
+    /// - Sum: Numeric type (or null if no matching documents)
+    /// - Avg: float (or null if no matching documents)
+    /// - Count: int
+    /// </returns>
+    /// <remarks>
+    /// This is an internal function used by the query expression aggregate operators.
+    /// It generates SQL like:
+    /// - SELECT MIN(json_extract(body, '$.field')) FROM collection WHERE ...
+    /// - SELECT MAX(json_extract(body, '$.field')) FROM collection WHERE ...
+    /// - SELECT SUM(json_extract(body, '$.field')) FROM collection WHERE ...
+    /// - SELECT AVG(json_extract(body, '$.field')) FROM collection WHERE ...
+    /// - SELECT COUNT(*) FROM collection WHERE ...
+    /// </remarks>
+    let execAggregate
+        (aggregate: FractalDb.Types.AggregateOp)
+        (filter: Query<'T>)
+        (collection: Collection<'T>)
+        : Task<obj> =
+        let translated = collection.Translator.Translate(filter)
+
+        let whereClause =
+            if translated.Sql = "" then
+                ""
+            else
+                $"WHERE {translated.Sql}"
+
+        let selectClause =
+            match aggregate with
+            | FractalDb.Types.AggregateOp.Min field -> $"SELECT MIN(json_extract(body, '$.{field}')) as result"
+            | FractalDb.Types.AggregateOp.Max field -> $"SELECT MAX(json_extract(body, '$.{field}')) as result"
+            | FractalDb.Types.AggregateOp.Sum field -> $"SELECT SUM(json_extract(body, '$.{field}')) as result"
+            | FractalDb.Types.AggregateOp.Avg field -> $"SELECT AVG(json_extract(body, '$.{field}')) as result"
+            | FractalDb.Types.AggregateOp.Count -> "SELECT COUNT(*) as result"
+
+        let sql = $"{selectClause} FROM {collection.Name} {whereClause}"
+
+        let params' =
+            translated.Parameters |> List.map (fun (name, value) -> name, toSqlType value)
+
+        // For COUNT, return int. For others, return the value as-is (let caller handle type conversion)
+        let dbResult =
+            match aggregate with
+            | FractalDb.Types.AggregateOp.Count ->
+                collection.Connection
+                |> Db.newCommand sql
+                |> Db.setParams params'
+                |> Db.scalar Convert.ToInt32
+                |> box
+            | _ ->
+                // For Min/Max/Sum/Avg, use identity converter to get the raw value
+                collection.Connection
+                |> Db.newCommand sql
+                |> Db.setParams params'
+                |> Db.scalar (fun x -> x)
+
+        Task.FromResult(dbResult)
+
+    /// <summary>
+    /// Executes an aggregate operation that may return NULL (for nullable fields or empty results).
+    /// </summary>
+    /// <param name="aggregate">The aggregate operation to perform (Min, Max, Sum, Avg).</param>
+    /// <param name="filter">Query filter to select documents for aggregation.</param>
+    /// <param name="collection">The collection to aggregate.</param>
+    /// <returns>
+    /// Task containing Some(value) if a non-null result exists, None if result is NULL.
+    /// </returns>
+    /// <remarks>
+    /// execAggregateNullable is designed for nullable fields and scenarios where
+    /// no matching documents exist. Unlike execAggregate, it handles NULL results gracefully.
+    ///
+    /// Null result scenarios:
+    /// - No documents match the filter
+    /// - All matching documents have NULL in the aggregated field
+    /// - Empty collection
+    ///
+    /// SQL Translation (same as execAggregate):
+    /// - SELECT MIN(json_extract(body, '$.field')) FROM collection WHERE ...
+    /// - SELECT MAX(json_extract(body, '$.field')) FROM collection WHERE ...
+    /// - SELECT SUM(json_extract(body, '$.field')) FROM collection WHERE ...
+    /// - SELECT AVG(json_extract(body, '$.field')) FROM collection WHERE ...
+    ///
+    /// Type handling:
+    /// - Returns option&lt;obj&gt; - caller should cast the inner value
+    /// - SQLite int64 → cast to int64
+    /// - SQLite REAL → cast to float
+    /// - DBNull.Value → None
+    ///
+    /// Performance:
+    /// - Same as execAggregate (single SQL query)
+    /// - No additional overhead for null checking
+    /// </remarks>
+    /// <example>
+    /// <code>
+    /// // Sum of optional discounts (may be null)
+    /// let! result =
+    ///     orders
+    ///     |> Collection.execAggregateNullable (AggregateOp.Sum "optionalDiscount") Query.Empty
+    ///
+    /// match result with
+    /// | Some value -> printfn $"Total discounts: {Convert.ToDecimal(value)}"
+    /// | None -> printfn "No discounts found"
+    /// </code>
+    /// </example>
+    let execAggregateNullable
+        (aggregate: FractalDb.Types.AggregateOp)
+        (filter: Query<'T>)
+        (collection: Collection<'T>)
+        : Task<option<obj>> =
+        let translated = collection.Translator.Translate(filter)
+
+        let whereClause =
+            if translated.Sql = "" then
+                ""
+            else
+                $"WHERE {translated.Sql}"
+
+        let selectClause =
+            match aggregate with
+            | FractalDb.Types.AggregateOp.Min field -> $"SELECT MIN(json_extract(body, '$.{field}')) as result"
+            | FractalDb.Types.AggregateOp.Max field -> $"SELECT MAX(json_extract(body, '$.{field}')) as result"
+            | FractalDb.Types.AggregateOp.Sum field -> $"SELECT SUM(json_extract(body, '$.{field}')) as result"
+            | FractalDb.Types.AggregateOp.Avg field -> $"SELECT AVG(json_extract(body, '$.{field}')) as result"
+            | FractalDb.Types.AggregateOp.Count -> "SELECT COUNT(*) as result" // COUNT never returns NULL, but support it for consistency
+
+        let sql = $"{selectClause} FROM {collection.Name} {whereClause}"
+
+        let params' =
+            translated.Parameters |> List.map (fun (name, value) -> name, toSqlType value)
+
+        let dbResult =
+            collection.Connection
+            |> Db.newCommand sql
+            |> Db.setParams params'
+            |> Db.scalar (fun x -> if x = null || x = box DBNull.Value then None else Some x)
+
+        Task.FromResult(dbResult)
+
+    /// <summary>
+    /// Checks if ALL documents matching the filter satisfy a predicate.
+    /// </summary>
+    /// <param name="predicate">The query predicate that all documents must satisfy.</param>
+    /// <param name="filter">Optional filter to restrict which documents are checked. Use Query.Empty to check all.</param>
+    /// <param name="collection">The collection to check.</param>
+    /// <returns>
+    /// Task containing true if all matching documents satisfy the predicate,
+    /// false if any document doesn't satisfy it.
+    /// Returns true for empty result sets (vacuous truth).
+    /// </returns>
+    /// <remarks>
+    /// execAll uses the NOT EXISTS pattern for efficient early termination:
+    /// - SQL: SELECT NOT EXISTS (SELECT 1 FROM collection WHERE filter AND NOT predicate)
+    /// - Stops as soon as it finds a document that doesn't satisfy the predicate
+    /// - Returns true immediately for empty collections (no documents to check)
+    ///
+    /// Performance:
+    /// - O(1) best case: first document doesn't satisfy predicate
+    /// - O(n) worst case: all documents satisfy predicate
+    /// - Uses indexes if predicate involves indexed fields
+    ///
+    /// Empty collection behavior:
+    /// - Returns true (vacuous truth - "all zero documents satisfy P")
+    /// - Matches F# Seq.forall behavior
+    ///
+    /// Thread safety:
+    /// - Safe for concurrent reads
+    /// - Result reflects committed snapshot
+    /// </remarks>
+    /// <example>
+    /// <code>
+    /// // Check if all users are adults
+    /// let adultFilter = Query.Field("age", FieldOp.Compare(box (CompareOp.Gte 18L)))
+    /// let! allAdults = users |> Collection.execAll adultFilter Query.Empty
+    /// printfn $"All adults: {allAdults}"
+    ///
+    /// // Check if all active users have email verified
+    /// let verifiedFilter = Query.Field("emailVerified", FieldOp.Compare(box (CompareOp.Eq true)))
+    /// let activeFilter = Query.Field("status", FieldOp.Compare(box (CompareOp.Eq "active")))
+    /// let! allVerified = users |> Collection.execAll verifiedFilter activeFilter
+    /// </code>
+    /// </example>
+    let execAll (predicate: Query<'T>) (filter: Query<'T>) (collection: Collection<'T>) : Task<bool> =
+        // Translate the filter first (which docs to check)
+        let filterTranslated = collection.Translator.Translate(filter)
+
+        // Translate the predicate (the condition all docs must satisfy)
+        let predicateTranslated = collection.Translator.Translate(predicate)
+
+        // Re-number predicate parameters to avoid conflicts with filter parameters
+        // Filter params are @p0, @p1, etc. Predicate params need to continue from there.
+        let filterParamCount = List.length filterTranslated.Parameters
+
+        let renamePredicateParams (sql: string) (parameters: list<string * obj>) =
+            let mutable newSql = sql
+            let mutable newParams = []
+
+            for i, (name, value) in parameters |> List.indexed do
+                let newName = $"@p{filterParamCount + i}"
+                newSql <- newSql.Replace(name, newName)
+                newParams <- (newName, value) :: newParams
+
+            newSql, List.rev newParams
+
+        let predicateSql, predicateParams =
+            renamePredicateParams predicateTranslated.Sql predicateTranslated.Parameters
+
+        // Build the NOT predicate clause
+        let notPredicateClause =
+            if predicateSql = "" then
+                "1=0" // If predicate is empty (match all), NOT predicate = match none
+            else
+                $"NOT ({predicateSql})"
+
+        // Build the WHERE clause combining filter AND NOT predicate
+        let whereClause =
+            match filterTranslated.Sql with
+            | "" -> $"WHERE {notPredicateClause}"
+            | filterSql -> $"WHERE ({filterSql}) AND {notPredicateClause}"
+
+        // SQL: SELECT NOT EXISTS (SELECT 1 FROM collection WHERE [filter AND] NOT predicate)
+        let sql =
+            $"SELECT NOT EXISTS (SELECT 1 FROM {collection.Name} {whereClause}) as result"
+
+        // Combine parameters from both filter and predicate
+        let allParams =
+            (filterTranslated.Parameters @ predicateParams)
+            |> List.map (fun (name, value) -> name, toSqlType value)
+
+        let dbResult =
+            collection.Connection
+            |> Db.newCommand sql
+            |> Db.setParams allParams
+            |> Db.scalar (fun x -> Convert.ToInt32(x) = 1)
+
+        Task.FromResult(dbResult)
+
+    /// <summary>
+    /// Finds the first document matching the predicate or throws if not found.
+    /// </summary>
+    /// <param name="predicate">The query predicate to match documents against.</param>
+    /// <param name="collection">The collection to search in.</param>
+    /// <returns>
+    /// Task containing the Document matching the predicate.
+    /// </returns>
+    /// <exception cref="System.InvalidOperationException">
+    /// Thrown when no document matches the predicate.
+    /// </exception>
+    /// <remarks>
+    /// execFind executes a query with the predicate as WHERE clause and LIMIT 1.
+    /// Unlike findOne which returns option, execFind throws when no match is found.
+    ///
+    /// This matches F# standard library behavior:
+    /// - List.find throws KeyNotFoundException if not found
+    /// - Seq.find throws KeyNotFoundException if not found
+    /// - execFind throws InvalidOperationException (matches LINQ's First())
+    ///
+    /// SQL Translation:
+    /// <code>
+    /// SELECT _id, json(body) as body, createdAt, updatedAt
+    /// FROM collection WHERE predicate LIMIT 1
+    /// </code>
+    ///
+    /// Performance:
+    /// - O(1) if predicate uses indexed field
+    /// - O(n) worst case for table scan
+    /// - Single database round-trip
+    /// - Returns immediately upon finding first match
+    ///
+    /// Use Cases:
+    /// - Lookup by unique key where existence is expected
+    /// - Assert-style queries where missing is an error
+    /// - When you need a document and want explicit failure
+    ///
+    /// Error handling:
+    /// - Throws InvalidOperationException if no document matches
+    /// - Use findOne if you want None instead of exception
+    /// </remarks>
+    /// <example>
+    /// <code>
+    /// // Find user by email (throws if not found)
+    /// let emailPredicate = Query.Field("email", FieldOp.Compare(box (CompareOp.Eq "alice@test.com")))
+    /// let! user = users |> Collection.execFind emailPredicate
+    /// printfn $"Found user: {user.Data.Name}"
+    ///
+    /// // With error handling
+    /// try
+    ///     let! user = users |> Collection.execFind emailPredicate
+    ///     return Ok user
+    /// with
+    /// | :? InvalidOperationException -> return Error "User not found"
+    /// </code>
+    /// </example>
+    let execFind (predicate: Query<'T>) (collection: Collection<'T>) : Task<Document<'T>> =
+        let translated = collection.Translator.Translate(predicate)
+
+        let whereClause =
+            if translated.Sql = "" then
+                ""
+            else
+                $"WHERE {translated.Sql}"
+
+        let sql =
+            $"SELECT _id, json(body) as body, createdAt, updatedAt 
+                    FROM {collection.Name} {whereClause} LIMIT 1"
+
+        let params' =
+            translated.Parameters |> List.map (fun (name, value) -> name, toSqlType value)
+
+        task {
+            let! dbResult =
+                collection.Connection
+                |> Db.newCommand sql
+                |> Db.setParams params'
+                |> Db.Async.querySingle (fun rd ->
+                    rd.ReadString "_id", rd.ReadString "body", rd.ReadInt64 "createdAt", rd.ReadInt64 "updatedAt")
+
+            match dbResult with
+            | Some rowData -> return rowToDocument rowData
+            | None ->
+                return
+                    raise (
+                        InvalidOperationException(
+                            $"Sequence contains no matching element. No document in '{collection.Name}' matches the predicate."
+                        )
+                    )
+        }
+
+    /// <summary>
+    /// Executes a GROUP BY query and returns grouped results with counts.
+    /// </summary>
+    /// <param name="translatedQuery">The translated query containing GroupBy field.</param>
+    /// <param name="collection">The collection to query.</param>
+    /// <returns>
+    /// Task containing a list of (key, count) tuples where:
+    /// - key: The grouping key value (as obj, cast to appropriate type)
+    /// - count: Number of documents in that group
+    /// </returns>
+    /// <remarks>
+    /// execGroupBy generates GROUP BY SQL to aggregate documents by a field.
+    ///
+    /// SQL Translation:
+    /// <code>
+    /// SELECT json_extract(body, '$.field') as _key, COUNT(*) as _count
+    /// FROM collection
+    /// WHERE [filter]
+    /// GROUP BY json_extract(body, '$.field')
+    /// </code>
+    ///
+    /// The Where clause from the TranslatedQuery is applied before grouping.
+    ///
+    /// Performance:
+    /// - Uses index on grouping field if available
+    /// - Single database round-trip
+    /// - Returns one row per unique group key
+    ///
+    /// Type handling:
+    /// - Key is returned as obj - caller should cast to appropriate type
+    /// - Count is int64 (SQLite COUNT returns integer)
+    /// - NULL keys are grouped together
+    ///
+    /// Empty results:
+    /// - Returns empty list if no documents match the filter
+    /// - NULL-only groups are included in results
+    /// </remarks>
+    /// <example>
+    /// <code>
+    /// // Group users by country
+    /// let q = translate &lt;@ query { for u in users do groupBy u.Country } @&gt;
+    /// let! results = users |> Collection.execGroupBy q
+    /// // Returns: [("USA", 150L); ("Canada", 45L); ("UK", 80L)]
+    ///
+    /// // Group with filter
+    /// let q2 = translate &lt;@ query { for u in users do where (u.Active = true) groupBy u.Country } @&gt;
+    /// let! activeByCountry = users |> Collection.execGroupBy q2
+    /// </code>
+    /// </example>
+    let execGroupBy
+        (translatedQuery: FractalDb.QueryExpr.TranslatedQuery<'T>)
+        (collection: Collection<'T>)
+        : Task<list<obj * int64>> =
+        match translatedQuery.GroupBy with
+        | None -> Task.FromResult([]) // No grouping field, return empty
+        | Some groupField ->
+            let filter = translatedQuery.Where |> Option.defaultValue Query.Empty
+            let translated = collection.Translator.Translate(filter)
+
+            let whereClause =
+                if translated.Sql = "" then
+                    ""
+                else
+                    $"WHERE {translated.Sql}"
+
+            let fieldPath = $"json_extract(body, '$.{groupField}')"
+
+            let sql =
+                $"SELECT {fieldPath} as _key, COUNT(*) as _count 
+                        FROM {collection.Name} {whereClause} 
+                        GROUP BY {fieldPath}"
+
+            let params' =
+                translated.Parameters |> List.map (fun (name, value) -> name, toSqlType value)
+
+            task {
+                let! dbResult =
+                    collection.Connection
+                    |> Db.newCommand sql
+                    |> Db.setParams params'
+                    |> Db.Async.query (fun rd ->
+                        let key = rd.GetValue(0) // _key
+                        let count = rd.GetInt64(1) // _count
+                        (key, count))
+
+                return dbResult
+            }
+
+    /// <summary>
+    /// Executes a query and returns the last document by reversing sort order.
+    /// </summary>
+    /// <param name="translatedQuery">The TranslatedQuery from a query { } expression.</param>
+    /// <param name="collection">The collection to execute the query against.</param>
+    /// <returns>
+    /// Task containing the last Document matching the query criteria.
+    /// </returns>
+    /// <exception cref="System.InvalidOperationException">
+    /// Thrown when no document matches the query (empty result set).
+    /// </exception>
+    /// <remarks>
+    /// execLast retrieves the last document by reversing the sort order and taking 1.
+    ///
+    /// <para><strong>IMPORTANT: Requires sortBy:</strong></para>
+    /// The query SHOULD include a sortBy clause to define ordering.
+    /// Without sortBy, the "last" document is unpredictable (database-dependent order).
+    ///
+    /// SQL Translation:
+    /// <code>
+    /// query { for log in logs do sortBy log.Timestamp last }
+    /// // Original: ORDER BY timestamp ASC
+    /// // Reversed: ORDER BY timestamp DESC LIMIT 1
+    /// </code>
+    ///
+    /// Sort Direction Reversal:
+    /// - ASC (Ascending) → DESC (Descending)
+    /// - DESC (Descending) → ASC (Ascending)
+    ///
+    /// Performance:
+    /// - O(1) if sorted field is indexed
+    /// - O(n log n) worst case (requires sort)
+    /// - Single database round-trip
+    /// - Deserializes only one document
+    ///
+    /// Error handling:
+    /// - Throws InvalidOperationException if no documents match
+    /// - Use execLastOrDefault if you want None instead of exception
+    /// </remarks>
+    /// <example>
+    /// <code>
+    /// // Get most recent log entry (throws if no logs)
+    /// let q = query {
+    ///     for log in logs do
+    ///     sortBy log.Timestamp
+    ///     last
+    /// }
+    /// let! lastLog = logs |> Collection.execLast q
+    /// printfn $"Last log: {lastLog.Data.Message}"
+    ///
+    /// // Get oldest user by age descending (last = youngest)
+    /// let q = query {
+    ///     for user in users do
+    ///     sortByDescending user.Age
+    ///     last
+    /// }
+    /// let! youngest = users |> Collection.execLast q
+    /// </code>
+    /// </example>
+    let execLast
+        (translatedQuery: FractalDb.QueryExpr.TranslatedQuery<'T>)
+        (collection: Collection<'T>)
+        : Task<Document<'T>> =
+        // Extract filter, defaulting to Empty if none
+        let filter = translatedQuery.Where |> Option.defaultValue Query.Empty
+        let translated = collection.Translator.Translate(filter)
+
+        let whereClause =
+            if translated.Sql = "" then
+                ""
+            else
+                $"WHERE {translated.Sql}"
+
+        // Reverse the sort directions (for "last", we reverse the sort and take first)
+        let reversedOrderBy =
+            translatedQuery.OrderBy
+            |> List.map (fun (field, dir) ->
+                let fieldPath = $"json_extract(body, '$.{field}')"
+
+                match dir with
+                | FractalDb.QueryExpr.SortDirection.Asc -> $"{fieldPath} DESC"
+                | FractalDb.QueryExpr.SortDirection.Desc -> $"{fieldPath} ASC"
+                // For NullsLast variants, reverse the sort but keep nulls-last behavior
+                // When reversed: original NULLs-last becomes NULLs-first, so use IS NOT NULL
+                | FractalDb.QueryExpr.SortDirection.AscNullsLast -> $"{fieldPath} IS NOT NULL, {fieldPath} DESC"
+                | FractalDb.QueryExpr.SortDirection.DescNullsLast -> $"{fieldPath} IS NOT NULL, {fieldPath} ASC")
+
+        let orderByClause =
+            if List.isEmpty reversedOrderBy then
+                ""
+            else
+                let orderByStr = reversedOrderBy |> String.concat ", "
+                $"ORDER BY {orderByStr}"
+
+        let sql =
+            $"SELECT _id, json(body) as body, createdAt, updatedAt 
+                    FROM {collection.Name} {whereClause} {orderByClause} LIMIT 1"
+
+        let params' =
+            translated.Parameters |> List.map (fun (name, value) -> name, toSqlType value)
+
+        task {
+            let! dbResult =
+                collection.Connection
+                |> Db.newCommand sql
+                |> Db.setParams params'
+                |> Db.Async.querySingle (fun rd ->
+                    rd.ReadString "_id", rd.ReadString "body", rd.ReadInt64 "createdAt", rd.ReadInt64 "updatedAt")
+
+            match dbResult with
+            | Some rowData -> return rowToDocument rowData
+            | None ->
+                return
+                    raise (
+                        InvalidOperationException(
+                            "Sequence contains no matching element. The query returned no results."
+                        )
+                    )
+        }
+
+    /// <summary>
+    /// Executes a query and returns the last document or None if no results.
+    /// </summary>
+    /// <param name="translatedQuery">The TranslatedQuery from a query { } expression.</param>
+    /// <param name="collection">The collection to execute the query against.</param>
+    /// <returns>
+    /// Task containing Some(Document) if found, None if no matches.
+    /// </returns>
+    /// <remarks>
+    /// execLastOrDefault safely retrieves the last document by reversing sort order.
+    /// Unlike execLast, it returns None instead of throwing for empty results.
+    ///
+    /// <para><strong>IMPORTANT: Requires sortBy:</strong></para>
+    /// The query SHOULD include a sortBy clause to define ordering.
+    /// Without sortBy, the "last" document is unpredictable (database-dependent order).
+    ///
+    /// SQL Translation:
+    /// <code>
+    /// query { for log in logs do sortBy log.Timestamp lastOrDefault }
+    /// // Original: ORDER BY timestamp ASC
+    /// // Reversed: ORDER BY timestamp DESC LIMIT 1
+    /// // Returns: Some(document) or None
+    /// </code>
+    ///
+    /// Sort Direction Reversal:
+    /// - ASC (Ascending) → DESC (Descending)
+    /// - DESC (Descending) → ASC (Ascending)
+    ///
+    /// Performance:
+    /// - O(1) if sorted field is indexed
+    /// - O(n log n) worst case (requires sort)
+    /// - Single database round-trip
+    /// - Deserializes only one document (or none)
+    ///
+    /// Use Cases:
+    /// - Safe access to most recent item
+    /// - Collections that may be empty
+    /// - Option-based control flow (idiomatic F#)
+    /// </remarks>
+    /// <example>
+    /// <code>
+    /// // Safe access to most recent log
+    /// let q = query {
+    ///     for log in logs do
+    ///     sortBy log.Timestamp
+    ///     lastOrDefault
+    /// }
+    /// let! lastLogOpt = logs |> Collection.execLastOrDefault q
+    /// match lastLogOpt with
+    /// | Some log -> printfn $"Last log: {log.Data.Message}"
+    /// | None -> printfn "No logs found"
+    ///
+    /// // With Option.map
+    /// let! nameOpt =
+    ///     users
+    ///     |> Collection.execLastOrDefault q
+    ///     |> Task.map (Option.map (fun u -> u.Data.Name))
+    /// </code>
+    /// </example>
+    let execLastOrDefault
+        (translatedQuery: FractalDb.QueryExpr.TranslatedQuery<'T>)
+        (collection: Collection<'T>)
+        : Task<option<Document<'T>>> =
+        // Extract filter, defaulting to Empty if none
+        let filter = translatedQuery.Where |> Option.defaultValue Query.Empty
+        let translated = collection.Translator.Translate(filter)
+
+        let whereClause =
+            if translated.Sql = "" then
+                ""
+            else
+                $"WHERE {translated.Sql}"
+
+        // Reverse the sort directions
+        let reversedOrderBy =
+            translatedQuery.OrderBy
+            |> List.map (fun (field, dir) ->
+                let fieldPath = $"json_extract(body, '$.{field}')"
+
+                match dir with
+                | FractalDb.QueryExpr.SortDirection.Asc -> $"{fieldPath} DESC"
+                | FractalDb.QueryExpr.SortDirection.Desc -> $"{fieldPath} ASC"
+                | FractalDb.QueryExpr.SortDirection.AscNullsLast -> $"{fieldPath} IS NOT NULL, {fieldPath} DESC"
+                | FractalDb.QueryExpr.SortDirection.DescNullsLast -> $"{fieldPath} IS NOT NULL, {fieldPath} ASC")
+
+        let orderByClause =
+            if List.isEmpty reversedOrderBy then
+                ""
+            else
+                let orderByStr = reversedOrderBy |> String.concat ", "
+                $"ORDER BY {orderByStr}"
+
+        let sql =
+            $"SELECT _id, json(body) as body, createdAt, updatedAt 
+                    FROM {collection.Name} {whereClause} {orderByClause} LIMIT 1"
+
+        let params' =
+            translated.Parameters |> List.map (fun (name, value) -> name, toSqlType value)
+
+        task {
+            let! dbResult =
+                collection.Connection
+                |> Db.newCommand sql
+                |> Db.setParams params'
+                |> Db.Async.querySingle (fun rd ->
+                    rd.ReadString "_id", rd.ReadString "body", rd.ReadInt64 "createdAt", rd.ReadInt64 "updatedAt")
+
+            match dbResult with
+            | Some rowData -> return Some(rowToDocument rowData)
+            | None -> return None
+        }
+
+    /// <summary>
+    /// Executes a query and returns the single matching document, throwing if 0 or >1 results.
+    /// </summary>
+    /// <param name="translatedQuery">The TranslatedQuery from a query { } expression.</param>
+    /// <param name="collection">The collection to execute the query against.</param>
+    /// <returns>
+    /// Task containing the single Document matching the query criteria.
+    /// </returns>
+    /// <exception cref="System.InvalidOperationException">
+    /// Thrown when no document matches (empty result) or more than one document matches.
+    /// </exception>
+    /// <remarks>
+    /// execExactlyOne asserts that exactly one document matches the query criteria.
+    /// It uses LIMIT 2 to efficiently detect multiple matches without fetching all results.
+    ///
+    /// SQL Translation:
+    /// <code>
+    /// query { for user in users do where (user.Email = email) exactlyOne }
+    /// // Translates to: SELECT * FROM users WHERE email = '...' LIMIT 2
+    /// </code>
+    ///
+    /// Exception Cases:
+    /// - 0 results: "Sequence contains no matching element"
+    /// - >1 results: "Sequence contains more than one matching element"
+    ///
+    /// Performance:
+    /// - O(1) if query uses indexed field
+    /// - Only fetches up to 2 documents regardless of total matches
+    /// - Single database round-trip
+    ///
+    /// Use Cases:
+    /// - Unique constraint validation: ensure unique email returns exactly one user
+    /// - Singleton lookups: get the single active configuration
+    /// - Required unique fields: get document by unique ID
+    /// </remarks>
+    /// <example>
+    /// <code>
+    /// // Get user by unique email (throws if 0 or >1)
+    /// let q = query {
+    ///     for user in users do
+    ///     where (user.Email = "alice@example.com")
+    /// }
+    /// let! user = users |> Collection.execExactlyOne q
+    ///
+    /// // Error handling
+    /// try
+    ///     let! user = users |> Collection.execExactlyOne q
+    ///     return Ok user
+    /// with
+    /// | :? InvalidOperationException as ex when ex.Message.Contains("no matching") ->
+    ///     return Error "User not found"
+    /// | :? InvalidOperationException as ex when ex.Message.Contains("more than one") ->
+    ///     return Error "Duplicate users found"
+    /// </code>
+    /// </example>
+    let execExactlyOne
+        (translatedQuery: FractalDb.QueryExpr.TranslatedQuery<'T>)
+        (collection: Collection<'T>)
+        : Task<Document<'T>> =
+        // Extract filter, defaulting to Empty if none
+        let filter = translatedQuery.Where |> Option.defaultValue Query.Empty
+        let translated = collection.Translator.Translate(filter)
+
+        let whereClause =
+            if translated.Sql = "" then
+                ""
+            else
+                $"WHERE {translated.Sql}"
+
+        // Use LIMIT 2 to detect multiple matches efficiently
+        let sql =
+            $"SELECT _id, json(body) as body, createdAt, updatedAt 
+                    FROM {collection.Name} {whereClause} LIMIT 2"
+
+        let params' =
+            translated.Parameters |> List.map (fun (name, value) -> name, toSqlType value)
+
+        task {
+            let! dbResult =
+                collection.Connection
+                |> Db.newCommand sql
+                |> Db.setParams params'
+                |> Db.Async.query (fun rd ->
+                    rd.ReadString "_id", rd.ReadString "body", rd.ReadInt64 "createdAt", rd.ReadInt64 "updatedAt")
+
+            match dbResult with
+            | [] ->
+                return
+                    raise (
+                        InvalidOperationException(
+                            "Sequence contains no matching element. The query returned no results."
+                        )
+                    )
+            | [ single ] -> return rowToDocument single
+            | _ ->
+                return
+                    raise (
+                        InvalidOperationException(
+                            "Sequence contains more than one matching element. Expected exactly one result."
+                        )
+                    )
+        }
+
+    /// <summary>
+    /// Executes a query and returns the single matching document or None, throwing if >1 results.
+    /// </summary>
+    /// <param name="translatedQuery">The TranslatedQuery from a query { } expression.</param>
+    /// <param name="collection">The collection to execute the query against.</param>
+    /// <returns>
+    /// Task containing Some(Document) if exactly one match, None if no matches.
+    /// </returns>
+    /// <exception cref="System.InvalidOperationException">
+    /// Thrown when more than one document matches the query criteria.
+    /// </exception>
+    /// <remarks>
+    /// execExactlyOneOrDefault returns None for empty results but throws for duplicates.
+    /// It uses LIMIT 2 to efficiently detect multiple matches without fetching all results.
+    ///
+    /// SQL Translation:
+    /// <code>
+    /// query { for user in users do where (user.Email = email) exactlyOneOrDefault }
+    /// // Translates to: SELECT * FROM users WHERE email = '...' LIMIT 2
+    /// </code>
+    ///
+    /// Result Cases:
+    /// - 0 results: Returns None
+    /// - 1 result: Returns Some(document)
+    /// - >1 results: Throws InvalidOperationException
+    ///
+    /// Performance:
+    /// - O(1) if query uses indexed field
+    /// - Only fetches up to 2 documents regardless of total matches
+    /// - Single database round-trip
+    ///
+    /// Use Cases:
+    /// - Optional unique lookup: get user by email if exists (error if duplicate)
+    /// - Safe singleton access: get config if exists, use default otherwise
+    /// - Cache lookup with uniqueness assertion
+    /// </remarks>
+    /// <example>
+    /// <code>
+    /// // Optional lookup (None if not found, throws if >1)
+    /// let q = query {
+    ///     for user in users do
+    ///     where (user.Email = email)
+    /// }
+    /// let! userOpt = users |> Collection.execExactlyOneOrDefault q
+    /// match userOpt with
+    /// | Some user -> processUser user
+    /// | None -> createNewUser email
+    ///
+    /// // With default value
+    /// let! configOpt = configs |> Collection.execExactlyOneOrDefault q
+    /// let config = configOpt |> Option.defaultValue defaultConfig
+    /// </code>
+    /// </example>
+    let execExactlyOneOrDefault
+        (translatedQuery: FractalDb.QueryExpr.TranslatedQuery<'T>)
+        (collection: Collection<'T>)
+        : Task<option<Document<'T>>> =
+        // Extract filter, defaulting to Empty if none
+        let filter = translatedQuery.Where |> Option.defaultValue Query.Empty
+        let translated = collection.Translator.Translate(filter)
+
+        let whereClause =
+            if translated.Sql = "" then
+                ""
+            else
+                $"WHERE {translated.Sql}"
+
+        // Use LIMIT 2 to detect multiple matches efficiently
+        let sql =
+            $"SELECT _id, json(body) as body, createdAt, updatedAt 
+                    FROM {collection.Name} {whereClause} LIMIT 2"
+
+        let params' =
+            translated.Parameters |> List.map (fun (name, value) -> name, toSqlType value)
+
+        task {
+            let! dbResult =
+                collection.Connection
+                |> Db.newCommand sql
+                |> Db.setParams params'
+                |> Db.Async.query (fun rd ->
+                    rd.ReadString "_id", rd.ReadString "body", rd.ReadInt64 "createdAt", rd.ReadInt64 "updatedAt")
+
+            match dbResult with
+            | [] -> return None
+            | [ single ] -> return Some(rowToDocument single)
+            | _ ->
+                return
+                    raise (
+                        InvalidOperationException(
+                            "Sequence contains more than one matching element. Expected exactly one result."
+                        )
+                    )
+        }
+
+    /// <summary>
+    /// Executes a query and returns the document at the specified index (0-based).
+    /// </summary>
+    /// <param name="index">The 0-based index of the document to retrieve.</param>
+    /// <param name="translatedQuery">The TranslatedQuery from a query { } expression.</param>
+    /// <param name="collection">The collection to execute the query against.</param>
+    /// <returns>
+    /// Task containing the Document at the specified index.
+    /// </returns>
+    /// <exception cref="System.ArgumentOutOfRangeException">
+    /// Thrown when index is negative or when no document exists at the specified index.
+    /// </exception>
+    /// <remarks>
+    /// execNth retrieves the document at a specific position using LIMIT 1 OFFSET n.
+    ///
+    /// <para><strong>IMPORTANT: Requires sortBy:</strong></para>
+    /// The query SHOULD include a sortBy clause for consistent ordering.
+    /// Without sortBy, the document at index n may vary between calls.
+    ///
+    /// SQL Translation:
+    /// <code>
+    /// let q = query { for user in users do sortBy user.Name }
+    /// users |> Collection.execNth 5 q
+    /// // Translates to: SELECT * FROM users ORDER BY name LIMIT 1 OFFSET 5
+    /// </code>
+    ///
+    /// 0-Based Indexing:
+    /// - execNth 0 → first element
+    /// - execNth 1 → second element
+    /// - execNth (n-1) → nth element
+    ///
+    /// Performance:
+    /// - O(n) where n is the offset (database must skip n rows)
+    /// - Use indexes on sort fields for better performance
+    /// - Single database round-trip
+    /// - Fetches only one document
+    ///
+    /// Error handling:
+    /// - Throws ArgumentOutOfRangeException if index &lt; 0
+    /// - Throws ArgumentOutOfRangeException if no document at index
+    /// </remarks>
+    /// <example>
+    /// <code>
+    /// // Get 6th user alphabetically (0-indexed)
+    /// let q = query {
+    ///     for user in users do
+    ///     sortBy user.Name
+    /// }
+    /// let! user = users |> Collection.execNth 5 q
+    ///
+    /// // Get 2nd highest scorer
+    /// let q = query {
+    ///     for player in players do
+    ///     sortByDescending player.Score
+    /// }
+    /// let! silver = players |> Collection.execNth 1 q
+    ///
+    /// // Error handling
+    /// try
+    ///     let! user = users |> Collection.execNth 100 q
+    ///     return Ok user
+    /// with
+    /// | :? ArgumentOutOfRangeException -> return Error "Index out of bounds"
+    /// </code>
+    /// </example>
+    let execNth
+        (index: int)
+        (translatedQuery: FractalDb.QueryExpr.TranslatedQuery<'T>)
+        (collection: Collection<'T>)
+        : Task<Document<'T>> =
+        // Validate index is non-negative
+        if index < 0 then
+            raise (ArgumentOutOfRangeException(nameof index, index, "Index must be non-negative."))
+
+        // Extract filter, defaulting to Empty if none
+        let filter = translatedQuery.Where |> Option.defaultValue Query.Empty
+        let translated = collection.Translator.Translate(filter)
+
+        let whereClause =
+            if translated.Sql = "" then
+                ""
+            else
+                $"WHERE {translated.Sql}"
+
+        // Build ORDER BY clause from TranslatedQuery
+        let orderByClause =
+            if List.isEmpty translatedQuery.OrderBy then
+                ""
+            else
+                let orderParts =
+                    translatedQuery.OrderBy
+                    |> List.map (fun (field, dir) ->
+                        let fieldPath = $"json_extract(body, '$.{field}')"
+
+                        match dir with
+                        | FractalDb.QueryExpr.SortDirection.Asc -> $"{fieldPath} ASC"
+                        | FractalDb.QueryExpr.SortDirection.Desc -> $"{fieldPath} DESC"
+                        | FractalDb.QueryExpr.SortDirection.AscNullsLast -> $"{fieldPath} IS NULL, {fieldPath} ASC"
+                        | FractalDb.QueryExpr.SortDirection.DescNullsLast -> $"{fieldPath} IS NULL, {fieldPath} DESC")
+
+                let orderByStr = orderParts |> String.concat ", "
+                $"ORDER BY {orderByStr}"
+
+        // Use LIMIT 1 OFFSET n to get the nth element
+        let sql =
+            $"SELECT _id, json(body) as body, createdAt, updatedAt 
+                    FROM {collection.Name} {whereClause} {orderByClause} LIMIT 1 OFFSET {index}"
+
+        let params' =
+            translated.Parameters |> List.map (fun (name, value) -> name, toSqlType value)
+
+        task {
+            let! dbResult =
+                collection.Connection
+                |> Db.newCommand sql
+                |> Db.setParams params'
+                |> Db.Async.querySingle (fun rd ->
+                    rd.ReadString "_id", rd.ReadString "body", rd.ReadInt64 "createdAt", rd.ReadInt64 "updatedAt")
+
+            match dbResult with
+            | Some rowData -> return rowToDocument rowData
+            | None ->
+                return
+                    raise (
+                        ArgumentOutOfRangeException(
+                            nameof index,
+                            index,
+                            $"Index {index} is out of bounds. The query returned fewer results."
+                        )
+                    )
+        }
 
     /// <summary>
     /// Searches for documents containing the specified text across multiple fields.
@@ -1392,8 +2451,7 @@ module Collection =
                     |> ignore
 
                     return Ok document
-                with
-                | :? DbExecutionException as ex ->
+                with :? DbExecutionException as ex ->
                     // Map Donald exception to FractalError
                     let error = mapDonaldException ex
 
@@ -1529,13 +2587,12 @@ module Collection =
                                 |> ignore
 
                                 insertedDocs <- document :: insertedDocs
-                            with
-                            | :? DbExecutionException as ex ->
+                            with :? DbExecutionException as ex ->
                                 let err = mapDonaldException ex
 
                                 if ordered then
                                     error <- Some err
-                            // else: skip this document, continue with next (unordered mode)
+                    // else: skip this document, continue with next (unordered mode)
 
                     match error with
                     | Some err when ordered ->

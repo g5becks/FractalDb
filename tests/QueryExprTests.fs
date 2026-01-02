@@ -6,6 +6,7 @@ module FractalDb.Tests.QueryExprTests
 open System
 open Xunit
 open FsUnit.Xunit
+open FractalDb
 open FractalDb.Types
 open FractalDb.Schema
 open FractalDb.Operators
@@ -628,6 +629,129 @@ type QueryExprTests(fixture: QueryExprTestFixture) =
                 values |> should contain (box "Charlie")
             | _ -> failwith "Expected CompareOp.In"
         | _ -> failwith "Expected Query.Field with Compare operator"
+
+    // ═══════════════════════════════════════════════════════════════
+    // SQL LIKE Pattern Matching - Sql.like
+    // ═══════════════════════════════════════════════════════════════
+
+    [<Fact>]
+    member _.``Query expression with Sql.like percent wildcard translates to StringOp.Like``() =
+        let result =
+            query {
+                for user in users do
+                    where (Sql.like "admin%" user.Name)
+            }
+
+        result.Source |> should equal "users"
+
+        match result.Where with
+        | Some(Query.Field(field, FieldOp.String op)) ->
+            field |> should equal "name"
+
+            match op with
+            | StringOp.Like pattern -> pattern |> should equal "admin%"
+            | _ -> failwith "Expected StringOp.Like"
+        | _ -> failwith "Expected Query.Field with String operator"
+
+    [<Fact>]
+    member _.``Query expression with Sql.like underscore wildcard translates to StringOp.Like``() =
+        let result =
+            query {
+                for user in users do
+                    where (Sql.like "_e%" user.Name)
+            }
+
+        result.Source |> should equal "users"
+
+        match result.Where with
+        | Some(Query.Field(field, FieldOp.String op)) ->
+            field |> should equal "name"
+
+            match op with
+            | StringOp.Like pattern -> pattern |> should equal "_e%"
+            | _ -> failwith "Expected StringOp.Like"
+        | _ -> failwith "Expected Query.Field with String operator"
+
+    [<Fact>]
+    member _.``Query expression with Sql.like character set pattern translates to StringOp.Like``() =
+        let result =
+            query {
+                for user in users do
+                    where (Sql.like "[abc]%" user.Name)
+            }
+
+        result.Source |> should equal "users"
+
+        match result.Where with
+        | Some(Query.Field(field, FieldOp.String op)) ->
+            field |> should equal "name"
+
+            match op with
+            | StringOp.Like pattern -> pattern |> should equal "[abc]%"
+            | _ -> failwith "Expected StringOp.Like"
+        | _ -> failwith "Expected Query.Field with String operator"
+
+    // ═══════════════════════════════════════════════════════════════
+    // SQL LIKE Pattern Matching - Sql.ilike (case-insensitive)
+    // ═══════════════════════════════════════════════════════════════
+
+    [<Fact>]
+    member _.``Query expression with Sql.ilike translates to StringOp.ILike``() =
+        let result =
+            query {
+                for user in users do
+                    where (Sql.ilike "admin%" user.Email)
+            }
+
+        result.Source |> should equal "users"
+
+        match result.Where with
+        | Some(Query.Field(field, FieldOp.String op)) ->
+            field |> should equal "email"
+
+            match op with
+            | StringOp.ILike pattern -> pattern |> should equal "admin%"
+            | _ -> failwith "Expected StringOp.ILike"
+        | _ -> failwith "Expected Query.Field with String operator"
+
+    // ═══════════════════════════════════════════════════════════════
+    // Distinct Operator
+    // ═══════════════════════════════════════════════════════════════
+
+    [<Fact>]
+    member _.``Query expression with distinct sets Distinct = true``() =
+        let result =
+            query {
+                for user in users do
+                    distinct
+            }
+
+        result.Source |> should equal "users"
+        result.Distinct |> should equal true
+
+    [<Fact>]
+    member _.``Query expression with distinct and select sets Distinct = true``() =
+        let result =
+            query {
+                for user in users do
+                    select user.Name
+                    distinct
+            }
+
+        result.Source |> should equal "users"
+        result.Distinct |> should equal true
+        result.Projection |> should equal (Projection.SelectSingle "name")
+
+    [<Fact>]
+    member _.``Query expression without distinct has Distinct = false``() =
+        let result =
+            query {
+                for user in users do
+                    where (user.Age > 18L)
+            }
+
+        result.Source |> should equal "users"
+        result.Distinct |> should equal false
 
     // ═══════════════════════════════════════════════════════════════
     // Sorting - sortBy
@@ -1263,7 +1387,8 @@ type QueryExprTests(fixture: QueryExprTestFixture) =
                     .where(Query.Field("active", FieldOp.Compare(box (CompareOp.Eq true))))
                     .where(Query.Field("age", FieldOp.Compare(box (CompareOp.Gte 25L))))
                     .where(Query.Field("age", FieldOp.Compare(box (CompareOp.Lte 30L))))
-                    .exec users
+                    .exec
+                    users
 
             results |> should haveLength 2
             let names = results |> List.map (fun doc -> doc.Data.Name) |> List.sort
@@ -1325,7 +1450,8 @@ type QueryExprTests(fixture: QueryExprTestFixture) =
                     baseQuery
                         .orderBy("age", FractalDb.QueryExpr.SortDirection.Asc)
                         .orderBy("name", FractalDb.QueryExpr.SortDirection.Asc)
-                        .exec users
+                        .exec
+                        users
 
                 results |> should not' (be Empty)
                 // Age 30: Bob, Zack (alphabetical)
@@ -1515,7 +1641,8 @@ type QueryExprTests(fixture: QueryExprTestFixture) =
                     .orderBy("age", FractalDb.QueryExpr.SortDirection.Desc)
                     .skip(0)
                     .limit(1)
-                    .exec users
+                    .exec
+                    users
 
             results |> should haveLength 1
             results.[0].Data.Name |> should equal "Bob"
@@ -1898,4 +2025,1292 @@ type QueryExprTests(fixture: QueryExprTestFixture) =
             // All three combined: active, sorted by name, take 2
             allThreeResults.[0].Data.Name |> should equal "Alice"
             allThreeResults.[1].Data.Name |> should equal "Bob"
+        }
+
+    // ═══════════════════════════════════════════════════════════════
+    // Integration Tests - Sql.like Pattern Matching
+    // ═══════════════════════════════════════════════════════════════
+
+    [<Fact>]
+    member _.``Integration: Sql.like returns documents matching pattern``() =
+        task {
+            // Test data: Alice, Bob, Charlie - Alice starts with "A"
+            let queryResult: TranslatedQuery<TestUser> =
+                query {
+                    for user in users do
+                        where (Sql.like "A%" user.Name)
+                }
+
+            let! results = queryResult.exec users
+
+            results |> should haveLength 1
+            results.[0].Data.Name |> should equal "Alice"
+        }
+
+    [<Fact>]
+    member _.``Integration: Sql.like with underscore wildcard works``() =
+        task {
+            // Test data: Alice, Bob, Charlie - Bob has 'o' as second char
+            let queryResult: TranslatedQuery<TestUser> =
+                query {
+                    for user in users do
+                        where (Sql.like "_o%" user.Name)
+                }
+
+            let! results = queryResult.exec users
+
+            results |> should haveLength 1
+            results.[0].Data.Name |> should equal "Bob"
+        }
+
+    [<Fact>]
+    member _.``Integration: Sql.like with complex pattern works end-to-end``() =
+        task {
+            // Test data: alice@test.com, bob@test.com, charlie@test.com
+            // All end with @test.com
+            let queryResult: TranslatedQuery<TestUser> =
+                query {
+                    for user in users do
+                        where (Sql.like "%@test.com" user.Email)
+                }
+
+            let! results = queryResult.exec users
+
+            results |> should haveLength 3
+        }
+
+    // ═══════════════════════════════════════════════════════════════
+    // Integration Tests - Sql.ilike Case-Insensitive Pattern Matching
+    // ═══════════════════════════════════════════════════════════════
+
+    [<Fact>]
+    member _.``Integration: Sql.ilike is case-insensitive``() =
+        task {
+            // Test data: Alice - should match "ALICE%", "alice%", "Alice%"
+            let queryResult: TranslatedQuery<TestUser> =
+                query {
+                    for user in users do
+                        where (Sql.ilike "ALICE%" user.Name)
+                }
+
+            let! results = queryResult.exec users
+
+            results |> should haveLength 1
+            results.[0].Data.Name |> should equal "Alice"
+        }
+
+    [<Fact>]
+    member _.``Integration: Sql.ilike with mixed case pattern matches``() =
+        task {
+            // Test data: alice@test.com - should match "ALICE@TEST.COM%"
+            let queryResult: TranslatedQuery<TestUser> =
+                query {
+                    for user in users do
+                        where (Sql.ilike "aLiCe@TeSt.CoM" user.Email)
+                }
+
+            let! results = queryResult.exec users
+
+            results |> should haveLength 1
+            results.[0].Data.Email |> should equal "alice@test.com"
+        }
+
+    // ═══════════════════════════════════════════════════════════════
+    // Integration Tests - Distinct Operator
+    // ═══════════════════════════════════════════════════════════════
+
+    [<Fact>]
+    member _.``Integration: distinct returns unique documents``() =
+        task {
+            // Test with all 3 users - distinct should return all 3 (all unique)
+            let queryResult: TranslatedQuery<TestUser> =
+                query {
+                    for user in users do
+                        distinct
+                }
+
+            let! results = queryResult.exec users
+
+            results |> should haveLength 3
+        }
+
+    [<Fact>]
+    member _.``Integration: distinct with where clause works``() =
+        task {
+            // Test distinct with where - should return only active users
+            let queryResult: TranslatedQuery<TestUser> =
+                query {
+                    for user in users do
+                        where (user.Active = true)
+                        distinct
+                }
+
+            let! results = queryResult.exec users
+
+            // Alice and Bob are active
+            results |> should haveLength 2
+        }
+
+    [<Fact>]
+    member _.``Integration: distinct with sortBy works``() =
+        task {
+            // Test distinct with sorting
+            let queryResult: TranslatedQuery<TestUser> =
+                query {
+                    for user in users do
+                        sortBy user.Name
+                        distinct
+                }
+
+            let! results = queryResult.exec users
+
+            results |> should haveLength 3
+            // Should be sorted: Alice, Bob, Charlie
+            results.[0].Data.Name |> should equal "Alice"
+            results.[1].Data.Name |> should equal "Bob"
+            results.[2].Data.Name |> should equal "Charlie"
+        }
+
+    // ═══════════════════════════════════════════════════════════════
+    // Integration Tests - Aggregate Operators (execAggregate)
+    // ═══════════════════════════════════════════════════════════════
+
+    [<Fact>]
+    member _.``Integration: execAggregate with Min returns minimum value``() =
+        task {
+            // Test data: Alice=25, Bob=30, Charlie=35
+            let! result = users |> Collection.execAggregate (AggregateOp.Min "age") Query.Empty
+
+            // Result is returned as obj, need to handle SQLite int64
+            let minAge = System.Convert.ToInt64(result)
+            minAge |> should equal 25L
+        }
+
+    [<Fact>]
+    member _.``Integration: execAggregate with Max returns maximum value``() =
+        task {
+            // Test data: Alice=25, Bob=30, Charlie=35
+            let! result = users |> Collection.execAggregate (AggregateOp.Max "age") Query.Empty
+
+            let maxAge = System.Convert.ToInt64(result)
+            maxAge |> should equal 35L
+        }
+
+    [<Fact>]
+    member _.``Integration: execAggregate with Sum returns sum of values``() =
+        task {
+            // Test data: Alice=25, Bob=30, Charlie=35 -> Sum = 90
+            let! result = users |> Collection.execAggregate (AggregateOp.Sum "age") Query.Empty
+
+            let sumAge = System.Convert.ToInt64(result)
+            sumAge |> should equal 90L
+        }
+
+    [<Fact>]
+    member _.``Integration: execAggregate with Avg returns average of values``() =
+        task {
+            // Test data: Alice=25, Bob=30, Charlie=35 -> Avg = 30.0
+            let! result = users |> Collection.execAggregate (AggregateOp.Avg "age") Query.Empty
+
+            let avgAge = System.Convert.ToDouble(result)
+            avgAge |> should equal 30.0
+        }
+
+    [<Fact>]
+    member _.``Integration: execAggregate with Count returns count of documents``() =
+        task {
+            // Test data: 3 users total
+            let! result = users |> Collection.execAggregate AggregateOp.Count Query.Empty
+
+            let count = System.Convert.ToInt32(result)
+            count |> should equal 3
+        }
+
+    [<Fact>]
+    member _.``Integration: execAggregate with filter returns aggregate of filtered results``() =
+        task {
+            // Test data: Active users are Alice=25, Bob=30
+            // Min age of active users = 25
+            let activeFilter = Query.Field("active", FieldOp.Compare(box (CompareOp.Eq true)))
+
+            let! result = users |> Collection.execAggregate (AggregateOp.Min "age") activeFilter
+
+            let minAge = System.Convert.ToInt64(result)
+            minAge |> should equal 25L
+        }
+
+    [<Fact>]
+    member _.``Integration: execAggregate with Sum and filter returns sum of filtered results``() =
+        task {
+            // Test data: Active users are Alice=25, Bob=30
+            // Sum of active users' ages = 55
+            let activeFilter = Query.Field("active", FieldOp.Compare(box (CompareOp.Eq true)))
+
+            let! result = users |> Collection.execAggregate (AggregateOp.Sum "age") activeFilter
+
+            let sumAge = System.Convert.ToInt64(result)
+            sumAge |> should equal 55L
+        }
+
+    [<Fact>]
+    member _.``Integration: execAggregate on empty result set returns null for Min/Max/Sum/Avg``() =
+        task {
+            // Filter that matches no documents
+            let noMatchFilter = Query.Field("age", FieldOp.Compare(box (CompareOp.Gt 1000L)))
+
+            // Min on empty set returns DBNull
+            let! minResult = users |> Collection.execAggregate (AggregateOp.Min "age") noMatchFilter
+            minResult |> should equal System.DBNull.Value
+
+            // Max on empty set returns DBNull
+            let! maxResult = users |> Collection.execAggregate (AggregateOp.Max "age") noMatchFilter
+            maxResult |> should equal System.DBNull.Value
+
+            // Sum on empty set returns DBNull
+            let! sumResult = users |> Collection.execAggregate (AggregateOp.Sum "age") noMatchFilter
+            sumResult |> should equal System.DBNull.Value
+
+            // Avg on empty set returns DBNull
+            let! avgResult = users |> Collection.execAggregate (AggregateOp.Avg "age") noMatchFilter
+            avgResult |> should equal System.DBNull.Value
+        }
+
+    [<Fact>]
+    member _.``Integration: execAggregate Count on empty result set returns 0``() =
+        task {
+            // Filter that matches no documents
+            let noMatchFilter = Query.Field("age", FieldOp.Compare(box (CompareOp.Gt 1000L)))
+
+            let! result = users |> Collection.execAggregate AggregateOp.Count noMatchFilter
+
+            let count = System.Convert.ToInt32(result)
+            count |> should equal 0
+        }
+
+    // ═══════════════════════════════════════════════════════════════
+    // Integration Tests - execAll Operator
+    // ═══════════════════════════════════════════════════════════════
+
+    [<Fact>]
+    member _.``Integration: execAll returns true when all documents match predicate``() =
+        task {
+            // Test data: Alice=25, Bob=30, Charlie=35 - all ages > 20
+            let predicate = Query.Field("age", FieldOp.Compare(box (CompareOp.Gt 20L)))
+
+            let! result = users |> Collection.execAll predicate Query.Empty
+
+            result |> should equal true
+        }
+
+    [<Fact>]
+    member _.``Integration: execAll returns false when any document doesn't match``() =
+        task {
+            // Test data: Alice=25, Bob=30, Charlie=35 - not all ages > 30
+            let predicate = Query.Field("age", FieldOp.Compare(box (CompareOp.Gt 30L)))
+
+            let! result = users |> Collection.execAll predicate Query.Empty
+
+            result |> should equal false
+        }
+
+    // ═══════════════════════════════════════════════════════════════
+    // Integration Tests - execFind Operator
+    // ═══════════════════════════════════════════════════════════════
+
+    [<Fact>]
+    member _.``Integration: execFind returns matching document``() =
+        task {
+            // Find Alice by email
+            let predicate =
+                Query.Field("email", FieldOp.Compare(box (CompareOp.Eq "alice@test.com")))
+
+            let! result = users |> Collection.execFind predicate
+
+            result.Data.Name |> should equal "Alice"
+            result.Data.Age |> should equal 25L
+        }
+
+    [<Fact>]
+    member _.``Integration: execFind throws InvalidOperationException when no match``() =
+        task {
+            // Search for non-existent email
+            let predicate =
+                Query.Field("email", FieldOp.Compare(box (CompareOp.Eq "nonexistent@test.com")))
+
+            let action = fun () -> (users |> Collection.execFind predicate).Result |> ignore
+
+            action |> should throw typeof<System.AggregateException>
+        }
+
+    [<Fact>]
+    member _.``Integration: execFind with complex predicate works``() =
+        task {
+            // Find user who is active AND age >= 30 (should find Bob)
+            let activePredicate =
+                Query.Field("active", FieldOp.Compare(box (CompareOp.Eq true)))
+
+            let agePredicate = Query.Field("age", FieldOp.Compare(box (CompareOp.Gte 30L)))
+            let predicate = Query.And [ activePredicate; agePredicate ]
+
+            let! result = users |> Collection.execFind predicate
+
+            result.Data.Name |> should equal "Bob"
+            result.Data.Age |> should equal 30L
+        }
+
+    [<Fact>]
+    member _.``Integration: execFind returns first match with multiple matches``() =
+        task {
+            // Find any active user (Alice=25 or Bob=30) - should return one of them
+            let predicate = Query.Field("active", FieldOp.Compare(box (CompareOp.Eq true)))
+
+            let! result = users |> Collection.execFind predicate
+
+            // Should return either Alice or Bob (both are active)
+            result.Data.Active |> should equal true
+            [ "Alice"; "Bob" ] |> should contain result.Data.Name
+        }
+
+
+    [<Fact>]
+    member _.``Integration: execAll with filter checks only filtered documents``() =
+        task {
+            // Test data: Active users are Alice=25, Bob=30 - all active users have age >= 25
+            let filter = Query.Field("active", FieldOp.Compare(box (CompareOp.Eq true)))
+            let predicate = Query.Field("age", FieldOp.Compare(box (CompareOp.Gte 25L)))
+
+            let! result = users |> Collection.execAll predicate filter
+
+            result |> should equal true
+        }
+
+    [<Fact>]
+    member _.``Integration: execAll with filter returns false when filtered subset doesn't all match``() =
+        task {
+            // Test data: Active users are Alice=25, Bob=30 - not all have age >= 30
+            let filter = Query.Field("active", FieldOp.Compare(box (CompareOp.Eq true)))
+            let predicate = Query.Field("age", FieldOp.Compare(box (CompareOp.Gte 30L)))
+
+            let! result = users |> Collection.execAll predicate filter
+
+            result |> should equal false
+        }
+
+    // ═══════════════════════════════════════════════════════════════
+    // Integration Tests - execAggregateNullable Operator
+    // ═══════════════════════════════════════════════════════════════
+
+    [<Fact>]
+    member _.``Integration: execAggregateNullable Min returns Some when data exists``() =
+        task {
+            // Test data: Alice=25, Bob=30, Charlie=35 - min age is 25
+            let! result = users |> Collection.execAggregateNullable (AggregateOp.Min "age") Query.Empty
+
+            result.IsSome |> should equal true
+            Convert.ToInt64(result.Value) |> should equal 25L
+        }
+
+    [<Fact>]
+    member _.``Integration: execAggregateNullable Max returns Some when data exists``() =
+        task {
+            // Test data: Alice=25, Bob=30, Charlie=35 - max age is 35
+            let! result = users |> Collection.execAggregateNullable (AggregateOp.Max "age") Query.Empty
+
+            result.IsSome |> should equal true
+            Convert.ToInt64(result.Value) |> should equal 35L
+        }
+
+    [<Fact>]
+    member _.``Integration: execAggregateNullable Sum returns Some when data exists``() =
+        task {
+            // Test data: Alice=25 + Bob=30 + Charlie=35 = 90
+            let! result = users |> Collection.execAggregateNullable (AggregateOp.Sum "age") Query.Empty
+
+            result.IsSome |> should equal true
+            Convert.ToInt64(result.Value) |> should equal 90L
+        }
+
+    [<Fact>]
+    member _.``Integration: execAggregateNullable Avg returns Some when data exists``() =
+        task {
+            // Test data: (25 + 30 + 35) / 3 = 30.0
+            let! result = users |> Collection.execAggregateNullable (AggregateOp.Avg "age") Query.Empty
+
+            result.IsSome |> should equal true
+            Convert.ToDouble(result.Value) |> should equal 30.0
+        }
+
+    [<Fact>]
+    member _.``Integration: execAggregateNullable returns None when no documents match filter``() =
+        task {
+            // Filter that matches no documents (age > 1000)
+            let noMatchFilter = Query.Field("age", FieldOp.Compare(box (CompareOp.Gt 1000L)))
+
+            let! result = users |> Collection.execAggregateNullable (AggregateOp.Min "age") noMatchFilter
+
+            result.IsNone |> should equal true
+        }
+
+    [<Fact>]
+    member _.``Integration: execAggregateNullable with filter returns correct value``() =
+        task {
+            // Filter for active users only (Alice=25, Bob=30)
+            let activeFilter = Query.Field("active", FieldOp.Compare(box (CompareOp.Eq true)))
+
+            let! result = users |> Collection.execAggregateNullable (AggregateOp.Max "age") activeFilter
+
+            result.IsSome |> should equal true
+            Convert.ToInt64(result.Value) |> should equal 30L // Bob is oldest active user
+        }
+
+    // ═══════════════════════════════════════════════════════════════
+    // Integration Tests - execGroupBy Operator
+    // ═══════════════════════════════════════════════════════════════
+
+    [<Fact>]
+    member _.``Integration: execGroupBy groups by field and returns counts``() =
+        task {
+            // Test data: Alice=active, Bob=active, Charlie=inactive
+            // Group by active status
+            let q: FractalDb.QueryExpr.TranslatedQuery<TestUser> =
+                query {
+                    for user in users do
+                        groupBy user.Active
+                }
+
+            let! results = users |> Collection.execGroupBy q
+
+            // Should have 2 groups: true (2 users) and false (1 user)
+            results |> List.length |> should equal 2
+
+            let activeGroup = results |> List.find (fun (k, _) -> Convert.ToBoolean(k) = true)
+
+            let inactiveGroup =
+                results |> List.find (fun (k, _) -> Convert.ToBoolean(k) = false)
+
+            snd activeGroup |> should equal 2L
+            snd inactiveGroup |> should equal 1L
+        }
+
+    [<Fact>]
+    member _.``Integration: execGroupBy with where clause filters before grouping``() =
+        task {
+            // Test data: Alice=25/active, Bob=30/active, Charlie=35/inactive
+            // Filter for age >= 30, then group by active
+            let q: FractalDb.QueryExpr.TranslatedQuery<TestUser> =
+                query {
+                    for user in users do
+                        where (user.Age >= 30L)
+                        groupBy user.Active
+                }
+
+            let! results = users |> Collection.execGroupBy q
+
+            // Should have 2 groups: Bob (active) and Charlie (inactive)
+            results |> List.length |> should equal 2
+
+            let activeGroup = results |> List.find (fun (k, _) -> Convert.ToBoolean(k) = true)
+
+            let inactiveGroup =
+                results |> List.find (fun (k, _) -> Convert.ToBoolean(k) = false)
+
+            snd activeGroup |> should equal 1L // Bob
+            snd inactiveGroup |> should equal 1L // Charlie
+        }
+
+    [<Fact>]
+    member _.``Integration: execGroupBy returns empty for no matches``() =
+        task {
+            // Filter that matches no documents
+            let q: FractalDb.QueryExpr.TranslatedQuery<TestUser> =
+                query {
+                    for user in users do
+                        where (user.Age > 1000L)
+                        groupBy user.Active
+                }
+
+            let! results = users |> Collection.execGroupBy q
+
+            results |> List.length |> should equal 0
+        }
+
+    [<Fact>]
+    member _.``Integration: execGroupBy groups by string field``() =
+        task {
+            // Group by name - each user has unique name, so 3 groups with count 1 each
+            let q: FractalDb.QueryExpr.TranslatedQuery<TestUser> =
+                query {
+                    for user in users do
+                        groupBy user.Name
+                }
+
+            let! results = users |> Collection.execGroupBy q
+
+            // Should have 3 groups (Alice, Bob, Charlie)
+            results |> List.length |> should equal 3
+
+            // Each group should have count 1
+            results |> List.iter (fun (_, count) -> count |> should equal 1L)
+        }
+
+    // ═══════════════════════════════════════════════════════════════
+    // Integration Tests - execLast / execLastOrDefault Operators
+    // ═══════════════════════════════════════════════════════════════
+
+    [<Fact>]
+    member _.``Integration: execLast returns last element by reversing sort order``() =
+        task {
+            // Sort by age ascending: Alice=25, Bob=30, Charlie=35
+            // last should return Charlie (age 35)
+            let q: FractalDb.QueryExpr.TranslatedQuery<TestUser> =
+                query {
+                    for user in users do
+                        sortBy user.Age
+                }
+
+            let! result = users |> Collection.execLast q
+
+            result.Data.Name |> should equal "Charlie"
+            result.Data.Age |> should equal 35L
+        }
+
+    [<Fact>]
+    member _.``Integration: execLast with descending sort returns first in original order``() =
+        task {
+            // Sort by age descending: Charlie=35, Bob=30, Alice=25
+            // last should return Alice (age 25)
+            let q: FractalDb.QueryExpr.TranslatedQuery<TestUser> =
+                query {
+                    for user in users do
+                        sortByDescending user.Age
+                }
+
+            let! result = users |> Collection.execLast q
+
+            result.Data.Name |> should equal "Alice"
+            result.Data.Age |> should equal 25L
+        }
+
+    [<Fact>]
+    member _.``Integration: execLast with where clause returns last of filtered results``() =
+        task {
+            // Active users sorted by age: Alice=25, Bob=30
+            // last should return Bob
+            let q: FractalDb.QueryExpr.TranslatedQuery<TestUser> =
+                query {
+                    for user in users do
+                        where (user.Active = true)
+                        sortBy user.Age
+                }
+
+            let! result = users |> Collection.execLast q
+
+            result.Data.Name |> should equal "Bob"
+            result.Data.Age |> should equal 30L
+        }
+
+    [<Fact>]
+    member _.``Integration: execLast throws InvalidOperationException when empty``() =
+        task {
+            // Filter that matches no documents
+            let q: FractalDb.QueryExpr.TranslatedQuery<TestUser> =
+                query {
+                    for user in users do
+                        where (user.Age > 100L)
+                        sortBy user.Age
+                }
+
+            let action = fun () -> (users |> Collection.execLast q).Result |> ignore
+
+            action |> should throw typeof<System.AggregateException>
+        }
+
+    [<Fact>]
+    member _.``Integration: execLastOrDefault returns Some for non-empty result``() =
+        task {
+            // Sort by age ascending: Alice=25, Bob=30, Charlie=35
+            // lastOrDefault should return Some(Charlie)
+            let q: FractalDb.QueryExpr.TranslatedQuery<TestUser> =
+                query {
+                    for user in users do
+                        sortBy user.Age
+                }
+
+            let! result = users |> Collection.execLastOrDefault q
+
+            result |> should not' (be Null)
+            result.IsSome |> should equal true
+            result.Value.Data.Name |> should equal "Charlie"
+        }
+
+    [<Fact>]
+    member _.``Integration: execLastOrDefault returns None for empty result``() =
+        task {
+            // Filter that matches no documents
+            let q: FractalDb.QueryExpr.TranslatedQuery<TestUser> =
+                query {
+                    for user in users do
+                        where (user.Age > 100L)
+                        sortBy user.Age
+                }
+
+            let! result = users |> Collection.execLastOrDefault q
+
+            result |> should equal None
+        }
+
+    [<Fact>]
+    member _.``Integration: execLast with string sort returns last alphabetically``() =
+        task {
+            // Sort by name ascending: Alice, Bob, Charlie
+            // last should return Charlie
+            let q: FractalDb.QueryExpr.TranslatedQuery<TestUser> =
+                query {
+                    for user in users do
+                        sortBy user.Name
+                }
+
+            let! result = users |> Collection.execLast q
+
+            result.Data.Name |> should equal "Charlie"
+        }
+
+    // ═══════════════════════════════════════════════════════════════
+    // Integration Tests - execExactlyOne / execExactlyOneOrDefault Operators
+    // ═══════════════════════════════════════════════════════════════
+
+    [<Fact>]
+    member _.``Integration: execExactlyOne returns single matching document``() =
+        task {
+            // Alice has unique email
+            let q: FractalDb.QueryExpr.TranslatedQuery<TestUser> =
+                query {
+                    for user in users do
+                        where (user.Email = "alice@test.com")
+                }
+
+            let! result = users |> Collection.execExactlyOne q
+
+            result.Data.Name |> should equal "Alice"
+            result.Data.Email |> should equal "alice@test.com"
+        }
+
+    [<Fact>]
+    member _.``Integration: execExactlyOne throws when no match``() =
+        task {
+            // Non-existent email
+            let q: FractalDb.QueryExpr.TranslatedQuery<TestUser> =
+                query {
+                    for user in users do
+                        where (user.Email = "nonexistent@test.com")
+                }
+
+            let action = fun () -> (users |> Collection.execExactlyOne q).Result |> ignore
+
+            action |> should throw typeof<System.AggregateException>
+        }
+
+    [<Fact>]
+    member _.``Integration: execExactlyOne throws when multiple matches``() =
+        task {
+            // Multiple active users exist (Alice and Bob are both active)
+            let q: FractalDb.QueryExpr.TranslatedQuery<TestUser> =
+                query {
+                    for user in users do
+                        where (user.Active = true)
+                }
+
+            let action = fun () -> (users |> Collection.execExactlyOne q).Result |> ignore
+
+            action |> should throw typeof<System.AggregateException>
+        }
+
+    [<Fact>]
+    member _.``Integration: execExactlyOneOrDefault returns Some for single match``() =
+        task {
+            // Alice has unique email
+            let q: FractalDb.QueryExpr.TranslatedQuery<TestUser> =
+                query {
+                    for user in users do
+                        where (user.Email = "alice@test.com")
+                }
+
+            let! result = users |> Collection.execExactlyOneOrDefault q
+
+            result.IsSome |> should equal true
+            result.Value.Data.Name |> should equal "Alice"
+        }
+
+    [<Fact>]
+    member _.``Integration: execExactlyOneOrDefault returns None for no match``() =
+        task {
+            // Non-existent email
+            let q: FractalDb.QueryExpr.TranslatedQuery<TestUser> =
+                query {
+                    for user in users do
+                        where (user.Email = "nonexistent@test.com")
+                }
+
+            let! result = users |> Collection.execExactlyOneOrDefault q
+
+            result |> should equal None
+        }
+
+    [<Fact>]
+    member _.``Integration: execExactlyOneOrDefault throws when multiple matches``() =
+        task {
+            // Multiple active users exist (Alice and Bob are both active)
+            let q: FractalDb.QueryExpr.TranslatedQuery<TestUser> =
+                query {
+                    for user in users do
+                        where (user.Active = true)
+                }
+
+            let action =
+                fun () -> (users |> Collection.execExactlyOneOrDefault q).Result |> ignore
+
+            action |> should throw typeof<System.AggregateException>
+        }
+
+    [<Fact>]
+    member _.``Integration: execExactlyOne with unique age returns correct user``() =
+        task {
+            // Charlie is the only one with age 35
+            let q: FractalDb.QueryExpr.TranslatedQuery<TestUser> =
+                query {
+                    for user in users do
+                        where (user.Age = 35L)
+                }
+
+            let! result = users |> Collection.execExactlyOne q
+
+            result.Data.Name |> should equal "Charlie"
+            result.Data.Age |> should equal 35L
+        }
+
+    // ═══════════════════════════════════════════════════════════════
+    // Integration Tests - execNth Operator
+    // ═══════════════════════════════════════════════════════════════
+
+    [<Fact>]
+    member _.``Integration: execNth 0 returns first element``() =
+        task {
+            // Sort by age ascending: Alice=25, Bob=30, Charlie=35
+            // nth 0 should return Alice
+            let q: FractalDb.QueryExpr.TranslatedQuery<TestUser> =
+                query {
+                    for user in users do
+                        sortBy user.Age
+                }
+
+            let! result = users |> Collection.execNth 0 q
+
+            result.Data.Name |> should equal "Alice"
+            result.Data.Age |> should equal 25L
+        }
+
+    [<Fact>]
+    member _.``Integration: execNth 1 returns second element``() =
+        task {
+            // Sort by age ascending: Alice=25, Bob=30, Charlie=35
+            // nth 1 should return Bob
+            let q: FractalDb.QueryExpr.TranslatedQuery<TestUser> =
+                query {
+                    for user in users do
+                        sortBy user.Age
+                }
+
+            let! result = users |> Collection.execNth 1 q
+
+            result.Data.Name |> should equal "Bob"
+            result.Data.Age |> should equal 30L
+        }
+
+    [<Fact>]
+    member _.``Integration: execNth 2 returns third element``() =
+        task {
+            // Sort by age ascending: Alice=25, Bob=30, Charlie=35
+            // nth 2 should return Charlie
+            let q: FractalDb.QueryExpr.TranslatedQuery<TestUser> =
+                query {
+                    for user in users do
+                        sortBy user.Age
+                }
+
+            let! result = users |> Collection.execNth 2 q
+
+            result.Data.Name |> should equal "Charlie"
+            result.Data.Age |> should equal 35L
+        }
+
+    [<Fact>]
+    member _.``Integration: execNth with descending sort works correctly``() =
+        task {
+            // Sort by age descending: Charlie=35, Bob=30, Alice=25
+            // nth 0 should return Charlie
+            let q: FractalDb.QueryExpr.TranslatedQuery<TestUser> =
+                query {
+                    for user in users do
+                        sortByDescending user.Age
+                }
+
+            let! result = users |> Collection.execNth 0 q
+
+            result.Data.Name |> should equal "Charlie"
+        }
+
+    [<Fact>]
+    member _.``Integration: execNth throws when index out of bounds``() =
+        task {
+            // Only 3 users exist, so index 10 is out of bounds
+            let q: FractalDb.QueryExpr.TranslatedQuery<TestUser> =
+                query {
+                    for user in users do
+                        sortBy user.Age
+                }
+
+            let action = fun () -> (users |> Collection.execNth 10 q).Result |> ignore
+
+            action |> should throw typeof<System.AggregateException>
+        }
+
+    [<Fact>]
+    member _.``Integration: execNth throws when index is negative``() =
+        task {
+            let q: FractalDb.QueryExpr.TranslatedQuery<TestUser> =
+                query {
+                    for user in users do
+                        sortBy user.Age
+                }
+
+            let action = fun () -> (users |> Collection.execNth -1 q).Result |> ignore
+
+            action |> should throw typeof<System.ArgumentOutOfRangeException>
+        }
+
+    [<Fact>]
+    member _.``Integration: execNth with where clause returns correct element``() =
+        task {
+            // Active users sorted by age: Alice=25, Bob=30
+            // nth 1 should return Bob (2nd active user)
+            let q: FractalDb.QueryExpr.TranslatedQuery<TestUser> =
+                query {
+                    for user in users do
+                        where (user.Active = true)
+                        sortBy user.Age
+                }
+
+            let! result = users |> Collection.execNth 1 q
+
+            result.Data.Name |> should equal "Bob"
+        }
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Test Types and Fixtures for Nullable Sorting
+// ═══════════════════════════════════════════════════════════════════════════
+
+/// Test type with Option field for sortByNullable tests (Option serializes properly unlike Nullable)
+type OptionalPriceProduct =
+    { Name: string
+      Price: int64 option
+      Category: string }
+
+/// Schema for optional price product collection
+let optionalPriceProductSchema: SchemaDef<OptionalPriceProduct> =
+    { Fields =
+        [ { Name = "name"
+            Path = None
+            SqlType = SqliteType.Text
+            Indexed = true
+            Unique = false
+            Nullable = false }
+          { Name = "price"
+            Path = None
+            SqlType = SqliteType.Integer
+            Indexed = true
+            Unique = false
+            Nullable = true }
+          { Name = "category"
+            Path = None
+            SqlType = SqliteType.Text
+            Indexed = true
+            Unique = false
+            Nullable = false } ]
+      Indexes = []
+      Timestamps = true
+      Validate = None }
+
+/// <summary>
+/// Test fixture for nullable sorting tests with products that have optional prices.
+/// </summary>
+type NullableSortingTestFixture() =
+    let db = FractalDb.InMemory()
+
+    let products =
+        db.Collection<OptionalPriceProduct>("products", optionalPriceProductSchema)
+
+    // Seed test data with some null prices
+    do
+        let testProducts =
+            [ { Name = "Apple"
+                Price = Some 100L
+                Category = "Food" }
+              { Name = "Banana"
+                Price = Some 50L
+                Category = "Food" }
+              { Name = "Mystery Box"
+                Price = None
+                Category = "Mystery" }
+              { Name = "Cherry"
+                Price = Some 75L
+                Category = "Food" }
+              { Name = "Unknown Item"
+                Price = None
+                Category = "Mystery" } ]
+
+        testProducts
+        |> List.iter (fun product ->
+            products
+            |> Collection.insertOne product
+            |> Async.AwaitTask
+            |> Async.RunSynchronously
+            |> ignore)
+
+    member _.Db = db
+    member _.Products = products
+
+    interface IDisposable with
+        member _.Dispose() = db.Close()
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Integration Tests - sortByNullable Operator
+// ═══════════════════════════════════════════════════════════════════════════
+
+type SortByNullableIntegrationTests(fixture: NullableSortingTestFixture) =
+    let products = fixture.Products
+
+    interface IClassFixture<NullableSortingTestFixture>
+
+    [<Fact>]
+    member _.``Integration: sortByNullable ascending puts NULL values last``() =
+        task {
+            // Sort by price ascending with nulls last
+            // Expected order: Banana=50, Cherry=75, Apple=100, MysteryBox=None, UnknownItem=None
+            let q: FractalDb.QueryExpr.TranslatedQuery<OptionalPriceProduct> =
+                query {
+                    for product in products do
+                        sortByNullable product.Price
+                }
+
+            let! results = products |> Collection.exec q
+
+            // First 3 should be non-null values in ascending order
+            results[0].Data.Name |> should equal "Banana"
+            results[0].Data.Price |> should equal (Some 50L)
+
+            results[1].Data.Name |> should equal "Cherry"
+            results[1].Data.Price |> should equal (Some 75L)
+
+            results[2].Data.Name |> should equal "Apple"
+            results[2].Data.Price |> should equal (Some 100L)
+
+            // Last 2 should be null values
+            results[3].Data.Price |> should equal None
+            results[4].Data.Price |> should equal None
+        }
+
+    [<Fact>]
+    member _.``Integration: sortByNullableDescending puts NULL values last``() =
+        task {
+            // Sort by price descending with nulls last
+            // Expected order: Apple=100, Cherry=75, Banana=50, MysteryBox=None, UnknownItem=None
+            let q: FractalDb.QueryExpr.TranslatedQuery<OptionalPriceProduct> =
+                query {
+                    for product in products do
+                        sortByNullableDescending product.Price
+                }
+
+            let! results = products |> Collection.exec q
+
+            // First 3 should be non-null values in descending order
+            results[0].Data.Name |> should equal "Apple"
+            results[0].Data.Price |> should equal (Some 100L)
+
+            results[1].Data.Name |> should equal "Cherry"
+            results[1].Data.Price |> should equal (Some 75L)
+
+            results[2].Data.Name |> should equal "Banana"
+            results[2].Data.Price |> should equal (Some 50L)
+
+            // Last 2 should be null values
+            results[3].Data.Price |> should equal None
+            results[4].Data.Price |> should equal None
+        }
+
+    [<Fact>]
+    member _.``Integration: sortByNullable with where clause filters then sorts``() =
+        task {
+            // Filter for Food category only, then sort by price with nulls last
+            // Expected: Banana=50, Cherry=75, Apple=100 (no nulls in Food)
+            let q: FractalDb.QueryExpr.TranslatedQuery<OptionalPriceProduct> =
+                query {
+                    for product in products do
+                        where (product.Category = "Food")
+                        sortByNullable product.Price
+                }
+
+            let! results = products |> Collection.exec q
+
+            results |> List.length |> should equal 3
+            results[0].Data.Name |> should equal "Banana"
+            results[1].Data.Name |> should equal "Cherry"
+            results[2].Data.Name |> should equal "Apple"
+        }
+
+    [<Fact>]
+    member _.``Integration: sortByNullable with take limits results``() =
+        task {
+            // Sort and take first 2 (should be non-null lowest prices)
+            let q: FractalDb.QueryExpr.TranslatedQuery<OptionalPriceProduct> =
+                query {
+                    for product in products do
+                        sortByNullable product.Price
+                        take 2
+                }
+
+            let! results = products |> Collection.exec q
+
+            results |> List.length |> should equal 2
+            results[0].Data.Name |> should equal "Banana"
+            results[1].Data.Name |> should equal "Cherry"
+        }
+
+    [<Fact>]
+    member _.``Integration: sortByNullableDescending with take limits results``() =
+        task {
+            // Sort descending and take first 2 (should be non-null highest prices)
+            let q: FractalDb.QueryExpr.TranslatedQuery<OptionalPriceProduct> =
+                query {
+                    for product in products do
+                        sortByNullableDescending product.Price
+                        take 2
+                }
+
+            let! results = products |> Collection.exec q
+
+            results |> List.length |> should equal 2
+            results[0].Data.Name |> should equal "Apple"
+            results[1].Data.Name |> should equal "Cherry"
+        }
+
+    [<Fact>]
+    member _.``Integration: first element with sortByNullable is first non-null``() =
+        task {
+            let q: FractalDb.QueryExpr.TranslatedQuery<OptionalPriceProduct> =
+                query {
+                    for product in products do
+                        sortByNullable product.Price
+                        take 1
+                }
+
+            let! results = products |> Collection.exec q
+
+            results |> List.length |> should equal 1
+            results[0].Data.Name |> should equal "Banana"
+            results[0].Data.Price |> should equal (Some 50L)
+        }
+
+    [<Fact>]
+    member _.``Integration: execLast with sortByNullable returns null value``() =
+        task {
+            // Last element when sorted ascending with nulls-last should be a null
+            let q: FractalDb.QueryExpr.TranslatedQuery<OptionalPriceProduct> =
+                query {
+                    for product in products do
+                        sortByNullable product.Price
+                }
+
+            let! result = products |> Collection.execLast q
+
+            result.Data.Price |> should equal None
+        }
+
+    [<Fact>]
+    member _.``Integration: execLastOrDefault with sortByNullable returns null value``() =
+        task {
+            // Last element when sorted ascending with nulls-last should be a null
+            let q: FractalDb.QueryExpr.TranslatedQuery<OptionalPriceProduct> =
+                query {
+                    for product in products do
+                        sortByNullable product.Price
+                }
+
+            let! result = products |> Collection.execLastOrDefault q
+
+            result.IsSome |> should equal true
+            result.Value.Data.Price |> should equal None
+        }
+
+    [<Fact>]
+    member _.``Integration: execLast with sortByNullableDescending returns null value``() =
+        task {
+            // Last element when sorted descending with nulls-last should also be a null
+            let q: FractalDb.QueryExpr.TranslatedQuery<OptionalPriceProduct> =
+                query {
+                    for product in products do
+                        sortByNullableDescending product.Price
+                }
+
+            let! result = products |> Collection.execLast q
+
+            result.Data.Price |> should equal None
+        }
+
+    [<Fact>]
+    member _.``Integration: thenByNullable adds secondary sort with NULLs last``() =
+        task {
+            // Sort by category first, then by price (NULLs last) within each category
+            // Food: Banana=50, Cherry=75, Apple=100
+            // Mystery: MysteryBox=None, UnknownItem=None (but sorted to end within Mystery)
+            let q: FractalDb.QueryExpr.TranslatedQuery<OptionalPriceProduct> =
+                query {
+                    for product in products do
+                        sortBy product.Category
+                        thenByNullable product.Price
+                }
+
+            let! results = products |> Collection.exec q
+
+            // Food category first (alphabetically)
+            results[0].Data.Name |> should equal "Banana"
+            results[0].Data.Category |> should equal "Food"
+            results[0].Data.Price |> should equal (Some 50L)
+
+            results[1].Data.Name |> should equal "Cherry"
+            results[1].Data.Category |> should equal "Food"
+            results[1].Data.Price |> should equal (Some 75L)
+
+            results[2].Data.Name |> should equal "Apple"
+            results[2].Data.Category |> should equal "Food"
+            results[2].Data.Price |> should equal (Some 100L)
+
+            // Mystery category second (alphabetically), both have None prices
+            results[3].Data.Category |> should equal "Mystery"
+            results[3].Data.Price |> should equal None
+
+            results[4].Data.Category |> should equal "Mystery"
+            results[4].Data.Price |> should equal None
+        }
+
+    [<Fact>]
+    member _.``Integration: thenByNullableDescending adds secondary descending sort with NULLs last``() =
+        task {
+            // Sort by category first, then by price descending (NULLs last) within each category
+            // Food: Apple=100, Cherry=75, Banana=50
+            // Mystery: MysteryBox=None, UnknownItem=None (sorted to end within Mystery)
+            let q: FractalDb.QueryExpr.TranslatedQuery<OptionalPriceProduct> =
+                query {
+                    for product in products do
+                        sortBy product.Category
+                        thenByNullableDescending product.Price
+                }
+
+            let! results = products |> Collection.exec q
+
+            // Food category first (alphabetically), highest price first within Food
+            results[0].Data.Name |> should equal "Apple"
+            results[0].Data.Category |> should equal "Food"
+            results[0].Data.Price |> should equal (Some 100L)
+
+            results[1].Data.Name |> should equal "Cherry"
+            results[1].Data.Category |> should equal "Food"
+            results[1].Data.Price |> should equal (Some 75L)
+
+            results[2].Data.Name |> should equal "Banana"
+            results[2].Data.Category |> should equal "Food"
+            results[2].Data.Price |> should equal (Some 50L)
+
+            // Mystery category second (alphabetically), both have None prices
+            results[3].Data.Category |> should equal "Mystery"
+            results[3].Data.Price |> should equal None
+
+            results[4].Data.Category |> should equal "Mystery"
+            results[4].Data.Price |> should equal None
+        }
+
+    [<Fact>]
+    member _.``Integration: sortByNullable with thenBy for multi-field nullable sorting``() =
+        task {
+            // Sort by price (NULLs last) first, then by name within same price
+            let q: FractalDb.QueryExpr.TranslatedQuery<OptionalPriceProduct> =
+                query {
+                    for product in products do
+                        sortByNullable product.Price
+                        thenBy product.Name
+                }
+
+            let! results = products |> Collection.exec q
+
+            // Non-null prices first in ascending order
+            results[0].Data.Price |> should equal (Some 50L)
+            results[1].Data.Price |> should equal (Some 75L)
+            results[2].Data.Price |> should equal (Some 100L)
+
+            // Null prices last, sorted by name
+            // "Mystery Box" comes before "Unknown Item" alphabetically
+            results[3].Data.Price |> should equal None
+            results[3].Data.Name |> should equal "Mystery Box"
+
+            results[4].Data.Price |> should equal None
+            results[4].Data.Name |> should equal "Unknown Item"
+        }
+
+    [<Fact>]
+    member _.``Integration: thenByNullable with take limits results``() =
+        task {
+            // Sort by category then by nullable price, take top 3
+            let q: FractalDb.QueryExpr.TranslatedQuery<OptionalPriceProduct> =
+                query {
+                    for product in products do
+                        sortBy product.Category
+                        thenByNullable product.Price
+                        take 3
+                }
+
+            let! results = products |> Collection.exec q
+
+            results |> List.length |> should equal 3
+
+            // All 3 should be from Food category (first alphabetically)
+            results[0].Data.Category |> should equal "Food"
+            results[1].Data.Category |> should equal "Food"
+            results[2].Data.Category |> should equal "Food"
+
+            // In ascending price order
+            results[0].Data.Price |> should equal (Some 50L)
+            results[1].Data.Price |> should equal (Some 75L)
+            results[2].Data.Price |> should equal (Some 100L)
+        }
+
+    [<Fact>]
+    member _.``Integration: sortByNullable with thenByNullable for all-nullable sorting``() =
+        task {
+            // Both sorts use nullable handling
+            let q: FractalDb.QueryExpr.TranslatedQuery<OptionalPriceProduct> =
+                query {
+                    for product in products do
+                        sortByNullable product.Price
+                        thenByNullable product.Price // Same field - just tests translation works
+                }
+
+            let! results = products |> Collection.exec q
+
+            // Should still work - non-null prices first
+            results[0].Data.Price |> should equal (Some 50L)
+            results[1].Data.Price |> should equal (Some 75L)
+            results[2].Data.Price |> should equal (Some 100L)
+
+            // Nulls last
+            results[3].Data.Price |> should equal None
+            results[4].Data.Price |> should equal None
         }

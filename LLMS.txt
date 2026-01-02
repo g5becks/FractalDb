@@ -5,9 +5,9 @@ Summary:
 | Section            | Lines       | Content                                            |
 |--------------------|-------------|---------------------------------------------------|
 | Header             | 1-32        | This summary and grep instructions                |
-| Quick Reference    | 33-1300     | Computation expressions, common patterns, examples |
-| Full API Reference | 1301-4658   | Extracted XML docs for all modules                |
-| **Total**          | **4658**    | Complete documentation                            |
+| Quick Reference    | 33-1630     | Computation expressions, common patterns, examples |
+| Full API Reference | 1631-5404   | Extracted XML docs for all modules                |
+| **Total**          | **5404**    | Complete documentation                            |
 
 Grepable patterns:
 
@@ -26,9 +26,9 @@ grep -i "cancell" LLMS.txt            # Find cancellation/CancellableTask docs
 ```
 
 Documented items:
-- 94 modules (including RetryableError, ResilienceOptions, Cancellable)
-- 55+ types (including new transient error types)
-- 182 functions + 48 instance methods
+- 108 modules (including Sql, RetryableError, ResilienceOptions, Cancellable)
+- 130+ types (including AggregateOp, SortDirection variants)
+- 194 functions + 48 instance methods + 22 query operators
 - Parameters, return types, and examples included
 
 FractalDb is a lightweight F# document database built on SQLite.
@@ -303,6 +303,183 @@ Get first document or None.
 headOrDefault
 ```
 
+OPERATION: last
+Get last document (throws if empty, requires sorting).
+```fsharp
+query {
+    for user in users do
+    sortBy user.CreatedAt
+    last
+}
+let! result = users |> Collection.execLast q
+```
+
+OPERATION: lastOrDefault
+Get last document or None (requires sorting).
+```fsharp
+query {
+    for user in users do
+    sortByDescending user.Score
+    lastOrDefault
+}
+let! result = users |> Collection.execLastOrDefault q
+```
+
+OPERATION: exactlyOne
+Get exactly one document (throws if 0 or >1 results).
+```fsharp
+query {
+    for user in users do
+    where (user.Email = "alice@example.com")
+    exactlyOne
+}
+let! result = users |> Collection.execExactlyOne q
+```
+
+OPERATION: exactlyOneOrDefault
+Get exactly one document or None (throws if >1 results).
+```fsharp
+query {
+    for user in users do
+    where (user.Id = targetId)
+    exactlyOneOrDefault
+}
+let! result = users |> Collection.execExactlyOneOrDefault q
+```
+
+OPERATION: nth
+Get the nth document (0-indexed).
+```fsharp
+query {
+    for user in users do
+    sortBy user.Name
+    nth 4  // Get 5th user (index 4)
+}
+let! result = users |> Collection.execNth q
+```
+
+OPERATION: find
+Find first document matching predicate (adds to where clause).
+```fsharp
+query {
+    for user in users do
+    find (user.Email = "bob@example.com")
+}
+let! results = users |> Collection.exec q
+```
+
+OPERATION: all
+Check if all documents match a predicate.
+```fsharp
+query {
+    for user in users do
+    all (user.Active = true)
+}
+let! allActive = users |> Collection.execAll q  // Returns: bool
+```
+
+OPERATION: distinct
+Remove duplicate documents from results.
+```fsharp
+query {
+    for product in products do
+    select product.Category
+    distinct
+}
+```
+
+OPERATION: groupBy
+Group documents by a field value.
+```fsharp
+query {
+    for user in users do
+    groupBy user.Department
+}
+let! groups = users |> Collection.execGroupBy q
+// Returns: (string * Doc<User> list) list
+```
+
+OPERATION: minBy
+Get minimum value of a field.
+```fsharp
+query {
+    for user in users do
+    minBy user.Age
+}
+let! minAge = users |> Collection.execAggregate q
+```
+
+OPERATION: maxBy
+Get maximum value of a field.
+```fsharp
+query {
+    for user in users do
+    where (user.Active = true)
+    maxBy user.Score
+}
+let! maxScore = users |> Collection.execAggregate q
+```
+
+OPERATION: sumBy
+Get sum of a field.
+```fsharp
+query {
+    for order in orders do
+    where (order.Status = "completed")
+    sumBy order.Total
+}
+let! total = orders |> Collection.execAggregate q
+```
+
+OPERATION: averageBy
+Get average of a field.
+```fsharp
+query {
+    for product in products do
+    averageBy product.Rating
+}
+let! avgRating = products |> Collection.execAggregate q
+```
+
+OPERATION: minByNullable / maxByNullable / sumByNullable / averageByNullable
+Nullable variants of aggregate operators (return Option).
+```fsharp
+query {
+    for product in products do
+    minByNullable product.Price
+}
+let! minPrice = products |> Collection.execAggregateNullable q
+// Returns: int option (None if all NULL or no matches)
+```
+
+OPERATION: sortByNullable
+Sort ascending with NULL values last.
+```fsharp
+query {
+    for product in products do
+    sortByNullable product.Price  // NULLs appear last
+}
+```
+
+OPERATION: sortByNullableDescending
+Sort descending with NULL values last.
+```fsharp
+query {
+    for product in products do
+    sortByNullableDescending product.Rating
+}
+```
+
+OPERATION: thenByNullable / thenByNullableDescending
+Secondary nullable sorting (NULLs last).
+```fsharp
+query {
+    for product in products do
+    sortBy product.Category
+    thenByNullable product.Price
+}
+```
+
 ### WHERE PREDICATES
 
 COMPARISON:
@@ -327,6 +504,13 @@ STRING:
 user.Name.Contains("text")      // Contains substring
 user.Name.StartsWith("prefix")  // Starts with
 user.Name.EndsWith("suffix")    // Ends with
+```
+
+LIKE PATTERNS:
+```fsharp
+Sql.like "%@gmail.com" user.Email     // Case-sensitive LIKE
+Sql.ilike "%smith%" user.Name         // Case-insensitive LIKE
+// Patterns: % = any chars, _ = single char
 ```
 
 NESTED FIELDS:
@@ -622,6 +806,87 @@ Execute query expression.
 let q = query { for u in users do where (u.Active = true) take 10 }
 let! results = q.exec(users)
 // or: let! results = users |> Collection.exec q
+```
+
+MODULE: Collection.execHead query users
+Execute query with `head` operator (returns first, throws if empty).
+```fsharp
+let q = query { for u in users do where (u.Active = true) head }
+let! doc = users |> Collection.execHead q
+```
+
+MODULE: Collection.execHeadOrDefault query users
+Execute query with `headOrDefault` (returns first or None).
+```fsharp
+let q = query { for u in users do where (u.Role = "admin") headOrDefault }
+let! result = users |> Collection.execHeadOrDefault q
+```
+
+MODULE: Collection.execLast query users
+Execute query with `last` operator (returns last, throws if empty).
+```fsharp
+let q = query { for u in users do sortBy u.CreatedAt last }
+let! doc = users |> Collection.execLast q
+```
+
+MODULE: Collection.execLastOrDefault query users
+Execute query with `lastOrDefault` (returns last or None).
+```fsharp
+let q = query { for u in users do sortByDescending u.Score lastOrDefault }
+let! result = users |> Collection.execLastOrDefault q
+```
+
+MODULE: Collection.execExactlyOne query users
+Execute query with `exactlyOne` (throws if 0 or >1 results).
+```fsharp
+let q = query { for u in users do where (u.Email = "alice@example.com") exactlyOne }
+let! doc = users |> Collection.execExactlyOne q
+```
+
+MODULE: Collection.execExactlyOneOrDefault query users
+Execute query with `exactlyOneOrDefault` (returns Option, throws if >1).
+```fsharp
+let q = query { for u in users do where (u.Id = targetId) exactlyOneOrDefault }
+let! result = users |> Collection.execExactlyOneOrDefault q
+```
+
+MODULE: Collection.execNth query users
+Execute query with `nth n` (returns nth element, throws if out of range).
+```fsharp
+let q = query { for u in users do sortBy u.Name nth 4 }
+let! doc = users |> Collection.execNth q
+```
+
+MODULE: Collection.execAll query users
+Execute query with `all` predicate (returns bool).
+```fsharp
+let q = query { for u in users do all (u.Active = true) }
+let! allActive = users |> Collection.execAll q  // Returns: bool
+```
+
+MODULE: Collection.execAggregate query users
+Execute aggregate query (minBy, maxBy, sumBy, averageBy).
+```fsharp
+let q = query { for u in users do minBy u.Age }
+let! minAge = users |> Collection.execAggregate q
+```
+
+MODULE: Collection.execAggregateNullable query users
+Execute nullable aggregate (returns Option).
+```fsharp
+let q = query { for p in products do minByNullable p.Price }
+let! minPrice = products |> Collection.execAggregateNullable q
+// Returns: int option
+```
+
+MODULE: Collection.execGroupBy query users
+Execute groupBy query (returns grouped results).
+```fsharp
+let q = query { for u in users do groupBy u.Department }
+let! groups = users |> Collection.execGroupBy q
+// Returns: (string * Doc<User> list) list
+for (dept, deptUsers) in groups do
+    printfn "Department: %s (%d users)" dept (List.length deptUsers)
 ```
 
 INSTANCE: users.Count(filter)
@@ -4721,3 +4986,419 @@ INSTANCE: collection.ExecAsync(query)
         let! results = collection.ExecAsync(q)
         return results
     }
+
+--------------------------------------------------------------------------------
+MODULE: FractalDb.Sql
+--------------------------------------------------------------------------------
+
+SQL helper functions for pattern matching in query expressions.
+These are marker functions that get translated to SQL - they cannot be called at runtime.
+
+FUNCTION: like
+  SQL LIKE pattern matching (case-sensitive).
+  @param pattern: The LIKE pattern with wildcards (%, _, [abc], [^abc]).
+  @param field: The field value to match against (from document property).
+  @returns: bool - Always throws at runtime (marker function for query translation).
+  @throws: InvalidOperationException if called directly at runtime.
+  Note: Use only within query { ... } where clauses. Translated to SQL LIKE.
+  Pattern Wildcards:
+    - % matches zero or more characters
+    - _ matches exactly one character
+    - [abc] matches any single character in the set
+    - [^abc] matches any single character NOT in the set
+  Example:
+    // Starts with "admin"
+    query { for user in users do where (Sql.like "admin%" user.Name) }
+    
+    // Ends with "@gmail.com"
+    query { for user in users do where (Sql.like "%@gmail.com" user.Email) }
+    
+    // Second character is 'e'
+    query { for user in users do where (Sql.like "_e%" user.Name) }
+
+FUNCTION: ilike
+  SQL LIKE pattern matching (case-insensitive).
+  @param pattern: The LIKE pattern with wildcards (%, _, [abc], [^abc]).
+  @param field: The field value to match against (from document property).
+  @returns: bool - Always throws at runtime (marker function for query translation).
+  @throws: InvalidOperationException if called directly at runtime.
+  Note: Use only within query { ... } where clauses. Translated to SQL LIKE COLLATE NOCASE.
+  Case Insensitivity: "ADMIN", "admin", "Admin" all match pattern "admin%".
+  Example:
+    // Case-insensitive email domain matching
+    query { for user in users do where (Sql.ilike "%@GMAIL.COM" user.Email) }
+    
+    // Name contains "smith" (any case)
+    query { for user in users do where (Sql.ilike "%smith%" user.Name) }
+
+--------------------------------------------------------------------------------
+MODULE: FractalDb.Collection (Advanced Query Execution)
+--------------------------------------------------------------------------------
+
+Extended query execution functions for aggregate, element, and grouping operations.
+
+FUNCTION: execAggregate
+  Executes an aggregate operation (MIN, MAX, SUM, AVG, COUNT) on a collection.
+  @param aggregate: The AggregateOp specifying the operation and field.
+  @param filter: Query filter to select documents for aggregation.
+  @param collection: The collection to aggregate.
+  @returns: Task<obj> - The aggregate result (cast to appropriate type).
+  Note: Returns raw value from SQLite. COUNT returns int, others return field type.
+  Example:
+    let! minAge = users |> Collection.execAggregate (AggregateOp.Min "age") Query.Empty
+    let! total = orders |> Collection.execAggregate (AggregateOp.Sum "total") Query.Empty
+
+FUNCTION: execAggregateNullable
+  Executes an aggregate operation that may return NULL.
+  @param aggregate: The AggregateOp specifying the operation and field.
+  @param filter: Query filter to select documents for aggregation.
+  @param collection: The collection to aggregate.
+  @returns: Task<option<obj>> - Some(value) if non-null result, None if NULL.
+  Note: Returns None for empty results or all-NULL fields. Safe for nullable fields.
+  Example:
+    let! result = products |> Collection.execAggregateNullable (AggregateOp.Min "optionalPrice") Query.Empty
+    match result with
+    | Some value -> printfn $"Min price: {Convert.ToDecimal(value)}"
+    | None -> printfn "No prices found"
+
+FUNCTION: execAll
+  Checks if ALL documents matching the filter satisfy a predicate.
+  @param predicate: The query predicate that all documents must satisfy.
+  @param filter: Filter to restrict which documents are checked (use Query.Empty for all).
+  @param collection: The collection to check.
+  @returns: Task<bool> - true if all match, false if any don't. True for empty sets (vacuous truth).
+  SQL: SELECT NOT EXISTS (SELECT 1 FROM collection WHERE filter AND NOT predicate)
+  Performance: O(1) best case (first mismatch), O(n) worst case (all match).
+  Example:
+    let adultFilter = Query.Field("age", FieldOp.Compare(box (CompareOp.Gte 18L)))
+    let! allAdults = users |> Collection.execAll adultFilter Query.Empty
+
+FUNCTION: execFind
+  Finds the first document matching the predicate or throws if not found.
+  @param predicate: The query predicate to match documents against.
+  @param collection: The collection to search.
+  @returns: Task<Document<'T>> - The matching document.
+  @throws: InvalidOperationException if no document matches.
+  SQL: SELECT ... FROM collection WHERE predicate LIMIT 1
+  Note: Similar to F# List.find behavior. Use findOne for option-based result.
+  Example:
+    let emailPredicate = Query.Field("email", FieldOp.Compare(box (CompareOp.Eq "alice@test.com")))
+    let! user = users |> Collection.execFind emailPredicate
+
+FUNCTION: execGroupBy
+  Executes a GROUP BY query and returns grouped results with counts.
+  @param translatedQuery: The TranslatedQuery containing GroupBy field.
+  @param collection: The collection to query.
+  @returns: Task<list<obj * int64>> - List of (key, count) tuples.
+  SQL: SELECT json_extract(body, '$.field') as _key, COUNT(*) as _count FROM ... GROUP BY ...
+  Note: Key is obj - cast to appropriate type. NULL keys are grouped together.
+  Example:
+    let q = query { for u in users do groupBy u.Country }
+    let! results = users |> Collection.execGroupBy q
+    // Returns: [("USA", 150L); ("Canada", 45L); ("UK", 80L)]
+
+FUNCTION: execLast
+  Executes a query and returns the last document by reversing sort order.
+  @param translatedQuery: The TranslatedQuery from a query { } expression.
+  @param collection: The collection to execute against.
+  @returns: Task<Document<'T>> - The last document.
+  @throws: InvalidOperationException if no documents match.
+  IMPORTANT: Requires sortBy clause for consistent ordering.
+  SQL: Reverses ORDER BY direction and applies LIMIT 1.
+  Example:
+    let q = query { for log in logs do sortBy log.Timestamp last }
+    let! lastLog = logs |> Collection.execLast q
+
+FUNCTION: execLastOrDefault
+  Executes a query and returns the last document or None if no results.
+  @param translatedQuery: The TranslatedQuery from a query { } expression.
+  @param collection: The collection to execute against.
+  @returns: Task<option<Document<'T>>> - Some(doc) if found, None if empty.
+  IMPORTANT: Requires sortBy clause for consistent ordering.
+  Example:
+    let q = query { for log in logs do sortBy log.Timestamp lastOrDefault }
+    let! lastLogOpt = logs |> Collection.execLastOrDefault q
+    match lastLogOpt with
+    | Some log -> printfn $"Last: {log.Data.Message}"
+    | None -> printfn "No logs"
+
+FUNCTION: execExactlyOne
+  Executes a query and returns the single matching document.
+  @param translatedQuery: The TranslatedQuery from a query { } expression.
+  @param collection: The collection to execute against.
+  @returns: Task<Document<'T>> - The single document.
+  @throws: InvalidOperationException if 0 or >1 documents match.
+  SQL: Uses LIMIT 2 to efficiently detect multiple matches.
+  Example:
+    let q = query { for user in users do where (user.Email = email) exactlyOne }
+    let! user = users |> Collection.execExactlyOne q
+
+FUNCTION: execExactlyOneOrDefault
+  Executes a query and returns the single matching document or None.
+  @param translatedQuery: The TranslatedQuery from a query { } expression.
+  @param collection: The collection to execute against.
+  @returns: Task<option<Document<'T>>> - Some(doc) if exactly one, None if zero.
+  @throws: InvalidOperationException if >1 documents match.
+  SQL: Uses LIMIT 2 to efficiently detect multiple matches.
+  Example:
+    let q = query { for user in users do where (user.Email = email) exactlyOneOrDefault }
+    let! userOpt = users |> Collection.execExactlyOneOrDefault q
+
+FUNCTION: execNth
+  Executes a query and returns the document at the specified index (0-based).
+  @param index: The 0-based index of the document to retrieve.
+  @param translatedQuery: The TranslatedQuery from a query { } expression.
+  @param collection: The collection to execute against.
+  @returns: Task<Document<'T>> - The document at the index.
+  @throws: ArgumentOutOfRangeException if index < 0 or out of bounds.
+  IMPORTANT: Requires sortBy clause for consistent ordering.
+  SQL: SELECT ... ORDER BY ... LIMIT 1 OFFSET n
+  0-Based Indexing: nth 0 = first, nth 1 = second, nth (n-1) = nth element.
+  Example:
+    let q = query { for user in users do sortBy user.Name }
+    let! sixthUser = users |> Collection.execNth 5 q  // 6th user (0-indexed)
+
+--------------------------------------------------------------------------------
+MODULE: FractalDb.QueryExpr.QueryBuilder (Advanced Operators)
+--------------------------------------------------------------------------------
+
+Custom query operators for advanced query expressions.
+
+OPERATOR: sortByNullable
+  Ascending sort with NULL values last.
+  @param keySelector: Lambda selecting the nullable field to sort by.
+  SQL: ORDER BY field IS NULL, field ASC
+  Note: Unlike regular sortBy (NULLs first), sortByNullable places NULLs at end.
+  Example:
+    query {
+        for user in users do
+        sortByNullable user.MiddleName  // Non-NULL names first, then NULLs
+    }
+
+OPERATOR: sortByNullableDescending
+  Descending sort with NULL values last.
+  @param keySelector: Lambda selecting the nullable field to sort by.
+  SQL: ORDER BY field IS NULL, field DESC
+  Note: Highest values first, NULL values at end.
+  Example:
+    query {
+        for player in players do
+        sortByNullableDescending player.HighScore  // Highest scores first, unscored last
+    }
+
+OPERATOR: thenByNullable
+  Secondary ascending sort with NULL values last.
+  @param keySelector: Lambda selecting the secondary nullable field.
+  Note: Must follow a primary sort operation (sortBy/sortByDescending/sortByNullable).
+  Example:
+    query {
+        for employee in employees do
+        sortBy employee.Department
+        thenByNullable employee.Nickname  // Sort by dept, then nickname (NULLs last)
+    }
+
+OPERATOR: thenByNullableDescending
+  Secondary descending sort with NULL values last.
+  @param keySelector: Lambda selecting the secondary nullable field.
+  Note: Must follow a primary sort operation.
+  Example:
+    query {
+        for user in users do
+        sortBy user.Status
+        thenByNullableDescending user.LastLogin  // Most recent activity first, never-active last
+    }
+
+OPERATOR: distinct
+  Removes duplicate results from the query.
+  SQL: SELECT DISTINCT ...
+  Note: Works best with single field or tuple projections. O(n log n) or O(n) performance.
+  Example:
+    query {
+        for user in users do
+        select user.Country
+        distinct  // Unique countries only
+    }
+
+OPERATOR: minBy
+  Finds the minimum value of a field.
+  @param keySelector: Lambda selecting the field to find minimum of.
+  SQL: SELECT MIN(json_extract(body, '$.field')) FROM ...
+  @returns: 'Key - The minimum value.
+  Example:
+    query { for product in products do minBy product.Price }  // Lowest price
+
+OPERATOR: maxBy
+  Finds the maximum value of a field.
+  @param keySelector: Lambda selecting the field to find maximum of.
+  SQL: SELECT MAX(json_extract(body, '$.field')) FROM ...
+  @returns: 'Key - The maximum value.
+  Example:
+    query { for user in users do maxBy user.Age }  // Oldest user's age
+
+OPERATOR: sumBy
+  Calculates the sum of a numeric field.
+  @param keySelector: Lambda selecting the numeric field to sum.
+  SQL: SELECT SUM(json_extract(body, '$.field')) FROM ...
+  @returns: 'Key - The sum of all values.
+  Example:
+    query { for order in orders do sumBy order.Total }  // Total revenue
+
+OPERATOR: averageBy
+  Calculates the average of a numeric field.
+  @param keySelector: Lambda selecting the numeric field to average.
+  SQL: SELECT AVG(json_extract(body, '$.field')) FROM ...
+  @returns: float - The average value (always returns float).
+  Example:
+    query { for product in products do averageBy product.Rating }  // Average rating
+
+OPERATOR: minByNullable
+  Finds the minimum value of a nullable field.
+  @param keySelector: Lambda selecting the nullable field.
+  SQL: SELECT MIN(...) - ignores NULL values.
+  @returns: Nullable<'Key> - The minimum, or null if all values are NULL.
+  Example:
+    query { for user in users do minByNullable user.OptionalScore }
+
+OPERATOR: maxByNullable
+  Finds the maximum value of a nullable field.
+  @param keySelector: Lambda selecting the nullable field.
+  SQL: SELECT MAX(...) - ignores NULL values.
+  @returns: Nullable<'Key> - The maximum, or null if all values are NULL.
+  Example:
+    query { for user in users do maxByNullable user.OptionalScore }
+
+OPERATOR: sumByNullable
+  Calculates the sum of a nullable numeric field.
+  @param keySelector: Lambda selecting the nullable field to sum.
+  SQL: SELECT SUM(...) - ignores NULL values.
+  @returns: Nullable<'Key> - The sum, or null if all values are NULL.
+  Example:
+    query { for order in orders do sumByNullable order.OptionalDiscount }
+
+OPERATOR: averageByNullable
+  Calculates the average of a nullable numeric field.
+  @param keySelector: Lambda selecting the nullable field to average.
+  SQL: SELECT AVG(...) - ignores NULL values.
+  @returns: Nullable<float> - The average, or null if all values are NULL.
+  Example:
+    query { for product in products do averageByNullable product.OptionalRating }
+
+OPERATOR: groupBy
+  Groups documents by a field for aggregation.
+  @param keySelector: Lambda selecting the field to group by.
+  Note: Use with Collection.execGroupBy to get (key, count) results.
+  SQL: SELECT field as _key, COUNT(*) as _count FROM ... GROUP BY field
+  Example:
+    let q = query { for user in users do groupBy user.Country }
+    let! results = users |> Collection.execGroupBy q
+
+OPERATOR: all
+  Checks if ALL documents match a predicate.
+  @param predicate: Lambda defining the condition all documents must satisfy.
+  @returns: bool - true if all match, false if any don't. True for empty sets.
+  SQL: SELECT NOT EXISTS (SELECT 1 FROM ... WHERE NOT predicate)
+  Example:
+    query { for user in users do all (user.Age >= 18) }  // All users adults?
+
+OPERATOR: find
+  Retrieves the first document matching a predicate.
+  @param predicate: Lambda defining the search condition.
+  @returns: 'T - The first matching document.
+  @throws: InvalidOperationException if no document matches.
+  SQL: SELECT ... WHERE predicate LIMIT 1
+  Note: Equivalent to "where predicate + head" but more concise.
+  Example:
+    query { for user in users do find (user.Email = "alice@example.com") }
+
+OPERATOR: last
+  Retrieves the last document from a sorted query.
+  @returns: 'T - The last document.
+  @throws: InvalidOperationException if no results.
+  IMPORTANT: Requires sortBy clause for consistent ordering.
+  SQL: Reverses ORDER BY and applies LIMIT 1.
+  Example:
+    query { for log in logs do sortBy log.Timestamp last }  // Most recent log
+
+OPERATOR: lastOrDefault
+  Safely retrieves the last document from a sorted query.
+  @returns: 'T option - Some(document) if found, None if empty.
+  IMPORTANT: Requires sortBy clause for consistent ordering.
+  Example:
+    query { for log in logs do sortBy log.Timestamp lastOrDefault }
+
+OPERATOR: exactlyOne
+  Retrieves exactly one matching document.
+  @returns: 'T - The single matching document.
+  @throws: InvalidOperationException if 0 or >1 results.
+  SQL: Uses LIMIT 2 to efficiently detect multiple matches.
+  Example:
+    query { for user in users do where (user.Email = email) exactlyOne }
+
+OPERATOR: exactlyOneOrDefault
+  Retrieves exactly one matching document or None.
+  @returns: 'T option - Some(doc) if exactly one, None if zero.
+  @throws: InvalidOperationException if >1 results.
+  Example:
+    query { for user in users do where (user.Email = email) exactlyOneOrDefault }
+
+OPERATOR: nth
+  Retrieves the document at a specific index (0-based).
+  @param index: The 0-based index of the document to retrieve.
+  @returns: 'T - The document at the index.
+  @throws: ArgumentOutOfRangeException if index < 0 or out of bounds.
+  IMPORTANT: Requires sortBy clause for consistent ordering.
+  SQL: SELECT ... ORDER BY ... LIMIT 1 OFFSET n
+  Example:
+    query { for player in players do sortByDescending player.Score nth 1 }  // 2nd highest
+
+--------------------------------------------------------------------------------
+TYPE: FractalDb.Types.AggregateOp
+--------------------------------------------------------------------------------
+
+Discriminated union representing aggregate operations for Collection.execAggregate.
+
+CASE: Min field
+  Finds the minimum value of the specified field.
+  @param field: The field path (e.g., "price", "age").
+
+CASE: Max field
+  Finds the maximum value of the specified field.
+  @param field: The field path (e.g., "price", "age").
+
+CASE: Sum field
+  Calculates the sum of the specified numeric field.
+  @param field: The field path (e.g., "total", "quantity").
+
+CASE: Avg field
+  Calculates the average of the specified numeric field.
+  @param field: The field path (e.g., "rating", "score").
+
+CASE: Count
+  Counts matching documents.
+  Note: Does not require a field - counts all matching rows.
+
+Example:
+  let! minPrice = products |> Collection.execAggregate (AggregateOp.Min "price") Query.Empty
+  let! count = orders |> Collection.execAggregate AggregateOp.Count (Query.Field("status", ...))
+
+--------------------------------------------------------------------------------
+TYPE: FractalDb.QueryExpr.SortDirection (Extended)
+--------------------------------------------------------------------------------
+
+Discriminated union for sort direction with NULL handling variants.
+
+CASE: Asc
+  Ascending sort (default SQLite behavior: NULLs first).
+
+CASE: Desc
+  Descending sort (default SQLite behavior: NULLs first).
+
+CASE: AscNullsLast
+  Ascending sort with NULL values placed at the end.
+  SQL: ORDER BY field IS NULL, field ASC
+  Note: Used by sortByNullable operator.
+
+CASE: DescNullsLast
+  Descending sort with NULL values placed at the end.
+  SQL: ORDER BY field IS NULL, field DESC
+  Note: Used by sortByNullableDescending operator.

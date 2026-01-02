@@ -9,6 +9,129 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## FractalDb (F# Port)
 
+### [1.4.0] - 2026-01-01
+
+#### Added
+
+##### Query Expression Expansion (5 Phases)
+
+**Phase 1: Pattern Matching & Distinct**
+- **`Sql.like` / `Sql.ilike`** - SQL LIKE pattern matching with wildcards:
+  ```fsharp
+  query {
+      for user in users do
+      where (Sql.like "%@gmail.com" user.Email)       // Case-sensitive
+      where (Sql.ilike "%smith%" user.Name)           // Case-insensitive
+  }
+  ```
+- **`distinct`** - Remove duplicate rows from results:
+  ```fsharp
+  query {
+      for product in products do
+      select product.Category
+      distinct
+  }
+  ```
+- **`all`** - Check if all documents match a predicate:
+  ```fsharp
+  query { for user in users do all (user.Active = true) }
+  let! allActive = users |> Collection.execAll q  // Returns: bool
+  ```
+- **`find`** - Find first document matching predicate (throws if none):
+  ```fsharp
+  query { for user in users do find (user.Email = "bob@example.com") }
+  ```
+
+**Phase 2: Aggregate Operators**
+- **`minBy` / `maxBy` / `sumBy` / `averageBy`** - Compute aggregates:
+  ```fsharp
+  query {
+      for order in orders do
+      where (order.Status = "completed")
+      sumBy order.Total
+  }
+  let! total = orders |> Collection.execAggregate q
+  ```
+- **`minByNullable` / `maxByNullable` / `sumByNullable` / `averageByNullable`** - Nullable variants returning `Option`:
+  ```fsharp
+  query { for product in products do minByNullable product.Price }
+  let! minPrice = products |> Collection.execAggregateNullable q
+  // Returns: int option (None if all NULL)
+  ```
+- **`Collection.execAggregate`** - Execute aggregate queries
+- **`Collection.execAggregateNullable`** - Execute nullable aggregate queries
+
+**Phase 3: Grouping**
+- **`groupBy`** - Group documents by field value:
+  ```fsharp
+  query { for user in users do groupBy user.Department }
+  let! groups = users |> Collection.execGroupBy q
+  // Returns: (string * Doc<User> list) list
+  ```
+- **`Collection.execGroupBy`** - Execute groupBy queries
+
+**Phase 4: Element Operators**
+- **`last` / `lastOrDefault`** - Get last element (requires sorting):
+  ```fsharp
+  query { for user in users do sortBy user.CreatedAt last }
+  let! lastUser = users |> Collection.execLast q
+  ```
+- **`exactlyOne` / `exactlyOneOrDefault`** - Get exactly one element:
+  ```fsharp
+  query { for user in users do where (user.Email = "alice@test.com") exactlyOne }
+  let! user = users |> Collection.execExactlyOne q  // Throws if 0 or >1
+  ```
+- **`nth`** - Get nth element (0-indexed):
+  ```fsharp
+  query { for user in users do sortBy user.Name nth 4 }
+  let! fifthUser = users |> Collection.execNth q
+  ```
+- **`Collection.execLast` / `execLastOrDefault`**
+- **`Collection.execExactlyOne` / `execExactlyOneOrDefault`**
+- **`Collection.execNth`**
+
+**Phase 5: Nullable Sorting**
+- **`sortByNullable` / `sortByNullableDescending`** - Sort with NULLs last:
+  ```fsharp
+  query {
+      for product in products do
+      sortByNullable product.Price          // NULLs appear last
+      sortByNullableDescending product.Rating
+  }
+  ```
+- **`thenByNullable` / `thenByNullableDescending`** - Secondary nullable sorting:
+  ```fsharp
+  query {
+      for product in products do
+      sortBy product.Category
+      thenByNullable product.Price          // Secondary sort, NULLs last
+  }
+  ```
+- Generates SQL: `ORDER BY field IS NULL, field ASC/DESC`
+
+##### New Execution Functions
+
+| Function | Input Query | Return Type |
+|----------|-------------|-------------|
+| `execHead` | `head` | `Doc<'T>` |
+| `execHeadOrDefault` | `headOrDefault` | `Doc<'T> option` |
+| `execLast` | `last` | `Doc<'T>` |
+| `execLastOrDefault` | `lastOrDefault` | `Doc<'T> option` |
+| `execExactlyOne` | `exactlyOne` | `Doc<'T>` |
+| `execExactlyOneOrDefault` | `exactlyOneOrDefault` | `Doc<'T> option` |
+| `execNth` | `nth n` | `Doc<'T>` |
+| `execAll` | `all` | `bool` |
+| `execAggregate` | aggregate | `'T` |
+| `execAggregateNullable` | nullable aggregate | `'T option` |
+| `execGroupBy` | `groupBy` | `('K * Doc<'T> list) list` |
+
+#### Test Coverage
+
+- **710 tests** (up from 622)
+- Added comprehensive integration tests for all new operators
+
+---
+
 ### [1.3.0] - 2025-01-01
 
 #### Added

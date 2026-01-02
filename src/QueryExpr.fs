@@ -39,6 +39,26 @@ type SortDirection =
     /// </summary>
     | Desc
 
+    /// <summary>
+    /// Ascending order with NULL values sorted last.
+    /// </summary>
+    /// <remarks>
+    /// SQLite sorts NULLs first by default. This variant generates SQL that
+    /// ensures NULL values appear at the end of results:
+    /// ORDER BY field IS NULL, field ASC
+    /// </remarks>
+    | AscNullsLast
+
+    /// <summary>
+    /// Descending order with NULL values sorted last.
+    /// </summary>
+    /// <remarks>
+    /// SQLite sorts NULLs first by default. This variant generates SQL that
+    /// ensures NULL values appear at the end of results:
+    /// ORDER BY field IS NULL, field DESC
+    /// </remarks>
+    | DescNullsLast
+
 /// <summary>
 /// Projection configuration for controlling which fields are returned in query results.
 /// </summary>
@@ -359,6 +379,68 @@ type TranslatedQuery<'T> =
         /// Projections reduce memory usage and improve performance by excluding unused fields.
         /// </remarks>
         Projection: Projection
+
+        /// <summary>
+        /// Whether to return only distinct (unique) results.
+        /// </summary>
+        ///
+        /// <remarks>
+        /// When true, duplicate documents are removed from the result set.
+        /// Corresponds to the 'distinct' operator in query expressions.
+        ///
+        /// Note: Distinctness is determined by the entire document or projected fields,
+        /// not by a specific field. For field-level uniqueness, use groupBy.
+        ///
+        /// Performance note: DISTINCT requires sorting/hashing all results,
+        /// which may impact performance on large result sets.
+        /// </remarks>
+        Distinct: bool
+
+        /// <summary>
+        /// Optional aggregate operation to perform on the query results.
+        /// </summary>
+        ///
+        /// <remarks>
+        /// When set, the query returns a single scalar value instead of documents.
+        /// Corresponds to aggregate operators in query expressions:
+        /// - minBy → AggregateOp.Min
+        /// - maxBy → AggregateOp.Max
+        /// - sumBy → AggregateOp.Sum
+        /// - averageBy → AggregateOp.Avg
+        /// - count → AggregateOp.Count
+        ///
+        /// None means the query returns documents normally.
+        /// Some(aggregate) means the query returns a scalar value.
+        ///
+        /// Note: When Aggregate is Some, other query options (Sort, Skip, Take, Projection)
+        /// are typically ignored or have undefined behavior.
+        /// </remarks>
+        Aggregate: option<FractalDb.Types.AggregateOp>
+
+        /// <summary>
+        /// Optional field to group results by.
+        /// </summary>
+        ///
+        /// <remarks>
+        /// When set, the query groups documents by the specified field.
+        /// Corresponds to the 'groupBy' operator in query expressions.
+        ///
+        /// SQL Translation:
+        /// - GROUP BY json_extract(body, '$.field')
+        ///
+        /// When GroupBy is Some, the query returns grouped results with aggregate values
+        /// instead of individual documents.
+        ///
+        /// Example:
+        /// <code>
+        /// query {
+        ///     for user in users do
+        ///     groupBy user.Country
+        /// }
+        /// // Returns: [("USA", 150); ("Canada", 45); ("UK", 80)]
+        /// </code>
+        /// </remarks>
+        GroupBy: option<string>
     }
 
 
@@ -480,14 +562,20 @@ type TranslatedQuery<'T> =
               OrderBy = o1
               Skip = s1
               Take = t1
-              Projection = p1 } =
+              Projection = p1
+              Distinct = d1
+              Aggregate = a1
+              GroupBy = g1 } =
             this
 
         let { Where = w2
               OrderBy = o2
               Skip = s2
               Take = t2
-              Projection = p2 } =
+              Projection = p2
+              Distinct = d2
+              Aggregate = a2
+              GroupBy = g2 } =
             other
 
         // Merge Where clauses with AND
@@ -518,12 +606,30 @@ type TranslatedQuery<'T> =
             | SelectAll -> p1
             | _ -> p2
 
+        // Distinct: true if either query requests distinct
+        let mergedDistinct = d1 || d2
+
+        // Aggregate: later non-None value wins
+        let mergedAggregate =
+            match a2 with
+            | Some _ -> a2
+            | None -> a1
+
+        // GroupBy: later non-None value wins
+        let mergedGroupBy =
+            match g2 with
+            | Some _ -> g2
+            | None -> g1
+
         { Source = this.Source
           Where = mergedWhere
           OrderBy = mergedOrderBy
           Skip = mergedSkip
           Take = mergedTake
-          Projection = mergedProjection }
+          Projection = mergedProjection
+          Distinct = mergedDistinct
+          Aggregate = mergedAggregate
+          GroupBy = mergedGroupBy }
 
     /// <summary>
     /// Composes two queries using the &lt;+&gt; operator.
@@ -1405,6 +1511,284 @@ type QueryBuilder() =
         Unchecked.defaultof<_>
 
     /// <summary>
+    /// Enables 'sortByNullable field' syntax for ascending sort with NULL values last.
+    /// </summary>
+    ///
+    /// <param name="source">The source sequence from previous operations.</param>
+    /// <param name="keySelector">
+    /// Lambda expression selecting the nullable field to sort by (e.g., fun x -> x.MiddleName).
+    /// </param>
+    ///
+    /// <typeparam name="'T">The document type being sorted.</typeparam>
+    /// <typeparam name="'Key">The type of the sort key field (typically option type).</typeparam>
+    ///
+    /// <returns>
+    /// Unchecked.defaultof (never returns, only for type inference).
+    /// </returns>
+    ///
+    /// <remarks>
+    /// This member is NEVER EXECUTED. The sortByNullable operation is captured in the quotation
+    /// and translated to SQL with NULL handling.
+    ///
+    /// <para><strong>SQL Translation:</strong></para>
+    ///
+    /// sortByNullable generates SQL that places NULL values at the end:
+    /// <code>
+    /// query {
+    ///     for user in users do
+    ///     sortByNullable user.MiddleName
+    /// }
+    /// // Translates to: ORDER BY middle_name IS NULL, middle_name ASC
+    /// </code>
+    ///
+    /// <para><strong>vs. Regular sortBy:</strong></para>
+    ///
+    /// SQLite's default behavior sorts NULLs first in ascending order.
+    /// Use sortByNullable when you want:
+    /// - Non-NULL values first, sorted ascending
+    /// - NULL values at the end
+    ///
+    /// <para><strong>Use Cases:</strong></para>
+    ///
+    /// - Optional fields: "Sort users by middle name, with missing names last"
+    /// - Nullable dates: "Sort by completion date, incomplete items last"
+    /// - Optional ratings: "Sort by rating, unrated items last"
+    /// </remarks>
+    ///
+    /// <example>
+    /// <code>
+    /// // Sort by optional middle name, NULLs last
+    /// query {
+    ///     for user in users do
+    ///     sortByNullable user.MiddleName
+    /// }
+    /// // SQL: ORDER BY middle_name IS NULL, middle_name ASC
+    /// // Result: [Alice, Bob, Charlie, NULL, NULL, NULL]
+    ///
+    /// // Multi-field sort with nullable
+    /// query {
+    ///     for task in tasks do
+    ///     sortByNullable task.CompletedAt
+    ///     thenBy task.CreatedAt
+    /// }
+    /// // Completed tasks first (by date), then incomplete tasks
+    /// </code>
+    /// </example>
+    [<CustomOperation("sortByNullable", MaintainsVariableSpace = true)>]
+    member _.SortByNullable
+        (source: TranslatedQuery<'T>, [<ProjectionParameter>] keySelector: 'T -> 'Key)
+        : TranslatedQuery<'T> =
+        Unchecked.defaultof<_>
+
+    /// <summary>
+    /// Enables 'sortByNullableDescending field' syntax for descending sort with NULL values last.
+    /// </summary>
+    ///
+    /// <param name="source">The source sequence from previous operations.</param>
+    /// <param name="keySelector">
+    /// Lambda expression selecting the nullable field to sort by (e.g., fun x -> x.Score).
+    /// </param>
+    ///
+    /// <typeparam name="'T">The document type being sorted.</typeparam>
+    /// <typeparam name="'Key">The type of the sort key field (typically option type).</typeparam>
+    ///
+    /// <returns>
+    /// Unchecked.defaultof (never returns, only for type inference).
+    /// </returns>
+    ///
+    /// <remarks>
+    /// This member is NEVER EXECUTED. The sortByNullableDescending operation is captured
+    /// in the quotation and translated to SQL with NULL handling.
+    ///
+    /// <para><strong>SQL Translation:</strong></para>
+    ///
+    /// sortByNullableDescending generates SQL that places NULL values at the end:
+    /// <code>
+    /// query {
+    ///     for user in users do
+    ///     sortByNullableDescending user.Score
+    /// }
+    /// // Translates to: ORDER BY score IS NULL, score DESC
+    /// </code>
+    ///
+    /// <para><strong>vs. Regular sortByDescending:</strong></para>
+    ///
+    /// SQLite's default behavior sorts NULLs first regardless of sort direction.
+    /// Use sortByNullableDescending when you want:
+    /// - Non-NULL values first, sorted descending
+    /// - NULL values at the end
+    ///
+    /// <para><strong>Use Cases:</strong></para>
+    ///
+    /// - Top scores: "Highest scores first, unscored items last"
+    /// - Recent activity: "Most recent first, never-active users last"
+    /// - Priority ranking: "Highest priority first, unassigned last"
+    /// </remarks>
+    ///
+    /// <example>
+    /// <code>
+    /// // Sort by optional score descending, NULLs last
+    /// query {
+    ///     for player in players do
+    ///     sortByNullableDescending player.HighScore
+    /// }
+    /// // SQL: ORDER BY high_score IS NULL, high_score DESC
+    /// // Result: [1000, 900, 800, NULL, NULL]
+    ///
+    /// // Leaderboard with unranked players last
+    /// query {
+    ///     for player in players do
+    ///     sortByNullableDescending player.Rank
+    ///     take 100
+    /// }
+    /// </code>
+    /// </example>
+    [<CustomOperation("sortByNullableDescending", MaintainsVariableSpace = true)>]
+    member _.SortByNullableDescending
+        (source: TranslatedQuery<'T>, [<ProjectionParameter>] keySelector: 'T -> 'Key)
+        : TranslatedQuery<'T> =
+        Unchecked.defaultof<_>
+
+    /// <summary>
+    /// Enables 'thenByNullable field' syntax for secondary ascending sort with NULL values last.
+    /// </summary>
+    ///
+    /// <param name="source">The source sequence with existing sort order.</param>
+    /// <param name="keySelector">
+    /// Lambda expression selecting the secondary nullable field to sort by.
+    /// </param>
+    ///
+    /// <typeparam name="'T">The document type being sorted.</typeparam>
+    /// <typeparam name="'Key">The type of the sort key field (typically option type).</typeparam>
+    ///
+    /// <returns>
+    /// Unchecked.defaultof (never returns, only for type inference).
+    /// </returns>
+    ///
+    /// <remarks>
+    /// This member is NEVER EXECUTED. The thenByNullable operation is captured in the quotation
+    /// and translated to SQL with NULL handling for secondary sort.
+    ///
+    /// <para><strong>SQL Translation:</strong></para>
+    ///
+    /// thenByNullable appends to existing ORDER BY with NULL handling:
+    /// <code>
+    /// query {
+    ///     for user in users do
+    ///     sortBy user.Department
+    ///     thenByNullable user.MiddleName
+    /// }
+    /// // Translates to: ORDER BY department ASC, middle_name IS NULL, middle_name ASC
+    /// </code>
+    ///
+    /// <para><strong>Must Follow:</strong></para>
+    ///
+    /// thenByNullable must follow a primary sort operation:
+    /// - sortBy / sortByDescending
+    /// - sortByNullable / sortByNullableDescending
+    /// - Another thenBy variant
+    ///
+    /// <para><strong>Use Cases:</strong></para>
+    ///
+    /// - Secondary sort on optional field: "Sort by dept, then by nickname (missing last)"
+    /// - Tie-breaking with nullable: "Sort by status, then by completion date (incomplete last)"
+    /// </remarks>
+    ///
+    /// <example>
+    /// <code>
+    /// // Sort by department, then by optional nickname (NULLs last)
+    /// query {
+    ///     for employee in employees do
+    ///     sortBy employee.Department
+    ///     thenByNullable employee.Nickname
+    /// }
+    /// // SQL: ORDER BY department ASC, nickname IS NULL, nickname ASC
+    ///
+    /// // Multi-field sort with nullable secondary
+    /// query {
+    ///     for task in tasks do
+    ///     sortBy task.Priority
+    ///     thenByNullable task.AssignedTo
+    ///     thenBy task.CreatedAt
+    /// }
+    /// </code>
+    /// </example>
+    [<CustomOperation("thenByNullable", MaintainsVariableSpace = true)>]
+    member _.ThenByNullable
+        (source: TranslatedQuery<'T>, [<ProjectionParameter>] keySelector: 'T -> 'Key)
+        : TranslatedQuery<'T> =
+        Unchecked.defaultof<_>
+
+    /// <summary>
+    /// Enables 'thenByNullableDescending field' syntax for secondary descending sort with NULL values last.
+    /// </summary>
+    ///
+    /// <param name="source">The source sequence with existing sort order.</param>
+    /// <param name="keySelector">
+    /// Lambda expression selecting the secondary nullable field to sort by.
+    /// </param>
+    ///
+    /// <typeparam name="'T">The document type being sorted.</typeparam>
+    /// <typeparam name="'Key">The type of the sort key field (typically option type).</typeparam>
+    ///
+    /// <returns>
+    /// Unchecked.defaultof (never returns, only for type inference).
+    /// </returns>
+    ///
+    /// <remarks>
+    /// This member is NEVER EXECUTED. The thenByNullableDescending operation is captured in the quotation
+    /// and translated to SQL with NULL handling for secondary descending sort.
+    ///
+    /// <para><strong>SQL Translation:</strong></para>
+    ///
+    /// thenByNullableDescending appends to existing ORDER BY with NULL handling:
+    /// <code>
+    /// query {
+    ///     for user in users do
+    ///     sortBy user.Status
+    ///     thenByNullableDescending user.LastLogin
+    /// }
+    /// // Translates to: ORDER BY status ASC, last_login IS NULL, last_login DESC
+    /// </code>
+    ///
+    /// <para><strong>Must Follow:</strong></para>
+    ///
+    /// thenByNullableDescending must follow a primary sort operation:
+    /// - sortBy / sortByDescending
+    /// - sortByNullable / sortByNullableDescending
+    /// - Another thenBy variant
+    ///
+    /// <para><strong>Use Cases:</strong></para>
+    ///
+    /// - Recent activity secondary sort: "Sort by status, most recently active first (never-active last)"
+    /// - High score tie-breaker: "Sort by level, then highest score (unscored last)"
+    /// </remarks>
+    ///
+    /// <example>
+    /// <code>
+    /// // Sort by status, then by most recent login (never-logged-in last)
+    /// query {
+    ///     for user in users do
+    ///     sortBy user.Status
+    ///     thenByNullableDescending user.LastLogin
+    /// }
+    /// // SQL: ORDER BY status ASC, last_login IS NULL, last_login DESC
+    ///
+    /// // Leaderboard: primary by level, secondary by highest optional score
+    /// query {
+    ///     for player in players do
+    ///     sortByDescending player.Level
+    ///     thenByNullableDescending player.OptionalBonusScore
+    /// }
+    /// </code>
+    /// </example>
+    [<CustomOperation("thenByNullableDescending", MaintainsVariableSpace = true)>]
+    member _.ThenByNullableDescending
+        (source: TranslatedQuery<'T>, [<ProjectionParameter>] keySelector: 'T -> 'Key)
+        : TranslatedQuery<'T> =
+        Unchecked.defaultof<_>
+
+    /// <summary>
     /// Enables 'take n' syntax to limit the number of results returned.
     /// </summary>
     ///
@@ -1715,6 +2099,554 @@ type QueryBuilder() =
         Unchecked.defaultof<_>
 
     /// <summary>
+    /// Enables 'distinct' syntax to remove duplicate results.
+    /// </summary>
+    ///
+    /// <param name="source">The source sequence from previous operations.</param>
+    ///
+    /// <typeparam name="'T">The document type.</typeparam>
+    ///
+    /// <returns>
+    /// TranslatedQuery&lt;'T&gt; with Distinct = true.
+    /// Returns Unchecked.defaultof (never executes, only for type inference).
+    /// </returns>
+    ///
+    /// <remarks>
+    /// This member is NEVER EXECUTED. The distinct flag is captured in the quotation
+    /// and stored in TranslatedQuery.Distinct.
+    ///
+    /// <para><strong>SQL Translation:</strong></para>
+    ///
+    /// distinct is translated to SQL SELECT DISTINCT:
+    /// <code>
+    /// query {
+    ///     for user in users do
+    ///     select user.Country
+    ///     distinct
+    /// }
+    /// // Translates to: SELECT DISTINCT json_extract(body, '$.country') FROM users
+    /// </code>
+    ///
+    /// <para><strong>Usage with Projections:</strong></para>
+    ///
+    /// distinct works best with single field or tuple projections:
+    /// - Single field: Returns unique values of that field
+    /// - Full document: Returns documents with unique _id, body, timestamps
+    /// - Tuple: Returns unique combinations of projected fields
+    ///
+    /// <para><strong>Performance:</strong></para>
+    ///
+    /// DISTINCT requires SQLite to sort or hash all results to find duplicates:
+    /// - O(n log n) with sorting
+    /// - O(n) with hashing (typical)
+    ///
+    /// For large result sets, consider if you really need DISTINCT or if
+    /// proper data modeling would eliminate duplicates naturally.
+    ///
+    /// <para><strong>Order Matters:</strong></para>
+    ///
+    /// distinct is typically placed AFTER select to specify which fields
+    /// should be considered for uniqueness:
+    /// <code>
+    /// // Get unique countries
+    /// select user.Country
+    /// distinct
+    ///
+    /// // Get unique (city, state) pairs
+    /// select (user.City, user.State)
+    /// distinct
+    /// </code>
+    /// </remarks>
+    ///
+    /// <example>
+    /// <code>
+    /// // Get unique countries
+    /// query {
+    ///     for user in users do
+    ///     select user.Country
+    ///     distinct
+    /// }
+    /// // Returns: ["USA"; "Canada"; "UK"] (no duplicates)
+    ///
+    /// // Unique status values for filtered set
+    /// query {
+    ///     for order in orders do
+    ///     where (order.Year = 2024)
+    ///     select order.Status
+    ///     distinct
+    /// }
+    /// // Returns: ["pending"; "shipped"; "delivered"]
+    ///
+    /// // Unique category/brand combinations
+    /// query {
+    ///     for product in products do
+    ///     select (product.Category, product.Brand)
+    ///     distinct
+    /// }
+    /// // Returns: [("Electronics", "Apple"); ("Electronics", "Samsung"); ...]
+    /// </code>
+    /// </example>
+    [<CustomOperation("distinct", MaintainsVariableSpace = true)>]
+    member _.Distinct(source: TranslatedQuery<'T>) : TranslatedQuery<'T> = Unchecked.defaultof<_>
+
+    /// <summary>
+    /// Enables 'minBy field' syntax to find the minimum value of a field.
+    /// </summary>
+    ///
+    /// <param name="source">The source sequence from previous operations.</param>
+    /// <param name="keySelector">
+    /// Lambda expression selecting the field to find minimum of (e.g., fun x -> x.Age).
+    /// </param>
+    ///
+    /// <typeparam name="'T">The document type.</typeparam>
+    /// <typeparam name="'Key">The type of the field being aggregated.</typeparam>
+    ///
+    /// <returns>
+    /// 'Key - The minimum value of the specified field.
+    /// Returns Unchecked.defaultof (never executes, only for type inference).
+    /// </returns>
+    ///
+    /// <remarks>
+    /// This member is NEVER EXECUTED. The minBy operation is captured in the quotation
+    /// and translated to SQL MIN() aggregate.
+    ///
+    /// <para><strong>SQL Translation:</strong></para>
+    /// <code>
+    /// query {
+    ///     for product in products do
+    ///     minBy product.Price
+    /// }
+    /// // Translates to: SELECT MIN(json_extract(body, '$.price')) FROM products
+    /// </code>
+    ///
+    /// <para><strong>Return Value:</strong></para>
+    /// - Returns the minimum value of the field across all matching documents
+    /// - Returns null/default if no documents match the filter
+    /// - Works with numeric fields, strings (lexicographic), and dates
+    /// </remarks>
+    ///
+    /// <example>
+    /// <code>
+    /// // Find lowest price
+    /// query {
+    ///     for product in products do
+    ///     minBy product.Price
+    /// }
+    ///
+    /// // Find youngest user
+    /// query {
+    ///     for user in users do
+    ///     where (user.Active = true)
+    ///     minBy user.Age
+    /// }
+    /// </code>
+    /// </example>
+    [<CustomOperation("minBy")>]
+    member _.MinBy(source: TranslatedQuery<'T>, [<ProjectionParameter>] keySelector: 'T -> 'Key) : 'Key =
+        Unchecked.defaultof<_>
+
+    /// <summary>
+    /// Enables 'maxBy field' syntax to find the maximum value of a field.
+    /// </summary>
+    ///
+    /// <param name="source">The source sequence from previous operations.</param>
+    /// <param name="keySelector">
+    /// Lambda expression selecting the field to find maximum of (e.g., fun x -> x.Age).
+    /// </param>
+    ///
+    /// <typeparam name="'T">The document type.</typeparam>
+    /// <typeparam name="'Key">The type of the field being aggregated.</typeparam>
+    ///
+    /// <returns>
+    /// 'Key - The maximum value of the specified field.
+    /// Returns Unchecked.defaultof (never executes, only for type inference).
+    /// </returns>
+    ///
+    /// <remarks>
+    /// This member is NEVER EXECUTED. The maxBy operation is captured in the quotation
+    /// and translated to SQL MAX() aggregate.
+    ///
+    /// <para><strong>SQL Translation:</strong></para>
+    /// <code>
+    /// query {
+    ///     for product in products do
+    ///     maxBy product.Price
+    /// }
+    /// // Translates to: SELECT MAX(json_extract(body, '$.price')) FROM products
+    /// </code>
+    ///
+    /// <para><strong>Return Value:</strong></para>
+    /// - Returns the maximum value of the field across all matching documents
+    /// - Returns null/default if no documents match the filter
+    /// - Works with numeric fields, strings (lexicographic), and dates
+    /// </remarks>
+    ///
+    /// <example>
+    /// <code>
+    /// // Find highest price
+    /// query {
+    ///     for product in products do
+    ///     maxBy product.Price
+    /// }
+    ///
+    /// // Find oldest user
+    /// query {
+    ///     for user in users do
+    ///     where (user.Active = true)
+    ///     maxBy user.Age
+    /// }
+    /// </code>
+    /// </example>
+    [<CustomOperation("maxBy")>]
+    member _.MaxBy(source: TranslatedQuery<'T>, [<ProjectionParameter>] keySelector: 'T -> 'Key) : 'Key =
+        Unchecked.defaultof<_>
+
+    /// <summary>
+    /// Enables 'sumBy field' syntax to calculate the sum of a numeric field.
+    /// </summary>
+    ///
+    /// <param name="source">The source sequence from previous operations.</param>
+    /// <param name="keySelector">
+    /// Lambda expression selecting the numeric field to sum (e.g., fun x -> x.Quantity).
+    /// </param>
+    ///
+    /// <typeparam name="'T">The document type.</typeparam>
+    /// <typeparam name="'Key">The numeric type of the field being summed.</typeparam>
+    ///
+    /// <returns>
+    /// 'Key - The sum of all values of the specified field.
+    /// Returns Unchecked.defaultof (never executes, only for type inference).
+    /// </returns>
+    ///
+    /// <remarks>
+    /// This member is NEVER EXECUTED. The sumBy operation is captured in the quotation
+    /// and translated to SQL SUM() aggregate.
+    ///
+    /// <para><strong>SQL Translation:</strong></para>
+    /// <code>
+    /// query {
+    ///     for order in orders do
+    ///     sumBy order.Total
+    /// }
+    /// // Translates to: SELECT SUM(json_extract(body, '$.total')) FROM orders
+    /// </code>
+    ///
+    /// <para><strong>Return Value:</strong></para>
+    /// - Returns the sum of field values across all matching documents
+    /// - Returns null/0 if no documents match the filter
+    /// - Only works with numeric fields (int, float, decimal, etc.)
+    /// </remarks>
+    ///
+    /// <example>
+    /// <code>
+    /// // Calculate total revenue
+    /// query {
+    ///     for order in orders do
+    ///     sumBy order.Total
+    /// }
+    ///
+    /// // Sum quantities for specific product
+    /// query {
+    ///     for item in orderItems do
+    ///     where (item.ProductId = productId)
+    ///     sumBy item.Quantity
+    /// }
+    /// </code>
+    /// </example>
+    [<CustomOperation("sumBy")>]
+    member _.SumBy(source: TranslatedQuery<'T>, [<ProjectionParameter>] keySelector: 'T -> 'Key) : 'Key =
+        Unchecked.defaultof<_>
+
+    /// <summary>
+    /// Enables 'averageBy field' syntax to calculate the average of a numeric field.
+    /// </summary>
+    ///
+    /// <param name="source">The source sequence from previous operations.</param>
+    /// <param name="keySelector">
+    /// Lambda expression selecting the numeric field to average (e.g., fun x -> x.Rating).
+    /// </param>
+    ///
+    /// <typeparam name="'T">The document type.</typeparam>
+    /// <typeparam name="'Key">The numeric type of the field being averaged.</typeparam>
+    ///
+    /// <returns>
+    /// float - The average of all values of the specified field (always returns float).
+    /// Returns Unchecked.defaultof (never executes, only for type inference).
+    /// </returns>
+    ///
+    /// <remarks>
+    /// This member is NEVER EXECUTED. The averageBy operation is captured in the quotation
+    /// and translated to SQL AVG() aggregate.
+    ///
+    /// <para><strong>SQL Translation:</strong></para>
+    /// <code>
+    /// query {
+    ///     for product in products do
+    ///     averageBy product.Rating
+    /// }
+    /// // Translates to: SELECT AVG(json_extract(body, '$.rating')) FROM products
+    /// </code>
+    ///
+    /// <para><strong>Return Value:</strong></para>
+    /// - Returns the arithmetic mean of field values
+    /// - Always returns a floating-point number
+    /// - Returns null if no documents match the filter
+    /// - NULL values in the field are excluded from the calculation
+    /// </remarks>
+    ///
+    /// <example>
+    /// <code>
+    /// // Calculate average rating
+    /// query {
+    ///     for product in products do
+    ///     averageBy product.Rating
+    /// }
+    ///
+    /// // Average order value for a customer
+    /// query {
+    ///     for order in orders do
+    ///     where (order.CustomerId = customerId)
+    ///     averageBy order.Total
+    /// }
+    /// </code>
+    /// </example>
+    [<CustomOperation("averageBy")>]
+    member _.AverageBy(source: TranslatedQuery<'T>, [<ProjectionParameter>] keySelector: 'T -> 'Key) : float =
+        Unchecked.defaultof<_>
+
+    /// <summary>
+    /// Enables 'minByNullable field' syntax to find the minimum value of a nullable field.
+    /// </summary>
+    ///
+    /// <param name="source">The source sequence from previous operations.</param>
+    /// <param name="keySelector">
+    /// Lambda expression selecting the nullable field to find minimum of
+    /// (e.g., fun x -> x.OptionalScore).
+    /// </param>
+    ///
+    /// <typeparam name="'T">The document type.</typeparam>
+    /// <typeparam name="'Key">The value type of the nullable field being aggregated.</typeparam>
+    ///
+    /// <returns>
+    /// Nullable&lt;'Key&gt; - The minimum value, or null if no non-null values exist.
+    /// Returns Unchecked.defaultof (never executes, only for type inference).
+    /// </returns>
+    ///
+    /// <remarks>
+    /// This member is NEVER EXECUTED. The minByNullable operation is captured in the quotation
+    /// and translated to SQL MIN() aggregate.
+    ///
+    /// <para><strong>SQL Translation:</strong></para>
+    /// <code>
+    /// query {
+    ///     for user in users do
+    ///     minByNullable user.OptionalScore
+    /// }
+    /// // Translates to: SELECT MIN(json_extract(body, '$.optionalScore')) FROM users
+    /// </code>
+    ///
+    /// <para><strong>Null Handling:</strong></para>
+    /// - SQLite MIN() naturally ignores NULL values
+    /// - Returns NULL if all values are NULL or no documents match
+    /// - Result is wrapped in Nullable&lt;'Key&gt;
+    ///
+    /// <para><strong>vs. minBy:</strong></para>
+    /// - minBy returns 'Key (throws on null result)
+    /// - minByNullable returns Nullable&lt;'Key&gt; (handles null gracefully)
+    /// </remarks>
+    ///
+    /// <example>
+    /// <code>
+    /// // Find minimum optional score (may be null)
+    /// query {
+    ///     for user in users do
+    ///     minByNullable user.OptionalScore
+    /// }
+    /// |> Collection.execAggregateNullable users
+    /// // Returns: Nullable&lt;int64&gt; - has value if any scores exist, null otherwise
+    /// </code>
+    /// </example>
+    [<CustomOperation("minByNullable")>]
+    member _.MinByNullable
+        (source: TranslatedQuery<'T>, [<ProjectionParameter>] keySelector: 'T -> Nullable<'Key>)
+        : Nullable<'Key> =
+        Unchecked.defaultof<_>
+
+    /// <summary>
+    /// Enables 'maxByNullable field' syntax to find the maximum value of a nullable field.
+    /// </summary>
+    ///
+    /// <param name="source">The source sequence from previous operations.</param>
+    /// <param name="keySelector">
+    /// Lambda expression selecting the nullable field to find maximum of
+    /// (e.g., fun x -> x.OptionalScore).
+    /// </param>
+    ///
+    /// <typeparam name="'T">The document type.</typeparam>
+    /// <typeparam name="'Key">The value type of the nullable field being aggregated.</typeparam>
+    ///
+    /// <returns>
+    /// Nullable&lt;'Key&gt; - The maximum value, or null if no non-null values exist.
+    /// Returns Unchecked.defaultof (never executes, only for type inference).
+    /// </returns>
+    ///
+    /// <remarks>
+    /// This member is NEVER EXECUTED. The maxByNullable operation is captured in the quotation
+    /// and translated to SQL MAX() aggregate.
+    ///
+    /// <para><strong>SQL Translation:</strong></para>
+    /// <code>
+    /// query {
+    ///     for user in users do
+    ///     maxByNullable user.OptionalScore
+    /// }
+    /// // Translates to: SELECT MAX(json_extract(body, '$.optionalScore')) FROM users
+    /// </code>
+    ///
+    /// <para><strong>Null Handling:</strong></para>
+    /// - SQLite MAX() naturally ignores NULL values
+    /// - Returns NULL if all values are NULL or no documents match
+    /// - Result is wrapped in Nullable&lt;'Key&gt;
+    ///
+    /// <para><strong>vs. maxBy:</strong></para>
+    /// - maxBy returns 'Key (throws on null result)
+    /// - maxByNullable returns Nullable&lt;'Key&gt; (handles null gracefully)
+    /// </remarks>
+    ///
+    /// <example>
+    /// <code>
+    /// // Find maximum optional score (may be null)
+    /// query {
+    ///     for user in users do
+    ///     maxByNullable user.OptionalScore
+    /// }
+    /// |> Collection.execAggregateNullable users
+    /// // Returns: Nullable&lt;int64&gt; - has value if any scores exist, null otherwise
+    /// </code>
+    /// </example>
+    [<CustomOperation("maxByNullable")>]
+    member _.MaxByNullable
+        (source: TranslatedQuery<'T>, [<ProjectionParameter>] keySelector: 'T -> Nullable<'Key>)
+        : Nullable<'Key> =
+        Unchecked.defaultof<_>
+
+    /// <summary>
+    /// Enables 'sumByNullable field' syntax to calculate the sum of a nullable numeric field.
+    /// </summary>
+    ///
+    /// <param name="source">The source sequence from previous operations.</param>
+    /// <param name="keySelector">
+    /// Lambda expression selecting the nullable numeric field to sum
+    /// (e.g., fun x -> x.OptionalAmount).
+    /// </param>
+    ///
+    /// <typeparam name="'T">The document type.</typeparam>
+    /// <typeparam name="'Key">The numeric value type of the nullable field being summed.</typeparam>
+    ///
+    /// <returns>
+    /// Nullable&lt;'Key&gt; - The sum of all non-null values, or null if no non-null values exist.
+    /// Returns Unchecked.defaultof (never executes, only for type inference).
+    /// </returns>
+    ///
+    /// <remarks>
+    /// This member is NEVER EXECUTED. The sumByNullable operation is captured in the quotation
+    /// and translated to SQL SUM() aggregate.
+    ///
+    /// <para><strong>SQL Translation:</strong></para>
+    /// <code>
+    /// query {
+    ///     for order in orders do
+    ///     sumByNullable order.OptionalDiscount
+    /// }
+    /// // Translates to: SELECT SUM(json_extract(body, '$.optionalDiscount')) FROM orders
+    /// </code>
+    ///
+    /// <para><strong>Null Handling:</strong></para>
+    /// - SQLite SUM() naturally ignores NULL values
+    /// - Returns NULL if all values are NULL or no documents match
+    /// - Result is wrapped in Nullable&lt;'Key&gt;
+    ///
+    /// <para><strong>vs. sumBy:</strong></para>
+    /// - sumBy returns 'Key (returns 0 for empty/all-null)
+    /// - sumByNullable returns Nullable&lt;'Key&gt; (returns null for empty/all-null)
+    /// </remarks>
+    ///
+    /// <example>
+    /// <code>
+    /// // Sum optional discounts (may be null)
+    /// query {
+    ///     for order in orders do
+    ///     sumByNullable order.OptionalDiscount
+    /// }
+    /// |> Collection.execAggregateNullable orders
+    /// // Returns: Nullable&lt;decimal&gt; - has value if any discounts exist, null otherwise
+    /// </code>
+    /// </example>
+    [<CustomOperation("sumByNullable")>]
+    member _.SumByNullable
+        (source: TranslatedQuery<'T>, [<ProjectionParameter>] keySelector: 'T -> Nullable<'Key>)
+        : Nullable<'Key> =
+        Unchecked.defaultof<_>
+
+    /// <summary>
+    /// Enables 'averageByNullable field' syntax to calculate the average of a nullable numeric field.
+    /// </summary>
+    ///
+    /// <param name="source">The source sequence from previous operations.</param>
+    /// <param name="keySelector">
+    /// Lambda expression selecting the nullable numeric field to average
+    /// (e.g., fun x -> x.OptionalRating).
+    /// </param>
+    ///
+    /// <typeparam name="'T">The document type.</typeparam>
+    /// <typeparam name="'Key">The numeric value type of the nullable field being averaged.</typeparam>
+    ///
+    /// <returns>
+    /// Nullable&lt;float&gt; - The average of all non-null values, or null if no non-null values exist.
+    /// Returns Unchecked.defaultof (never executes, only for type inference).
+    /// </returns>
+    ///
+    /// <remarks>
+    /// This member is NEVER EXECUTED. The averageByNullable operation is captured in the quotation
+    /// and translated to SQL AVG() aggregate.
+    ///
+    /// <para><strong>SQL Translation:</strong></para>
+    /// <code>
+    /// query {
+    ///     for product in products do
+    ///     averageByNullable product.OptionalRating
+    /// }
+    /// // Translates to: SELECT AVG(json_extract(body, '$.optionalRating')) FROM products
+    /// </code>
+    ///
+    /// <para><strong>Null Handling:</strong></para>
+    /// - SQLite AVG() naturally ignores NULL values
+    /// - Returns NULL if all values are NULL or no documents match
+    /// - Result is always Nullable&lt;float&gt; (average returns floating-point)
+    ///
+    /// <para><strong>vs. averageBy:</strong></para>
+    /// - averageBy returns float (throws on null result)
+    /// - averageByNullable returns Nullable&lt;float&gt; (handles null gracefully)
+    /// </remarks>
+    ///
+    /// <example>
+    /// <code>
+    /// // Average optional ratings (may be null)
+    /// query {
+    ///     for product in products do
+    ///     averageByNullable product.OptionalRating
+    /// }
+    /// |> Collection.execAggregateNullable products
+    /// // Returns: Nullable&lt;float&gt; - has value if any ratings exist, null otherwise
+    /// </code>
+    /// </example>
+    [<CustomOperation("averageByNullable")>]
+    member _.AverageByNullable
+        (source: TranslatedQuery<'T>, [<ProjectionParameter>] keySelector: 'T -> Nullable<'Key>)
+        : Nullable<float> =
+        Unchecked.defaultof<_>
+
+    /// <summary>
     /// Enables 'count' syntax to count matching documents.
     /// </summary>
     ///
@@ -1907,6 +2839,91 @@ type QueryBuilder() =
     /// </example>
     [<CustomOperation("exists", MaintainsVariableSpace = true)>]
     member _.Exists(source: TranslatedQuery<'T>, [<ProjectionParameter>] predicate: 'T -> bool) : bool =
+        Unchecked.defaultof<_>
+
+    /// <summary>
+    /// Enables 'all' syntax to check if ALL documents match a predicate.
+    /// </summary>
+    ///
+    /// <param name="source">The source sequence from previous operations.</param>
+    /// <param name="predicate">
+    /// Lambda expression defining the condition all documents must satisfy
+    /// (e.g., fun x -> x.Age >= 18).
+    /// </param>
+    ///
+    /// <typeparam name="'T">The document type being tested.</typeparam>
+    ///
+    /// <returns>
+    /// bool - true if ALL documents match the predicate, false if any document doesn't match.
+    /// Returns true for empty collections (vacuous truth).
+    /// Returns Unchecked.defaultof (never executes, only for type inference).
+    /// </returns>
+    ///
+    /// <remarks>
+    /// This member is NEVER EXECUTED. The predicate is captured in the quotation and
+    /// translated to SQL using NOT EXISTS pattern by QueryExecutor.
+    ///
+    /// <para><strong>SQL Translation:</strong></para>
+    ///
+    /// all is translated to SQL using NOT EXISTS with negated predicate:
+    /// <code>
+    /// query {
+    ///     for user in users do
+    ///     all (user.Age >= 18)
+    /// }
+    /// // Translates to: SELECT NOT EXISTS (SELECT 1 FROM users WHERE NOT (age >= 18))
+    /// // Returns: true if no user has age &lt; 18
+    /// </code>
+    ///
+    /// <para><strong>Empty Collection Behavior:</strong></para>
+    ///
+    /// For empty collections, 'all' returns true (vacuous truth):
+    /// - Mathematically: "all elements satisfy P" is true when there are no elements
+    /// - This matches F# Seq.forall behavior
+    ///
+    /// <para><strong>Performance:</strong></para>
+    ///
+    /// Performance is similar to 'exists' with early termination:
+    /// - Stops after finding first non-matching document
+    /// - Uses indexes if predicate involves indexed fields
+    /// - O(1) best case (first doc doesn't match), O(n) worst case (all match)
+    ///
+    /// <para><strong>Use Cases:</strong></para>
+    ///
+    /// - Validation: "All users have verified email?"
+    /// - Compliance: "All orders have been shipped?"
+    /// - Quality checks: "All products have images?"
+    /// - Business rules: "All employees completed training?"
+    /// </remarks>
+    ///
+    /// <example>
+    /// <code>
+    /// // Check if all users are adults
+    /// query {
+    ///     for user in users do
+    ///     all (user.Age >= 18)
+    /// }
+    /// // Returns: bool (true if all users are 18+)
+    ///
+    /// // Combined with where clause (check subset)
+    /// query {
+    ///     for order in orders do
+    ///     where (order.CustomerId = customerId)
+    ///     all (order.Status = "completed")
+    /// }
+    /// // Returns: bool - all of this customer's orders completed?
+    ///
+    /// // Check complex condition
+    /// query {
+    ///     for product in products do
+    ///     where (product.Category = "electronics")
+    ///     all (product.Price > 0.0 &amp;&amp; product.Stock >= 0)
+    /// }
+    /// // Returns: bool - all electronics have valid price and stock?
+    /// </code>
+    /// </example>
+    [<CustomOperation("all", MaintainsVariableSpace = true)>]
+    member _.All(source: TranslatedQuery<'T>, [<ProjectionParameter>] predicate: 'T -> bool) : bool =
         Unchecked.defaultof<_>
 
     /// <summary>
@@ -2140,6 +3157,584 @@ type QueryBuilder() =
     /// </example>
     [<CustomOperation("headOrDefault")>]
     member _.HeadOrDefault(source: TranslatedQuery<'T>) : option<'T> = Unchecked.defaultof<_>
+
+    /// <summary>
+    /// Enables 'last' syntax to retrieve the last document from a sorted query.
+    /// </summary>
+    ///
+    /// <param name="source">The source sequence from previous operations.</param>
+    ///
+    /// <typeparam name="'T">The document type being retrieved.</typeparam>
+    ///
+    /// <returns>
+    /// 'T - The last document in the sorted result set.
+    /// Throws InvalidOperationException if no results.
+    /// Returns Unchecked.defaultof (never executes, only for type inference).
+    /// </returns>
+    ///
+    /// <remarks>
+    /// This member is NEVER EXECUTED. The last operation is captured in the quotation and
+    /// translated by reversing the sort order and applying LIMIT 1.
+    ///
+    /// <para><strong>SQL Translation:</strong></para>
+    ///
+    /// last reverses the sort order and takes the first result:
+    /// <code>
+    /// query {
+    ///     for log in logs do
+    ///     sortBy log.Timestamp
+    ///     last
+    /// }
+    /// // Translates to: SELECT * FROM logs ORDER BY timestamp DESC LIMIT 1
+    /// </code>
+    ///
+    /// <para><strong>IMPORTANT: Requires sortBy:</strong></para>
+    ///
+    /// The 'last' operator requires a sortBy clause to define ordering.
+    /// Without sortBy, results are unpredictable (database-dependent order).
+    ///
+    /// <para><strong>Exception Behavior:</strong></para>
+    ///
+    /// last throws InvalidOperationException if no documents exist:
+    /// <code>
+    /// try
+    ///     let lastLog = query { for log in logs do sortBy log.Timestamp last }
+    ///     processLog lastLog
+    /// with
+    /// | :? InvalidOperationException -> printfn "No logs found"
+    /// </code>
+    ///
+    /// <para><strong>Use Cases:</strong></para>
+    ///
+    /// - Most recent entry: "Get the latest log entry"
+    /// - Last in sequence: "Get the highest-numbered order"
+    /// - Final item: "Get the last user alphabetically"
+    /// </remarks>
+    ///
+    /// <example>
+    /// <code>
+    /// // Get most recent log entry
+    /// query {
+    ///     for log in logs do
+    ///     sortBy log.Timestamp
+    ///     last
+    /// }
+    ///
+    /// // Get user with highest age
+    /// query {
+    ///     for user in users do
+    ///     sortBy user.Age
+    ///     last
+    /// }
+    /// // SQL: SELECT * FROM users ORDER BY age DESC LIMIT 1
+    /// </code>
+    /// </example>
+    [<CustomOperation("last")>]
+    member _.Last(source: TranslatedQuery<'T>) : 'T = Unchecked.defaultof<_>
+
+    /// <summary>
+    /// Enables 'lastOrDefault' syntax to safely retrieve the last document from a sorted query.
+    /// </summary>
+    ///
+    /// <param name="source">The source sequence from previous operations.</param>
+    ///
+    /// <typeparam name="'T">The document type being retrieved.</typeparam>
+    ///
+    /// <returns>
+    /// 'T option - Some(document) if found, None if no matches.
+    /// Returns Unchecked.defaultof (never executes, only for type inference).
+    /// </returns>
+    ///
+    /// <remarks>
+    /// This member is NEVER EXECUTED. The lastOrDefault operation is captured in the quotation
+    /// and translated by reversing the sort order and applying LIMIT 1. Returns None if
+    /// no results instead of throwing.
+    ///
+    /// <para><strong>SQL Translation:</strong></para>
+    ///
+    /// lastOrDefault reverses sort and takes first:
+    /// <code>
+    /// query {
+    ///     for log in logs do
+    ///     sortBy log.Timestamp
+    ///     lastOrDefault
+    /// }
+    /// // Translates to: SELECT * FROM logs ORDER BY timestamp DESC LIMIT 1
+    /// // Returns: Some(document) if found, None if no rows
+    /// </code>
+    ///
+    /// <para><strong>IMPORTANT: Requires sortBy:</strong></para>
+    ///
+    /// The 'lastOrDefault' operator requires a sortBy clause to define ordering.
+    /// Without sortBy, results are unpredictable (database-dependent order).
+    ///
+    /// <para><strong>Option Type Behavior:</strong></para>
+    ///
+    /// lastOrDefault returns F# option type for safe handling:
+    /// <code>
+    /// match query { for log in logs do sortBy log.Timestamp lastOrDefault } with
+    /// | Some log -> processLog log
+    /// | None -> printfn "No logs found"
+    /// </code>
+    ///
+    /// <para><strong>vs. last:</strong></para>
+    ///
+    /// Choose based on whether missing document is exceptional:
+    ///
+    /// Use 'lastOrDefault' when:
+    /// - Collection MAY be empty (e.g., new users with no activity)
+    /// - Missing document is a valid case
+    /// - You prefer option-based control flow (idiomatic F#)
+    ///
+    /// Use 'last' when:
+    /// - Collection MUST have at least one document
+    /// - Missing document is an error condition
+    /// - You want exception-based control flow
+    ///
+    /// <para><strong>Use Cases:</strong></para>
+    ///
+    /// - Optional recent entry: "Get latest log if any exist"
+    /// - Safe sequence access: "Get highest-numbered order if any"
+    /// - Default handling: "Get last item or use fallback"
+    /// </remarks>
+    ///
+    /// <example>
+    /// <code>
+    /// // Safe access to most recent log
+    /// let lastLogOpt =
+    ///     query {
+    ///         for log in logs do
+    ///         sortBy log.Timestamp
+    ///         lastOrDefault
+    ///     }
+    /// // Returns: Document&lt;Log&gt; option
+    ///
+    /// // Pattern matching
+    /// match query { for log in logs do sortBy log.Timestamp lastOrDefault } with
+    /// | Some log -> Ok log
+    /// | None -> Error "No logs available"
+    ///
+    /// // With Option.map
+    /// query { for user in users do sortBy user.Age lastOrDefault }
+    /// |> Option.map (fun user -> user.Data.Name)
+    /// |> Option.defaultValue "No users"
+    /// </code>
+    /// </example>
+    [<CustomOperation("lastOrDefault")>]
+    member _.LastOrDefault(source: TranslatedQuery<'T>) : option<'T> = Unchecked.defaultof<_>
+
+    /// <summary>
+    /// Enables 'exactlyOne' syntax to retrieve exactly one matching document.
+    /// </summary>
+    ///
+    /// <param name="source">The source sequence from previous operations.</param>
+    ///
+    /// <typeparam name="'T">The document type being retrieved.</typeparam>
+    ///
+    /// <returns>
+    /// 'T - The single document matching the query.
+    /// Throws InvalidOperationException if 0 or more than 1 result.
+    /// Returns Unchecked.defaultof (never executes, only for type inference).
+    /// </returns>
+    ///
+    /// <remarks>
+    /// This member is NEVER EXECUTED. The exactlyOne operation is captured in the quotation
+    /// and translated by querying with LIMIT 2 and checking the result count.
+    ///
+    /// <para><strong>SQL Translation:</strong></para>
+    ///
+    /// exactlyOne queries with LIMIT 2 to efficiently detect multiple matches:
+    /// <code>
+    /// query {
+    ///     for user in users do
+    ///     where (user.Email = "alice@example.com")
+    ///     exactlyOne
+    /// }
+    /// // Translates to: SELECT * FROM users WHERE email = 'alice@example.com' LIMIT 2
+    /// // Returns: document if exactly 1 row, throws otherwise
+    /// </code>
+    ///
+    /// <para><strong>Exception Behavior:</strong></para>
+    ///
+    /// exactlyOne throws InvalidOperationException in two cases:
+    /// - No documents match (empty result)
+    /// - More than one document matches
+    ///
+    /// <code>
+    /// try
+    ///     let user = query { for u in users do where (u.Email = email) exactlyOne }
+    ///     processUser user
+    /// with
+    /// | :? InvalidOperationException as ex ->
+    ///     // Check message for "no matching element" vs "more than one element"
+    ///     handleError ex
+    /// </code>
+    ///
+    /// <para><strong>Use Cases:</strong></para>
+    ///
+    /// - Unique constraint validation: "Get user by unique email (must exist and be unique)"
+    /// - Configuration lookup: "Get the single active config (exactly one expected)"
+    /// - Singleton patterns: "Get the system settings document"
+    /// </remarks>
+    ///
+    /// <example>
+    /// <code>
+    /// // Get user by unique email (throws if 0 or >1)
+    /// query {
+    ///     for user in users do
+    ///     where (user.Email = "alice@example.com")
+    ///     exactlyOne
+    /// }
+    ///
+    /// // Get single active subscription
+    /// query {
+    ///     for sub in subscriptions do
+    ///     where (sub.UserId = userId &amp;&amp; sub.Active = true)
+    ///     exactlyOne
+    /// }
+    /// </code>
+    /// </example>
+    [<CustomOperation("exactlyOne")>]
+    member _.ExactlyOne(source: TranslatedQuery<'T>) : 'T = Unchecked.defaultof<_>
+
+    /// <summary>
+    /// Enables 'exactlyOneOrDefault' syntax to retrieve exactly one matching document or None.
+    /// </summary>
+    ///
+    /// <param name="source">The source sequence from previous operations.</param>
+    ///
+    /// <typeparam name="'T">The document type being retrieved.</typeparam>
+    ///
+    /// <returns>
+    /// 'T option - Some(document) if exactly one match, None if no matches.
+    /// Throws InvalidOperationException if more than 1 result.
+    /// Returns Unchecked.defaultof (never executes, only for type inference).
+    /// </returns>
+    ///
+    /// <remarks>
+    /// This member is NEVER EXECUTED. The exactlyOneOrDefault operation is captured in the
+    /// quotation and translated by querying with LIMIT 2 and checking the result count.
+    ///
+    /// <para><strong>SQL Translation:</strong></para>
+    ///
+    /// exactlyOneOrDefault queries with LIMIT 2:
+    /// <code>
+    /// query {
+    ///     for user in users do
+    ///     where (user.Email = "alice@example.com")
+    ///     exactlyOneOrDefault
+    /// }
+    /// // Translates to: SELECT * FROM users WHERE email = 'alice@example.com' LIMIT 2
+    /// // Returns: Some(document) if 1 row, None if 0 rows, throws if >1 rows
+    /// </code>
+    ///
+    /// <para><strong>Behavior:</strong></para>
+    ///
+    /// exactlyOneOrDefault has three outcomes:
+    /// - 0 results → Returns None
+    /// - 1 result → Returns Some(document)
+    /// - >1 results → Throws InvalidOperationException
+    ///
+    /// <para><strong>vs. exactlyOne:</strong></para>
+    ///
+    /// Choose based on whether missing document is exceptional:
+    ///
+    /// Use 'exactlyOneOrDefault' when:
+    /// - Document MAY not exist (optional lookup)
+    /// - Missing is valid but multiple is an error
+    /// - You prefer option-based control flow
+    ///
+    /// Use 'exactlyOne' when:
+    /// - Document MUST exist (required lookup)
+    /// - Both missing and duplicate are errors
+    ///
+    /// <para><strong>Use Cases:</strong></para>
+    ///
+    /// - Optional unique lookup: "Get user by email if exists (error if duplicate)"
+    /// - Config with default: "Get settings or use default (error if multiple)"
+    /// - Cache lookup: "Get cached item if exists (error if duplicate keys)"
+    /// </remarks>
+    ///
+    /// <example>
+    /// <code>
+    /// // Optional lookup (None if not found, throws if >1)
+    /// let userOpt =
+    ///     query {
+    ///         for user in users do
+    ///         where (user.Email = email)
+    ///         exactlyOneOrDefault
+    ///     }
+    /// // Returns: Document&lt;User&gt; option
+    ///
+    /// // Pattern matching
+    /// match query { for u in users do where (u.Email = email) exactlyOneOrDefault } with
+    /// | Some user -> Ok user
+    /// | None -> Error "User not found"
+    /// // Note: if >1 exists, this throws instead of reaching the match
+    ///
+    /// // With default value
+    /// query { for config in configs do where (config.Key = key) exactlyOneOrDefault }
+    /// |> Option.defaultValue defaultConfig
+    /// </code>
+    /// </example>
+    [<CustomOperation("exactlyOneOrDefault")>]
+    member _.ExactlyOneOrDefault(source: TranslatedQuery<'T>) : option<'T> = Unchecked.defaultof<_>
+
+    /// <summary>
+    /// Enables 'nth n' syntax to retrieve the document at a specific index (0-based).
+    /// </summary>
+    ///
+    /// <param name="source">The source sequence from previous operations.</param>
+    /// <param name="index">The 0-based index of the document to retrieve.</param>
+    ///
+    /// <typeparam name="'T">The document type being retrieved.</typeparam>
+    ///
+    /// <returns>
+    /// 'T - The document at the specified index.
+    /// Throws ArgumentOutOfRangeException if index is negative or out of bounds.
+    /// Returns Unchecked.defaultof (never executes, only for type inference).
+    /// </returns>
+    ///
+    /// <remarks>
+    /// This member is NEVER EXECUTED. The nth operation is captured in the quotation
+    /// and translated to SQL using LIMIT 1 OFFSET n.
+    ///
+    /// <para><strong>SQL Translation:</strong></para>
+    ///
+    /// nth uses OFFSET and LIMIT to efficiently fetch a single row at the index:
+    /// <code>
+    /// query {
+    ///     for user in users do
+    ///     sortBy user.Name
+    ///     nth 5
+    /// }
+    /// // Translates to: SELECT * FROM users ORDER BY name LIMIT 1 OFFSET 5
+    /// // Returns: 6th user (0-indexed)
+    /// </code>
+    ///
+    /// <para><strong>IMPORTANT: Requires sortBy:</strong></para>
+    ///
+    /// The 'nth' operator should be used with a sortBy clause to ensure consistent ordering.
+    /// Without sortBy, the result is database-dependent and may vary between calls.
+    ///
+    /// <para><strong>Exception Behavior:</strong></para>
+    ///
+    /// nth throws exceptions in two cases:
+    /// - ArgumentOutOfRangeException if index is negative
+    /// - ArgumentOutOfRangeException if no document exists at that index
+    ///
+    /// <para><strong>0-Based Indexing:</strong></para>
+    ///
+    /// nth uses 0-based indexing (like F# List.item and Array.get):
+    /// - nth 0 → first element
+    /// - nth 1 → second element
+    /// - nth (n-1) → nth element
+    ///
+    /// <para><strong>Use Cases:</strong></para>
+    ///
+    /// - Pagination: "Get the 10th item in sorted results"
+    /// - Ranking: "Get the 3rd highest scorer"
+    /// - Sampling: "Get the middle element of sorted data"
+    /// </remarks>
+    ///
+    /// <example>
+    /// <code>
+    /// // Get 6th user alphabetically (0-indexed, so nth 5)
+    /// query {
+    ///     for user in users do
+    ///     sortBy user.Name
+    ///     nth 5
+    /// }
+    ///
+    /// // Get 2nd highest scorer
+    /// query {
+    ///     for player in players do
+    ///     sortByDescending player.Score
+    ///     nth 1
+    /// }
+    /// // SQL: SELECT * FROM players ORDER BY score DESC LIMIT 1 OFFSET 1
+    ///
+    /// // Error handling
+    /// try
+    ///     let user = query { for u in users do sortBy u.Name nth 100 }
+    ///     processUser user
+    /// with
+    /// | :? ArgumentOutOfRangeException -> printfn "Index out of bounds"
+    /// </code>
+    /// </example>
+    [<CustomOperation("nth")>]
+    member _.Nth(source: TranslatedQuery<'T>, index: int) : 'T = Unchecked.defaultof<_>
+
+    /// <summary>
+    /// Enables 'find' syntax to retrieve the first document matching a predicate.
+    /// </summary>
+    ///
+    /// <param name="source">The source sequence from previous operations.</param>
+    /// <param name="predicate">
+    /// Lambda expression defining the search condition
+    /// (e.g., fun x -> x.Name = "Alice").
+    /// </param>
+    ///
+    /// <typeparam name="'T">The document type being searched.</typeparam>
+    ///
+    /// <returns>
+    /// 'T - The first document matching the predicate.
+    /// Throws InvalidOperationException if no document matches.
+    /// Returns Unchecked.defaultof (never executes, only for type inference).
+    /// </returns>
+    ///
+    /// <remarks>
+    /// This member is NEVER EXECUTED. The predicate is captured in the quotation and
+    /// translated to SQL with WHERE clause and LIMIT 1 by QueryExecutor.
+    ///
+    /// <para><strong>SQL Translation:</strong></para>
+    ///
+    /// find combines where clause with LIMIT 1:
+    /// <code>
+    /// query {
+    ///     for user in users do
+    ///     find (user.Email = "alice@example.com")
+    /// }
+    /// // Translates to: SELECT * FROM users WHERE email = 'alice@example.com' LIMIT 1
+    /// // Throws: InvalidOperationException if no rows returned
+    /// </code>
+    ///
+    /// <para><strong>Exception Behavior:</strong></para>
+    ///
+    /// find throws InvalidOperationException if no documents match:
+    /// <code>
+    /// try
+    ///     let user = query { for user in users do find (user.Id = id) }
+    ///     processUser user
+    /// with
+    /// | :? InvalidOperationException -> printfn "User not found"
+    /// </code>
+    ///
+    /// This is the F# idiomatic behavior matching List.find and Seq.find.
+    ///
+    /// <para><strong>vs. where + head:</strong></para>
+    ///
+    /// 'find' is equivalent to 'where predicate + head' but more concise:
+    /// <code>
+    /// // These are equivalent:
+    /// query { for u in users do find (u.Id = id) }
+    /// query { for u in users do where (u.Id = id) head }
+    /// </code>
+    ///
+    /// <para><strong>Use Cases:</strong></para>
+    ///
+    /// - Lookup by unique key: "Find user by email"
+    /// - Search with assertion: "Find the matching config (must exist)"
+    /// - Single-result queries: "Find the active subscription"
+    /// </remarks>
+    ///
+    /// <example>
+    /// <code>
+    /// // Find user by email (throws if not found)
+    /// query {
+    ///     for user in users do
+    ///     find (user.Email = "alice@example.com")
+    /// }
+    ///
+    /// // Find with complex predicate
+    /// query {
+    ///     for order in orders do
+    ///     find (order.CustomerId = customerId &amp;&amp; order.Status = "pending")
+    /// }
+    ///
+    /// // Error handling
+    /// try
+    ///     let user = query { for u in users do find (u.Id = id) }
+    ///     Ok user
+    /// with
+    /// | :? InvalidOperationException -> Error "User not found"
+    /// </code>
+    /// </example>
+    [<CustomOperation("find", MaintainsVariableSpace = true)>]
+    member _.Find(source: TranslatedQuery<'T>, [<ProjectionParameter>] predicate: 'T -> bool) : 'T =
+        Unchecked.defaultof<_>
+
+    /// <summary>
+    /// Enables 'groupBy field' syntax to group documents by a field.
+    /// </summary>
+    ///
+    /// <param name="source">The source sequence from previous operations.</param>
+    /// <param name="keySelector">
+    /// Lambda expression selecting the field to group by (e.g., fun x -> x.Country).
+    /// </param>
+    ///
+    /// <typeparam name="'T">The document type being grouped.</typeparam>
+    /// <typeparam name="'Key">The type of the grouping key.</typeparam>
+    ///
+    /// <returns>
+    /// TranslatedQuery with GroupBy field set.
+    /// Returns Unchecked.defaultof (never executes, only for type inference).
+    /// </returns>
+    ///
+    /// <remarks>
+    /// This member is NEVER EXECUTED. The groupBy operation is captured in the quotation
+    /// and translated to SQL GROUP BY clause.
+    ///
+    /// <para><strong>SQL Translation:</strong></para>
+    /// <code>
+    /// query {
+    ///     for user in users do
+    ///     groupBy user.Country
+    /// }
+    /// // Translates to: SELECT json_extract(body, '$.country') as _key, COUNT(*) as _count
+    /// //                FROM users GROUP BY json_extract(body, '$.country')
+    /// </code>
+    ///
+    /// <para><strong>Execution:</strong></para>
+    ///
+    /// Use Collection.execGroupBy to execute grouped queries:
+    /// <code>
+    /// let! results = users |> Collection.execGroupBy translatedQuery
+    /// // Returns: list of (key, count) tuples
+    /// </code>
+    ///
+    /// <para><strong>Combining with Where:</strong></para>
+    ///
+    /// The where clause is applied before grouping:
+    /// <code>
+    /// query {
+    ///     for user in users do
+    ///     where (user.Active = true)
+    ///     groupBy user.Country
+    /// }
+    /// // Groups only active users by country
+    /// </code>
+    ///
+    /// <para><strong>Use Cases:</strong></para>
+    ///
+    /// - Count documents per category
+    /// - Calculate statistics by region
+    /// - Aggregate metrics by time period
+    /// </remarks>
+    ///
+    /// <example>
+    /// <code>
+    /// // Group users by country
+    /// let q = query {
+    ///     for user in users do
+    ///     groupBy user.Country
+    /// }
+    /// let! results = users |> Collection.execGroupBy q
+    /// // Returns: [("USA", 150); ("Canada", 45); ("UK", 80)]
+    ///
+    /// // Group with filter
+    /// let q2 = query {
+    ///     for user in users do
+    ///     where (user.Age >= 18L)
+    ///     groupBy user.Status
+    /// }
+    /// </code>
+    /// </example>
+    [<CustomOperation("groupBy", MaintainsVariableSpace = true)>]
+    member _.GroupBy
+        (source: TranslatedQuery<'T>, [<ProjectionParameter>] keySelector: 'T -> 'Key)
+        : TranslatedQuery<'T> =
+        Unchecked.defaultof<_>
 
 
 // ============================================================
@@ -2636,17 +4231,53 @@ module internal QueryTranslator =
 
         // List/Array.Contains for IN queries: [1;2;3].Contains(field) or list.Contains(field)
         // Matches: someList.Contains(record.Field)
-        | Call(Some receiver, methodInfo, [ arg ]) when methodInfo.Name = "Contains" && not (receiver.Type = typeof<string>) ->
+        | Call(Some receiver, methodInfo, [ arg ]) when
+            methodInfo.Name = "Contains" && not (receiver.Type = typeof<string>)
+            ->
             let field = extractPropertyName arg
-            let values = evaluateExpr receiver :?> System.Collections.IEnumerable |> Seq.cast<obj> |> Seq.toList
+
+            let values =
+                evaluateExpr receiver :?> System.Collections.IEnumerable
+                |> Seq.cast<obj>
+                |> Seq.toList
+
             Query.Field(field, FieldOp.Compare(box (CompareOp.In values)))
 
         // List.contains / Seq.contains / Array.contains: List.contains field list
         // F# module functions: List.contains value list, Seq.contains value seq, Array.contains value array
-        | Call(None, methodInfo, [ fieldExpr; listExpr ]) when methodInfo.Name = "Contains" || methodInfo.Name = "contains" ->
+        | Call(None, methodInfo, [ fieldExpr; listExpr ]) when
+            methodInfo.Name = "Contains" || methodInfo.Name = "contains"
+            ->
             let field = extractPropertyName fieldExpr
-            let values = evaluateExpr listExpr :?> System.Collections.IEnumerable |> Seq.cast<obj> |> Seq.toList
+
+            let values =
+                evaluateExpr listExpr :?> System.Collections.IEnumerable
+                |> Seq.cast<obj>
+                |> Seq.toList
+
             Query.Field(field, FieldOp.Compare(box (CompareOp.In values)))
+
+        // Sql.like: Sql.like pattern field -> SQL LIKE (case-sensitive)
+        // Matches: Sql.like "_e%" user.Name
+        | Call(None, methodInfo, [ patternExpr; fieldExpr ]) when
+            methodInfo.DeclaringType <> null
+            && methodInfo.DeclaringType.Name = "Sql"
+            && methodInfo.Name = "like"
+            ->
+            let field = extractPropertyName fieldExpr
+            let pattern = evaluateExpr patternExpr :?> string
+            Query.Field(field, FieldOp.String(StringOp.Like pattern))
+
+        // Sql.ilike: Sql.ilike pattern field -> SQL LIKE COLLATE NOCASE (case-insensitive)
+        // Matches: Sql.ilike "admin%" user.Email
+        | Call(None, methodInfo, [ patternExpr; fieldExpr ]) when
+            methodInfo.DeclaringType <> null
+            && methodInfo.DeclaringType.Name = "Sql"
+            && methodInfo.Name = "ilike"
+            ->
+            let field = extractPropertyName fieldExpr
+            let pattern = evaluateExpr patternExpr :?> string
+            Query.Field(field, FieldOp.String(StringOp.ILike pattern))
 
         // Unsupported pattern
         | _ -> failwith $"Unsupported predicate expression: {expr}"
@@ -3160,6 +4791,42 @@ module internal QueryTranslator =
                 { q with
                     OrderBy = currentOrderBy @ [ (field, SortDirection.Desc) ] }
 
+            // sortByNullable field (ascending with NULLs last)
+            | Call(Some _, mi, [ source; selector ]) when isQueryBuilderMethod mi "SortByNullable" ->
+                let q = loop source query
+                let field = extractPropertyName selector
+                let { OrderBy = currentOrderBy } = q // Destructure to access field
+
+                { q with
+                    OrderBy = currentOrderBy @ [ (field, SortDirection.AscNullsLast) ] }
+
+            // sortByNullableDescending field (descending with NULLs last)
+            | Call(Some _, mi, [ source; selector ]) when isQueryBuilderMethod mi "SortByNullableDescending" ->
+                let q = loop source query
+                let field = extractPropertyName selector
+                let { OrderBy = currentOrderBy } = q // Destructure to access field
+
+                { q with
+                    OrderBy = currentOrderBy @ [ (field, SortDirection.DescNullsLast) ] }
+
+            // thenByNullable field (secondary sort ascending with NULLs last)
+            | Call(Some _, mi, [ source; selector ]) when isQueryBuilderMethod mi "ThenByNullable" ->
+                let q = loop source query
+                let field = extractPropertyName selector
+                let { OrderBy = currentOrderBy } = q // Destructure to access field
+
+                { q with
+                    OrderBy = currentOrderBy @ [ (field, SortDirection.AscNullsLast) ] }
+
+            // thenByNullableDescending field (secondary sort descending with NULLs last)
+            | Call(Some _, mi, [ source; selector ]) when isQueryBuilderMethod mi "ThenByNullableDescending" ->
+                let q = loop source query
+                let field = extractPropertyName selector
+                let { OrderBy = currentOrderBy } = q // Destructure to access field
+
+                { q with
+                    OrderBy = currentOrderBy @ [ (field, SortDirection.DescNullsLast) ] }
+
             // take n
             | Call(Some _, mi, [ source; Value(count, _) ]) when isQueryBuilderMethod mi "Take" ->
                 let q = loop source query
@@ -3176,6 +4843,81 @@ module internal QueryTranslator =
                 let proj = translateProjection projection
                 { q with Projection = proj }
 
+            // distinct (remove duplicates)
+            | Call(Some _, mi, [ source ]) when isQueryBuilderMethod mi "Distinct" ->
+                let q = loop source query
+                { q with Distinct = true }
+
+            // minBy field (aggregate)
+            | Call(Some _, mi, [ source; selector ]) when isQueryBuilderMethod mi "MinBy" ->
+                let q = loop source query
+                let field = extractPropertyName selector
+
+                { q with
+                    Aggregate = Some(FractalDb.Types.AggregateOp.Min field) }
+
+            // maxBy field (aggregate)
+            | Call(Some _, mi, [ source; selector ]) when isQueryBuilderMethod mi "MaxBy" ->
+                let q = loop source query
+                let field = extractPropertyName selector
+
+                { q with
+                    Aggregate = Some(FractalDb.Types.AggregateOp.Max field) }
+
+            // sumBy field (aggregate)
+            | Call(Some _, mi, [ source; selector ]) when isQueryBuilderMethod mi "SumBy" ->
+                let q = loop source query
+                let field = extractPropertyName selector
+
+                { q with
+                    Aggregate = Some(FractalDb.Types.AggregateOp.Sum field) }
+
+            // averageBy field (aggregate)
+            | Call(Some _, mi, [ source; selector ]) when isQueryBuilderMethod mi "AverageBy" ->
+                let q = loop source query
+                let field = extractPropertyName selector
+
+                { q with
+                    Aggregate = Some(FractalDb.Types.AggregateOp.Avg field) }
+
+            // minByNullable field (nullable aggregate)
+            | Call(Some _, mi, [ source; selector ]) when isQueryBuilderMethod mi "MinByNullable" ->
+                let q = loop source query
+                let field = extractPropertyName selector
+
+                { q with
+                    Aggregate = Some(FractalDb.Types.AggregateOp.Min field) }
+
+            // maxByNullable field (nullable aggregate)
+            | Call(Some _, mi, [ source; selector ]) when isQueryBuilderMethod mi "MaxByNullable" ->
+                let q = loop source query
+                let field = extractPropertyName selector
+
+                { q with
+                    Aggregate = Some(FractalDb.Types.AggregateOp.Max field) }
+
+            // sumByNullable field (nullable aggregate)
+            | Call(Some _, mi, [ source; selector ]) when isQueryBuilderMethod mi "SumByNullable" ->
+                let q = loop source query
+                let field = extractPropertyName selector
+
+                { q with
+                    Aggregate = Some(FractalDb.Types.AggregateOp.Sum field) }
+
+            // averageByNullable field (nullable aggregate)
+            | Call(Some _, mi, [ source; selector ]) when isQueryBuilderMethod mi "AverageByNullable" ->
+                let q = loop source query
+                let field = extractPropertyName selector
+
+                { q with
+                    Aggregate = Some(FractalDb.Types.AggregateOp.Avg field) }
+
+            // groupBy field (grouping)
+            | Call(Some _, mi, [ source; selector ]) when isQueryBuilderMethod mi "GroupBy" ->
+                let q = loop source query
+                let field = extractPropertyName selector
+                { q with GroupBy = Some field }
+
             // Unhandled pattern - return accumulator unchanged
             | _ -> query
 
@@ -3186,7 +4928,10 @@ module internal QueryTranslator =
               OrderBy = []
               Skip = None
               Take = None
-              Projection = Projection.SelectAll }
+              Projection = Projection.SelectAll
+              Distinct = false
+              Aggregate = None
+              GroupBy = None }
 
         loop (expr :> Expr) empty
 

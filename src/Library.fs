@@ -742,6 +742,173 @@ module CancellableTaskResult =
             }
 
 // =============================================================================
+// SQL Helper Functions (for Query Expressions)
+// =============================================================================
+
+/// <summary>
+/// SQL helper functions for use in query expressions.
+/// </summary>
+///
+/// <remarks>
+/// The Sql module provides marker functions for SQL pattern matching operations
+/// that get translated to SQL LIKE expressions when used in query expressions.
+/// These functions cannot be called directly at runtime - they are only meant
+/// to be used within query { ... } expressions where they are translated to SQL.
+///
+/// <para><strong>Pattern Wildcards:</strong></para>
+/// - <c>%</c> - Matches zero or more characters
+/// - <c>_</c> - Matches exactly one character
+/// - <c>[abc]</c> - Matches any single character in the set
+/// - <c>[^abc]</c> - Matches any single character NOT in the set
+/// - <c>[a-z]</c> - Matches any single character in the range
+///
+/// <para><strong>Case Sensitivity:</strong></para>
+/// - <c>like</c> - Case-sensitive matching
+/// - <c>ilike</c> - Case-insensitive matching (uses COLLATE NOCASE)
+/// </remarks>
+///
+/// <example>
+/// <code>
+/// open FractalDb
+///
+/// // Case-sensitive pattern matching
+/// query {
+///     for user in users do
+///     where (Sql.like "_e%" user.Name)  // Second char is 'e'
+///     select user
+/// }
+///
+/// // Case-insensitive pattern matching
+/// query {
+///     for user in users do
+///     where (Sql.ilike "admin%" user.Email)  // Starts with 'admin' (any case)
+///     select user
+/// }
+///
+/// // Character set patterns
+/// query {
+///     for user in users do
+///     where (Sql.like "[abc]%" user.Name)  // Name starts with a, b, or c
+///     select user
+/// }
+///
+/// // Negated character set
+/// query {
+///     for user in users do
+///     where (Sql.like "[^0-9]%" user.Code)  // Code doesn't start with digit
+///     select user
+/// }
+/// </code>
+/// </example>
+[<RequireQualifiedAccess>]
+module Sql =
+    open System
+
+    /// <summary>
+    /// SQL LIKE pattern matching (case-sensitive).
+    /// </summary>
+    ///
+    /// <param name="pattern">The LIKE pattern with wildcards (%, _, [abc], [^abc]).</param>
+    /// <param name="field">The field value to match against (from document property).</param>
+    ///
+    /// <returns>
+    /// This function always throws at runtime. It is a marker function that gets
+    /// translated to SQL LIKE when used in query expressions.
+    /// </returns>
+    ///
+    /// <remarks>
+    /// This is a marker function for query expression translation only.
+    /// Do not call this function directly - it will throw InvalidOperationException.
+    /// Use only within query { ... } where clauses.
+    ///
+    /// <para><strong>Pattern Wildcards:</strong></para>
+    /// - <c>%</c> - Matches zero or more characters
+    /// - <c>_</c> - Matches exactly one character
+    /// - <c>[abc]</c> - Matches any single character in the set
+    /// - <c>[^abc]</c> - Matches any single character NOT in the set
+    ///
+    /// <para><strong>SQL Generated:</strong></para>
+    /// <c>field LIKE @pattern</c>
+    /// </remarks>
+    ///
+    /// <example>
+    /// <code>
+    /// // Starts with "admin"
+    /// where (Sql.like "admin%" user.Name)
+    ///
+    /// // Ends with "@gmail.com"
+    /// where (Sql.like "%@gmail.com" user.Email)
+    ///
+    /// // Second character is 'e'
+    /// where (Sql.like "_e%" user.Name)
+    ///
+    /// // Exactly 3 characters
+    /// where (Sql.like "___" user.Code)
+    ///
+    /// // Starts with a, b, or c
+    /// where (Sql.like "[abc]%" user.Name)
+    /// </code>
+    /// </example>
+    ///
+    /// <exception cref="InvalidOperationException">
+    /// Always thrown if called directly at runtime.
+    /// </exception>
+    let like (pattern: string) (field: string) : bool =
+        raise (
+            InvalidOperationException(
+                "Sql.like can only be used within query expressions. It is translated to SQL LIKE at query compilation time."
+            )
+        )
+
+    /// <summary>
+    /// SQL LIKE pattern matching (case-insensitive).
+    /// </summary>
+    ///
+    /// <param name="pattern">The LIKE pattern with wildcards (%, _, [abc], [^abc]).</param>
+    /// <param name="field">The field value to match against (from document property).</param>
+    ///
+    /// <returns>
+    /// This function always throws at runtime. It is a marker function that gets
+    /// translated to SQL LIKE with COLLATE NOCASE when used in query expressions.
+    /// </returns>
+    ///
+    /// <remarks>
+    /// This is a marker function for query expression translation only.
+    /// Do not call this function directly - it will throw InvalidOperationException.
+    /// Use only within query { ... } where clauses.
+    ///
+    /// <para><strong>Case Insensitivity:</strong></para>
+    /// Uses SQLite's COLLATE NOCASE to perform case-insensitive matching.
+    /// "ADMIN", "admin", "Admin" all match pattern "admin%".
+    ///
+    /// <para><strong>SQL Generated:</strong></para>
+    /// <c>field LIKE @pattern COLLATE NOCASE</c>
+    /// </remarks>
+    ///
+    /// <example>
+    /// <code>
+    /// // Matches "ADMIN", "admin", "Admin", etc.
+    /// where (Sql.ilike "admin%" user.Email)
+    ///
+    /// // Case-insensitive email domain matching
+    /// where (Sql.ilike "%@GMAIL.COM" user.Email)
+    ///
+    /// // Name contains "smith" (any case)
+    /// where (Sql.ilike "%smith%" user.Name)
+    /// </code>
+    /// </example>
+    ///
+    /// <exception cref="InvalidOperationException">
+    /// Always thrown if called directly at runtime.
+    /// </exception>
+    let ilike (pattern: string) (field: string) : bool =
+        raise (
+            InvalidOperationException(
+                "Sql.ilike can only be used within query expressions. It is translated to SQL LIKE COLLATE NOCASE at query compilation time."
+            )
+        )
+
+// =============================================================================
 // Database (from Database.fs)
 // =============================================================================
 

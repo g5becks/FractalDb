@@ -22,16 +22,17 @@ open System
 /// }
 /// </code>
 /// </example>
-type DocumentMeta = {
-    /// <summary>Unique identifier for the document (UUID v7 format).</summary>
-    Id: string
-    
-    /// <summary>Unix timestamp in milliseconds when the document was created.</summary>
-    CreatedAt: int64
-    
-    /// <summary>Unix timestamp in milliseconds when the document was last updated.</summary>
-    UpdatedAt: int64
-}
+type DocumentMeta =
+    {
+        /// <summary>Unique identifier for the document (UUID v7 format).</summary>
+        Id: string
+
+        /// <summary>Unix timestamp in milliseconds when the document was created.</summary>
+        CreatedAt: int64
+
+        /// <summary>Unix timestamp in milliseconds when the document was last updated.</summary>
+        UpdatedAt: int64
+    }
 
 /// <summary>
 /// A document wraps user data with auto-generated metadata.
@@ -61,19 +62,20 @@ type DocumentMeta = {
 /// }
 /// </code>
 /// </example>
-type Document<'T> = {
-    /// <summary>Unique identifier for the document (UUID v7 format).</summary>
-    Id: string
-    
-    /// <summary>The user data stored in this document.</summary>
-    Data: 'T
-    
-    /// <summary>Unix timestamp in milliseconds when the document was created.</summary>
-    CreatedAt: int64
-    
-    /// <summary>Unix timestamp in milliseconds when the document was last updated.</summary>
-    UpdatedAt: int64
-}
+type Document<'T> =
+    {
+        /// <summary>Unique identifier for the document (UUID v7 format).</summary>
+        Id: string
+
+        /// <summary>The user data stored in this document.</summary>
+        Data: 'T
+
+        /// <summary>Unix timestamp in milliseconds when the document was created.</summary>
+        CreatedAt: int64
+
+        /// <summary>Unix timestamp in milliseconds when the document was last updated.</summary>
+        UpdatedAt: int64
+    }
 
 /// <summary>
 /// Provides functions for generating and validating document identifiers.
@@ -89,7 +91,7 @@ type Document<'T> = {
 /// UUID v7 is available in .NET 9+ via Guid.CreateVersion7().
 /// </remarks>
 module IdGenerator =
-    
+
     /// <summary>
     /// Generates a new time-sortable UUID v7 identifier.
     /// </summary>
@@ -110,9 +112,8 @@ module IdGenerator =
     /// // id2 > id1 (lexicographically, since id2 was generated later)
     /// </code>
     /// </example>
-    let generate () : string =
-        Guid.CreateVersion7().ToString()
-    
+    let generate () : string = Guid.CreateVersion7().ToString()
+
     /// <summary>
     /// Checks if an ID string is empty, null, or represents an empty GUID.
     /// </summary>
@@ -120,7 +121,7 @@ module IdGenerator =
     /// <param name="id">The ID string to check.</param>
     ///
     /// <returns>
-    /// <c>true</c> if the ID is null, empty, or equals "00000000-0000-0000-0000-000000000000"; 
+    /// <c>true</c> if the ID is null, empty, or equals "00000000-0000-0000-0000-000000000000";
     /// otherwise <c>false</c>.
     /// </returns>
     ///
@@ -139,7 +140,7 @@ module IdGenerator =
     /// </example>
     let isEmptyOrDefault (id: string) : bool =
         String.IsNullOrEmpty id || id = Guid.Empty.ToString()
-    
+
     /// <summary>
     /// Validates whether a string is a properly formatted GUID.
     /// </summary>
@@ -179,7 +180,7 @@ module IdGenerator =
 /// as well as utility functions for timestamp operations.
 /// </remarks>
 module Timestamp =
-    
+
     /// <summary>
     /// Gets the current Unix timestamp in milliseconds.
     /// </summary>
@@ -199,7 +200,7 @@ module Timestamp =
     /// </example>
     let now () : int64 =
         DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()
-    
+
     /// <summary>
     /// Converts a Unix timestamp in milliseconds to a DateTimeOffset.
     /// </summary>
@@ -221,7 +222,7 @@ module Timestamp =
     /// </example>
     let toDateTimeOffset (timestamp: int64) : DateTimeOffset =
         DateTimeOffset.FromUnixTimeMilliseconds(timestamp)
-    
+
     /// <summary>
     /// Converts a DateTimeOffset to a Unix timestamp in milliseconds.
     /// </summary>
@@ -242,9 +243,8 @@ module Timestamp =
     /// // timestamp = 1704067200000L
     /// </code>
     /// </example>
-    let fromDateTimeOffset (dto: DateTimeOffset) : int64 =
-        dto.ToUnixTimeMilliseconds()
-    
+    let fromDateTimeOffset (dto: DateTimeOffset) : int64 = dto.ToUnixTimeMilliseconds()
+
     /// <summary>
     /// Checks if a timestamp falls within a specified range (inclusive).
     /// </summary>
@@ -270,8 +270,7 @@ module Timestamp =
     /// Timestamp.isInRange start end' (start - 1L)  // false
     /// </code>
     /// </example>
-    let isInRange (start: int64) (end': int64) (timestamp: int64) : bool =
-        timestamp >= start && timestamp <= end'
+    let isInRange (start: int64) (end': int64) (timestamp: int64) : bool = timestamp >= start && timestamp <= end'
 
 /// <summary>
 /// Provides functions for creating and manipulating documents.
@@ -283,7 +282,7 @@ module Timestamp =
 /// update document data while preserving metadata, and transform document data.
 /// </remarks>
 module Document =
-    
+
     /// <summary>
     /// Creates a new document with auto-generated ID and current timestamps.
     /// </summary>
@@ -309,14 +308,13 @@ module Document =
     /// </code>
     /// </example>
     let create (data: 'T) : Document<'T> =
-        let now = Timestamp.now()
-        {
-            Id = IdGenerator.generate()
-            Data = data
-            CreatedAt = now
-            UpdatedAt = now
-        }
-    
+        let now = Timestamp.now ()
+
+        { Id = IdGenerator.generate ()
+          Data = data
+          CreatedAt = now
+          UpdatedAt = now }
+
     /// <summary>
     /// Creates a new document with an explicit ID and current timestamps.
     /// </summary>
@@ -343,14 +341,13 @@ module Document =
     /// </code>
     /// </example>
     let createWithId (id: string) (data: 'T) : Document<'T> =
-        let now = Timestamp.now()
-        {
-            Id = id
-            Data = data
-            CreatedAt = now
-            UpdatedAt = now
-        }
-    
+        let now = Timestamp.now ()
+
+        { Id = id
+          Data = data
+          CreatedAt = now
+          UpdatedAt = now }
+
     /// <summary>
     /// Updates a document's data using a transformation function, preserving ID and CreatedAt.
     /// </summary>
@@ -386,8 +383,8 @@ module Document =
     let update (f: 'T -> 'T) (doc: Document<'T>) : Document<'T> =
         { doc with
             Data = f doc.Data
-            UpdatedAt = Timestamp.now() }
-    
+            UpdatedAt = Timestamp.now () }
+
     /// <summary>
     /// Maps a document's data to a different type while preserving all metadata.
     /// </summary>
@@ -415,7 +412,7 @@ module Document =
     ///
     /// let userDoc = Document.create { Name = "Alice"; Email = "alice@example.com"; Age = 30 }
     ///
-    /// let summaryDoc = Document.map 
+    /// let summaryDoc = Document.map
     ///     (fun user -> { DisplayName = user.Name; Contact = user.Email })
     ///     userDoc
     /// // summaryDoc.Id = userDoc.Id
@@ -425,9 +422,103 @@ module Document =
     /// </code>
     /// </example>
     let map (f: 'T -> 'U) (doc: Document<'T>) : Document<'U> =
-        {
-            Id = doc.Id
-            Data = f doc.Data
-            CreatedAt = doc.CreatedAt
-            UpdatedAt = doc.UpdatedAt
-        }
+        { Id = doc.Id
+          Data = f doc.Data
+          CreatedAt = doc.CreatedAt
+          UpdatedAt = doc.UpdatedAt }
+
+/// <summary>
+/// Represents aggregate operations for query expressions.
+/// </summary>
+///
+/// <remarks>
+/// AggregateOp defines the supported aggregate functions that can be used in
+/// query expressions. These operations return single scalar values computed
+/// across all matching documents.
+///
+/// Aggregates are translated to SQL aggregate functions:
+/// - Min → SQL MIN()
+/// - Max → SQL MAX()
+/// - Sum → SQL SUM()
+/// - Avg → SQL AVG()
+/// - Count → SQL COUNT(*)
+///
+/// All field-based aggregates (Min, Max, Sum, Avg) operate on a specific field
+/// extracted from the JSON document body. Count operates on the entire result set.
+/// </remarks>
+///
+/// <example>
+/// <code>
+/// // Get minimum age
+/// AggregateOp.Min "age"
+///
+/// // Get maximum price
+/// AggregateOp.Max "price"
+///
+/// // Sum all quantities
+/// AggregateOp.Sum "quantity"
+///
+/// // Average rating
+/// AggregateOp.Avg "rating"
+///
+/// // Count all documents
+/// AggregateOp.Count
+/// </code>
+/// </example>
+[<RequireQualifiedAccess>]
+type AggregateOp =
+    /// <summary>
+    /// Returns the minimum value of the specified field.
+    /// </summary>
+    ///
+    /// <remarks>
+    /// Translates to SQL: MIN(json_extract(body, '$.field'))
+    /// Works with numeric fields and strings (lexicographic comparison).
+    /// Returns NULL if no documents match or all values are NULL.
+    /// </remarks>
+    | Min of field: string
+
+    /// <summary>
+    /// Returns the maximum value of the specified field.
+    /// </summary>
+    ///
+    /// <remarks>
+    /// Translates to SQL: MAX(json_extract(body, '$.field'))
+    /// Works with numeric fields and strings (lexicographic comparison).
+    /// Returns NULL if no documents match or all values are NULL.
+    /// </remarks>
+    | Max of field: string
+
+    /// <summary>
+    /// Returns the sum of all values for the specified field.
+    /// </summary>
+    ///
+    /// <remarks>
+    /// Translates to SQL: SUM(json_extract(body, '$.field'))
+    /// Only works with numeric fields (integers, decimals, floats).
+    /// Returns NULL if no documents match; treats NULL values as 0.
+    /// </remarks>
+    | Sum of field: string
+
+    /// <summary>
+    /// Returns the average (mean) of all values for the specified field.
+    /// </summary>
+    ///
+    /// <remarks>
+    /// Translates to SQL: AVG(json_extract(body, '$.field'))
+    /// Only works with numeric fields (integers, decimals, floats).
+    /// Returns NULL if no documents match; excludes NULL values from calculation.
+    /// Result is always a floating-point number.
+    /// </remarks>
+    | Avg of field: string
+
+    /// <summary>
+    /// Returns the count of matching documents.
+    /// </summary>
+    ///
+    /// <remarks>
+    /// Translates to SQL: COUNT(*)
+    /// Counts all documents matching the query filter.
+    /// Returns 0 if no documents match (never NULL).
+    /// </remarks>
+    | Count

@@ -199,6 +199,61 @@ let companyUsers = query {
 }
 ```
 
+## Pattern Matching with LIKE
+
+Use `Sql.like` and `Sql.ilike` for SQL LIKE pattern matching with wildcards:
+
+```fsharp
+open FractalDb
+
+// Case-sensitive LIKE pattern
+let gmailUsers = query {
+    for user in users do
+    where (Sql.like "%@gmail.com" user.Email)
+}
+
+// Case-insensitive LIKE pattern (ilike)
+let searchName = query {
+    for user in users do
+    where (Sql.ilike "%john%" user.Name)
+}
+```
+
+### LIKE Pattern Syntax
+
+| Pattern | Matches |
+|---------|---------|
+| `%` | Any sequence of characters (including empty) |
+| `_` | Any single character |
+| `%text` | Ends with "text" |
+| `text%` | Starts with "text" |
+| `%text%` | Contains "text" |
+| `a_b` | "a" + any char + "b" (e.g., "aXb", "a1b") |
+
+### LIKE Examples
+
+```fsharp
+// Find users with Gmail addresses
+let gmailQuery = query {
+    for user in users do
+    where (Sql.like "%@gmail.com" user.Email)
+}
+
+// Case-insensitive search for names containing "smith"
+let smithQuery = query {
+    for user in users do
+    where (Sql.ilike "%smith%" user.Name)
+}
+
+// Match specific pattern: 3-letter extension
+let shortExtension = query {
+    for file in files do
+    where (Sql.like "%.___" file.Name)  // e.g., "file.txt", "doc.pdf"
+}
+```
+
+**Note**: `Sql.like` is case-sensitive, while `Sql.ilike` is case-insensitive. The pattern is always the first argument, followed by the field.
+
 ## Sorting
 
 ### Ascending Sort
@@ -216,6 +271,26 @@ let alphabetical = query {
 let newest = query {
     for post in posts do
     sortByDescending post.CreatedAt
+}
+```
+
+### Multi-Level Sorting
+
+Use `thenBy` and `thenByDescending` for secondary sort criteria:
+
+```fsharp
+// Sort by department, then by name within each department
+let organized = query {
+    for user in users do
+    sortBy user.Department
+    thenBy user.Name
+}
+
+// Sort by status ascending, then by date descending
+let prioritized = query {
+    for task in tasks do
+    sortBy task.Status
+    thenByDescending task.DueDate
 }
 ```
 
@@ -237,6 +312,68 @@ let topPosts = query {
     take 10
 }
 ```
+
+## Nullable Sorting
+
+When sorting fields that may contain NULL values, use nullable sort operators to control NULL placement:
+
+### sortByNullable / sortByNullableDescending
+
+These operators sort with NULL values appearing last:
+
+```fsharp
+// Sort by price, NULLs appear last
+let productsByPrice = query {
+    for product in products do
+    sortByNullable product.Price
+}
+
+// Sort by rating descending, NULLs appear last
+let topRated = query {
+    for product in products do
+    sortByNullableDescending product.Rating
+}
+```
+
+### thenByNullable / thenByNullableDescending
+
+Use for secondary nullable sorting:
+
+```fsharp
+// Primary sort by category, secondary sort by price with NULLs last
+let organized = query {
+    for product in products do
+    sortBy product.Category
+    thenByNullable product.Price
+}
+
+// Sort by status, then by optional priority descending
+let tasks = query {
+    for task in tasks do
+    sortBy task.Status
+    thenByNullableDescending task.Priority
+}
+```
+
+### SQL Generated
+
+Nullable sorting generates SQL that ensures NULLs appear last:
+
+```sql
+-- sortByNullable generates:
+ORDER BY field IS NULL, field ASC
+
+-- sortByNullableDescending generates:
+ORDER BY field IS NULL, field DESC
+```
+
+### When to Use Nullable Sorting
+
+| Scenario | Use |
+|----------|-----|
+| Field always has values | `sortBy` / `sortByDescending` |
+| Field may be NULL, want NULLs last | `sortByNullable` / `sortByNullableDescending` |
+| Secondary sort on nullable field | `thenByNullable` / `thenByNullableDescending` |
 
 ## Pagination
 
@@ -271,6 +408,29 @@ let page3 = query {
     take 10
 }
 ```
+
+## Distinct Results
+
+Use `distinct` to remove duplicate documents from results:
+
+```fsharp
+// Get unique categories
+let uniqueCategories = query {
+    for product in products do
+    select product.Category
+    distinct
+}
+
+// Distinct with filters
+let activeStatuses = query {
+    for order in orders do
+    where (order.Year = 2024)
+    select order.Status
+    distinct
+}
+```
+
+**Note**: `distinct` removes duplicate rows from the entire result set. When used with projections, it deduplicates the projected values.
 
 ## Nested Fields
 
@@ -311,6 +471,254 @@ let cities = query {
     select user.Address.City
 }
 ```
+
+## Aggregate Operators
+
+FractalDb supports aggregate operations that compute a single value from matching documents.
+
+### minBy / maxBy
+
+Find minimum or maximum values:
+
+```fsharp
+// Find minimum age
+let minAgeQuery = query {
+    for user in users do
+    minBy user.Age
+}
+let! minAge = users |> Collection.execAggregate minAgeQuery
+
+// Find maximum score with filter
+let maxScoreQuery = query {
+    for user in users do
+    where (user.Active = true)
+    maxBy user.Score
+}
+let! maxScore = users |> Collection.execAggregate maxScoreQuery
+```
+
+### sumBy / averageBy
+
+Calculate sums and averages:
+
+```fsharp
+// Sum of order totals
+let totalQuery = query {
+    for order in orders do
+    where (order.Status = "completed")
+    sumBy order.Total
+}
+let! total = orders |> Collection.execAggregate totalQuery
+
+// Average rating
+let avgQuery = query {
+    for product in products do
+    averageBy product.Rating
+}
+let! avgRating = products |> Collection.execAggregate avgQuery
+```
+
+### Nullable Aggregates
+
+For fields that may contain NULL values, use nullable variants that return `Option`:
+
+```fsharp
+// minByNullable / maxByNullable
+let minPriceQuery = query {
+    for product in products do
+    minByNullable product.Price
+}
+let! minPrice = products |> Collection.execAggregateNullable minPriceQuery
+// Returns: int option (None if all values are NULL or no matches)
+
+// sumByNullable / averageByNullable
+let avgDiscountQuery = query {
+    for product in products do
+    averageByNullable product.Discount
+}
+let! avgDiscount = products |> Collection.execAggregateNullable avgDiscountQuery
+```
+
+### Aggregate Execution
+
+| Query Type | Execution Function | Return Type |
+|------------|-------------------|-------------|
+| `minBy` / `maxBy` / `sumBy` / `averageBy` | `Collection.execAggregate` | `'T` |
+| `minByNullable` / `maxByNullable` / `sumByNullable` / `averageByNullable` | `Collection.execAggregateNullable` | `'T option` |
+
+## Element Operators
+
+Element operators retrieve specific documents from the result set.
+
+### head / headOrDefault
+
+Get the first matching document:
+
+```fsharp
+// Get first (throws if empty)
+let firstQuery = query {
+    for user in users do
+    where (user.Active = true)
+    sortBy user.Name
+    head
+}
+let! first = users |> Collection.execHead firstQuery
+
+// Get first or None
+let maybeFirst = query {
+    for user in users do
+    where (user.Role = "admin")
+    headOrDefault
+}
+let! result = users |> Collection.execHeadOrDefault maybeFirst
+```
+
+### last / lastOrDefault
+
+Get the last matching document (requires sorting):
+
+```fsharp
+// Get last (throws if empty)
+let lastQuery = query {
+    for user in users do
+    sortBy user.CreatedAt
+    last
+}
+let! lastUser = users |> Collection.execLast lastQuery
+
+// Get last or None
+let maybeLast = query {
+    for user in users do
+    sortByDescending user.Score
+    lastOrDefault
+}
+let! result = users |> Collection.execLastOrDefault maybeLast
+```
+
+### exactlyOne / exactlyOneOrDefault
+
+Get exactly one matching document:
+
+```fsharp
+// Exactly one (throws if 0 or >1 matches)
+let singleQuery = query {
+    for user in users do
+    where (user.Email = "alice@example.com")
+    exactlyOne
+}
+let! user = users |> Collection.execExactlyOne singleQuery
+
+// Exactly one or None (throws if >1 matches)
+let maybeSingle = query {
+    for user in users do
+    where (user.Id = userId)
+    exactlyOneOrDefault
+}
+let! result = users |> Collection.execExactlyOneOrDefault maybeSingle
+```
+
+### nth
+
+Get the nth document (0-indexed):
+
+```fsharp
+// Get 5th user (index 4)
+let fifthQuery = query {
+    for user in users do
+    sortBy user.Name
+    nth 4
+}
+let! fifthUser = users |> Collection.execNth fifthQuery
+```
+
+### find
+
+Find the first document matching a predicate (throws if none found):
+
+```fsharp
+let findQuery = query {
+    for user in users do
+    find (user.Email = "bob@example.com")
+}
+let! found = users |> Collection.exec findQuery
+```
+
+### all
+
+Check if all documents match a predicate:
+
+```fsharp
+let allActiveQuery = query {
+    for user in users do
+    all (user.Active = true)
+}
+let! allActive = users |> Collection.execAll allActiveQuery
+// Returns: bool
+```
+
+### Element Operator Execution Summary
+
+| Operator | Execution Function | Returns | Throws When |
+|----------|-------------------|---------|-------------|
+| `head` | `execHead` | `Doc<'T>` | Empty result |
+| `headOrDefault` | `execHeadOrDefault` | `Doc<'T> option` | Never |
+| `last` | `execLast` | `Doc<'T>` | Empty result |
+| `lastOrDefault` | `execLastOrDefault` | `Doc<'T> option` | Never |
+| `exactlyOne` | `execExactlyOne` | `Doc<'T>` | 0 or >1 results |
+| `exactlyOneOrDefault` | `execExactlyOneOrDefault` | `Doc<'T> option` | >1 results |
+| `nth n` | `execNth` | `Doc<'T>` | Index out of range |
+| `find` | `exec` | `Doc<'T> list` | Predicate never matches |
+| `all` | `execAll` | `bool` | Never |
+
+## Grouping
+
+Use `groupBy` to group documents by a field value:
+
+```fsharp
+// Group users by department
+let byDepartment = query {
+    for user in users do
+    groupBy user.Department
+}
+let! groups = users |> Collection.execGroupBy byDepartment
+// Returns: (string * Doc<User> list) list
+
+// Process groups
+for (dept, deptUsers) in groups do
+    printfn "Department: %s (%d users)" dept (List.length deptUsers)
+```
+
+### Grouping with Filters
+
+```fsharp
+// Group active users by role
+let activeByRole = query {
+    for user in users do
+    where (user.Active = true)
+    groupBy user.Role
+}
+let! groups = users |> Collection.execGroupBy activeByRole
+
+// Group orders by status
+let ordersByStatus = query {
+    for order in orders do
+    where (order.Total > 100.0)
+    groupBy order.Status
+}
+```
+
+### GroupBy Execution
+
+```fsharp
+// Execute with Collection.execGroupBy
+let! groups = collection |> Collection.execGroupBy groupQuery
+
+// Each group is a tuple: (groupKey, documents)
+for (key, docs) in groups do
+    printfn "Group '%s' has %d items" (string key) (List.length docs)
+```
+
+**Note**: `groupBy` returns groups as tuples where the first element is the group key and the second is the list of documents in that group.
 
 ## Executing Queries
 
@@ -642,9 +1050,34 @@ let usersInCity city = query {
 | Filter | `where (predicate)` | Filter documents |
 | Sort Ascending | `sortBy x.Field` | Sort ascending |
 | Sort Descending | `sortByDescending x.Field` | Sort descending |
+| Sort Nullable Asc | `sortByNullable x.Field` | Sort ascending, NULLs last |
+| Sort Nullable Desc | `sortByNullableDescending x.Field` | Sort descending, NULLs last |
+| Secondary Sort | `thenBy x.Field` | Secondary sort ascending |
+| Secondary Sort Desc | `thenByDescending x.Field` | Secondary sort descending |
+| Secondary Nullable | `thenByNullable x.Field` | Secondary sort, NULLs last |
+| Secondary Nullable Desc | `thenByNullableDescending x.Field` | Secondary desc, NULLs last |
 | Limit | `take n` | Limit results |
 | Skip | `skip n` | Skip results |
 | Project | `select x.Field` | Select field |
+| Distinct | `distinct` | Remove duplicates |
+| Min | `minBy x.Field` | Minimum value |
+| Max | `maxBy x.Field` | Maximum value |
+| Sum | `sumBy x.Field` | Sum values |
+| Average | `averageBy x.Field` | Average value |
+| Min Nullable | `minByNullable x.Field` | Min with NULL handling |
+| Max Nullable | `maxByNullable x.Field` | Max with NULL handling |
+| Sum Nullable | `sumByNullable x.Field` | Sum with NULL handling |
+| Avg Nullable | `averageByNullable x.Field` | Avg with NULL handling |
+| First | `head` | First element (throws if empty) |
+| First or None | `headOrDefault` | First element or None |
+| Last | `last` | Last element (throws if empty) |
+| Last or None | `lastOrDefault` | Last element or None |
+| Single | `exactlyOne` | Exactly one (throws if 0 or >1) |
+| Single or None | `exactlyOneOrDefault` | Exactly one or None |
+| Nth Element | `nth n` | Element at index n |
+| Find | `find (predicate)` | Find first matching |
+| All Match | `all (predicate)` | Check all match |
+| Group | `groupBy x.Field` | Group by field |
 
 ## Predicate Reference
 
@@ -662,3 +1095,22 @@ let usersInCity city = query {
 | Contains | `x.Field.Contains("text")` |
 | Starts With | `x.Field.StartsWith("prefix")` |
 | Ends With | `x.Field.EndsWith("suffix")` |
+| LIKE (case-sensitive) | `Sql.like "%pattern%" x.Field` |
+| LIKE (case-insensitive) | `Sql.ilike "%pattern%" x.Field` |
+
+## Execution Functions Reference
+
+| Function | Input Query | Return Type | Description |
+|----------|-------------|-------------|-------------|
+| `exec` | Standard query | `Doc<'T> list` | Get all matching documents |
+| `execHead` | `head` query | `Doc<'T>` | Get first document |
+| `execHeadOrDefault` | `headOrDefault` query | `Doc<'T> option` | Get first or None |
+| `execLast` | `last` query | `Doc<'T>` | Get last document |
+| `execLastOrDefault` | `lastOrDefault` query | `Doc<'T> option` | Get last or None |
+| `execExactlyOne` | `exactlyOne` query | `Doc<'T>` | Get single document |
+| `execExactlyOneOrDefault` | `exactlyOneOrDefault` query | `Doc<'T> option` | Get single or None |
+| `execNth` | `nth` query | `Doc<'T>` | Get nth document |
+| `execAll` | `all` query | `bool` | Check all match predicate |
+| `execAggregate` | Aggregate query | `'T` | Execute aggregate |
+| `execAggregateNullable` | Nullable aggregate | `'T option` | Execute nullable aggregate |
+| `execGroupBy` | `groupBy` query | `('K * Doc<'T> list) list` | Get grouped documents |

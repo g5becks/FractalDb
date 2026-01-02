@@ -337,9 +337,21 @@ let emails = query {
 | `where (predicate)` | Filter documents |
 | `sortBy x.Field` | Sort ascending |
 | `sortByDescending x.Field` | Sort descending |
+| `sortByNullable x.Field` | Sort ascending, NULLs last |
+| `thenBy x.Field` | Secondary sort |
 | `take n` | Limit to n results |
 | `skip n` | Skip first n results |
 | `select x.Field` | Project to specific field |
+| `distinct` | Remove duplicate results |
+| `head` / `headOrDefault` | Get first element |
+| `last` / `lastOrDefault` | Get last element |
+| `exactlyOne` / `exactlyOneOrDefault` | Get single element |
+| `nth n` | Get nth element (0-indexed) |
+| `minBy` / `maxBy` | Aggregate min/max |
+| `sumBy` / `averageBy` | Aggregate sum/average |
+| `groupBy x.Field` | Group by field |
+| `all (predicate)` | Check all match |
+| `find (predicate)` | Find first matching |
 
 ### Where Clause Operators
 
@@ -357,6 +369,8 @@ let emails = query {
 | `x.Field.Contains("text")` | String contains |
 | `x.Field.StartsWith("pre")` | String starts with |
 | `x.Field.EndsWith("suf")` | String ends with |
+| `Sql.like "%pattern%" x.Field` | SQL LIKE (case-sensitive) |
+| `Sql.ilike "%pattern%" x.Field` | SQL LIKE (case-insensitive) |
 
 ## Query Composition
 
@@ -447,6 +461,45 @@ let! results = query.exec(users)
 - **Skip/Take** - the last one wins
 - **Projection** - the last one wins
 - All three styles can be mixed in the same codebase
+
+## Advanced Query Features
+
+FractalDb supports aggregates, grouping, element operators, and pattern matching:
+
+```fsharp
+// Aggregates
+let sumQuery = query {
+    for order in orders do
+    where (order.Status = "completed")
+    sumBy order.Total
+}
+let! total = orders |> Collection.execAggregate sumQuery
+
+// Grouping
+let groupQuery = query {
+    for user in users do
+    groupBy user.Department
+}
+let! groups = users |> Collection.execGroupBy groupQuery
+for (dept, deptUsers) in groups do
+    printfn "%s: %d users" dept (List.length deptUsers)
+
+// Element operators
+let lastQuery = query {
+    for user in users do
+    sortBy user.CreatedAt
+    last
+}
+let! lastUser = users |> Collection.execLast lastQuery
+
+// Pattern matching with LIKE
+let likeQuery = query {
+    for user in users do
+    where (Sql.ilike "%@gmail.com" user.Email)  // Case-insensitive
+}
+```
+
+See [Query Expressions documentation](docs/query-expressions.md) for complete details.
 
 ## Transactions
 
