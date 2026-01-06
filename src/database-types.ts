@@ -2,6 +2,7 @@ import type { Database as SQLiteDatabase } from "bun:sqlite"
 import type { CollectionBuilder } from "./collection-builder.js"
 import type { Collection } from "./collection-types.js"
 import type { Document } from "./core-types.js"
+import type { RetryOptions } from "./retry-types.js"
 import type { SchemaDefinition } from "./schema-types.js"
 
 /**
@@ -73,6 +74,27 @@ export type DatabaseOptions = {
    * ```
    */
   readonly enableCache?: boolean
+
+  /**
+   * Default retry configuration for all database operations.
+   *
+   * @remarks
+   * Provides automatic retry with exponential backoff for transient errors.
+   * Individual collections and operations can override this setting.
+   *
+   * @defaultValue No retries (retries: 0)
+   *
+   * @see {@link CollectionOptions.retry} for per-collection override
+   *
+   * @example
+   * ```typescript
+   * const db = new StrataDB({
+   *   database: 'app.db',
+   *   retry: { retries: 3, minTimeout: 1000, maxTimeout: 30000 }
+   * });
+   * ```
+   */
+  readonly retry?: RetryOptions
 }
 
 /**
