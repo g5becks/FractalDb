@@ -801,6 +801,12 @@ export type QueryOptions<T> = {
    * Requires `sort` to be set. More efficient than skip/limit for large datasets.
    */
   readonly cursor?: CursorSpec
+
+  /**
+   * AbortSignal for cancelling the operation.
+   * When the signal is aborted, the operation will throw an AbortedError.
+   */
+  readonly signal?: AbortSignal
 }
 
 /**

@@ -1,5 +1,6 @@
 import type { Database as SQLiteDatabase, SQLQueryBindings } from "bun:sqlite"
 import stringify from "fast-safe-stringify"
+import { throwIfAborted } from "./abort-utils.js"
 import type {
   Collection,
   DeleteResult,
@@ -575,7 +576,9 @@ export class SQLiteCollection<T extends Document> implements Collection<T> {
    * }
    * ```
    */
-  findById(id: string): Promise<T | null> {
+  findById(id: string, options?: { signal?: AbortSignal }): Promise<T | null> {
+    throwIfAborted(options?.signal)
+
     const stmt = this.db.prepare<{ _id: string; body: string }, [string]>(
       `SELECT _id, json(body) as body FROM ${this.name} WHERE _id = ?`
     )
@@ -640,6 +643,8 @@ export class SQLiteCollection<T extends Document> implements Collection<T> {
     filter: QueryFilter<T>,
     options?: QueryOptions<T>
   ): Promise<readonly T[]> {
+    throwIfAborted(options?.signal)
+
     const { sql: whereClause, params } = this.translator.translate(filter)
 
     let sql = `SELECT _id, json(body) as body FROM ${this.name}`
@@ -692,6 +697,8 @@ export class SQLiteCollection<T extends Document> implements Collection<T> {
       SQLQueryBindings[]
     >(sql)
     const rows = stmt.all(...allParams)
+
+    throwIfAborted(options?.signal)
 
     let results = rows.map((row) => {
       const doc = JSON.parse(row.body) as Omit<T, "_id">
@@ -768,7 +775,12 @@ export class SQLiteCollection<T extends Document> implements Collection<T> {
    * console.log(`Active users: ${activeCount}`);
    * ```
    */
-  count(filter: QueryFilter<T>): Promise<number> {
+  count(
+    filter: QueryFilter<T>,
+    options?: { signal?: AbortSignal }
+  ): Promise<number> {
+    throwIfAborted(options?.signal)
+
     const { sql: whereClause, params } = this.translator.translate(filter)
 
     let sql = `SELECT COUNT(*) as count FROM ${this.name}`
@@ -1581,8 +1593,11 @@ export class SQLiteCollection<T extends Document> implements Collection<T> {
    */
   distinct<K extends keyof Omit<T, "_id" | "createdAt" | "updatedAt">>(
     field: K,
-    filter?: QueryFilter<T>
+    filter?: QueryFilter<T>,
+    options?: { signal?: AbortSignal }
   ): Promise<T[K][]> {
+    throwIfAborted(options?.signal)
+
     const fieldStr = String(field)
 
     // Determine if field is indexed
@@ -1619,7 +1634,9 @@ export class SQLiteCollection<T extends Document> implements Collection<T> {
    *
    * @returns Promise resolving to the estimated document count
    */
-  estimatedDocumentCount(): Promise<number> {
+  estimatedDocumentCount(options?: { signal?: AbortSignal }): Promise<number> {
+    throwIfAborted(options?.signal)
+
     // Use SQLite's internal statistics for fast estimate
     const stmt = this.db.prepare<{ count: number }, []>(
       `SELECT COUNT(*) as count FROM ${this.name}`
