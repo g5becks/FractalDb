@@ -1,9 +1,11 @@
 ---
 id: task-182
 title: Export retry types and utilities from index.ts
-status: To Do
-assignee: []
+status: In Progress
+assignee:
+  - '@agent'
 created_date: '2026-01-06 00:24'
+updated_date: '2026-01-06 03:19'
 labels:
   - retry
   - exports
@@ -28,3 +30,12 @@ Update src/index.ts to export RetryOptions, RetryContext from retry-types.ts and
 - [ ] #6 bun run check passes with no errors
 - [ ] #7 bun run build succeeds
 <!-- AC:END -->
+
+## Implementation Plan
+
+<!-- SECTION:PLAN:BEGIN -->
+1. Check current exports in index.ts
+2. Add retry type exports from retry-types.ts
+3. Add retry utility exports from retry-utils.ts
+4. Run bun run check and bun run build
+<!-- SECTION:PLAN:END -->

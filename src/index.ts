@@ -99,6 +99,14 @@ export type {
   QueryFilter,
   StringOperator,
 } from "./query-types.js"
+// Retry types and utilities
+export type { RetryContext, RetryOptions } from "./retry-types.js"
+// biome-ignore lint/performance/noBarrelFile: library entry point requires re-exports
+export {
+  defaultShouldRetry,
+  mergeRetryOptions,
+  withRetry,
+} from "./retry-utils.js"
 export { createSchema } from "./schema-builder.js"
 export type { SchemaBuilder } from "./schema-builder-types.js"
 // Schema types and builder
