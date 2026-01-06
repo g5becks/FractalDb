@@ -718,7 +718,11 @@ export type Collection<T extends Document> = {
    */
   findOneAndDelete(
     filter: string | QueryFilter<T>,
-    options?: { sort?: SortSpec<T>; signal?: AbortSignal }
+    options?: {
+      sort?: SortSpec<T>
+      signal?: AbortSignal
+      retry?: RetryOptions | false
+    }
   ): Promise<T | null>
 
   /**
@@ -783,6 +787,7 @@ export type Collection<T extends Document> = {
       returnDocument?: "before" | "after"
       upsert?: boolean
       signal?: AbortSignal
+      retry?: RetryOptions | false
     }
   ): Promise<T | null>
 
@@ -844,6 +849,7 @@ export type Collection<T extends Document> = {
       returnDocument?: "before" | "after"
       upsert?: boolean
       signal?: AbortSignal
+      retry?: RetryOptions | false
     }
   ): Promise<T | null>
 
@@ -1059,7 +1065,10 @@ export type Collection<T extends Document> = {
    * await collection.drop({ signal: controller.signal });
    * ```
    */
-  drop(options?: { signal?: AbortSignal }): Promise<void>
+  drop(options?: {
+    signal?: AbortSignal
+    retry?: RetryOptions | false
+  }): Promise<void>
 
   // ===== Validation =====
 
@@ -1097,7 +1106,10 @@ export type Collection<T extends Document> = {
    * await users.validate(doc, { signal: controller.signal });
    * ```
    */
-  validate(doc: unknown, options?: { signal?: AbortSignal }): Promise<T>
+  validate(
+    doc: unknown,
+    options?: { signal?: AbortSignal; retry?: RetryOptions | false }
+  ): Promise<T>
 
   /**
    * Validate a document against the schema (sync).
