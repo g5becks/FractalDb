@@ -1703,7 +1703,9 @@ export class SQLiteCollection<T extends Document> implements Collection<T> {
    *
    * @returns Promise resolving when the collection is dropped
    */
-  drop(): Promise<void> {
+  drop(options?: { signal?: AbortSignal }): Promise<void> {
+    throwIfAborted(options?.signal)
+
     this.db.exec(`DROP TABLE IF EXISTS ${this.name}`)
     return Promise.resolve()
   }
@@ -1728,7 +1730,9 @@ export class SQLiteCollection<T extends Document> implements Collection<T> {
    * }
    * ```
    */
-  validate(doc: unknown): Promise<T> {
+  validate(doc: unknown, options?: { signal?: AbortSignal }): Promise<T> {
+    throwIfAborted(options?.signal)
+
     if (!this.schema.validate) {
       // No validator configured, trust the document
       return Promise.resolve(doc as T)
