@@ -1508,11 +1508,16 @@ export class SQLiteCollection<T extends Document> implements Collection<T> {
    */
   async findOneAndDelete(
     filter: string | QueryFilter<T>,
-    options?: { sort?: SortSpec<T> }
+    options?: { sort?: SortSpec<T>; signal?: AbortSignal }
   ): Promise<T | null> {
+    throwIfAborted(options?.signal)
+
     // Normalize and find the document first
     const normalizedFilter = this.normalizeFilter(filter)
     const doc = await this.findOne(normalizedFilter, options)
+
+    throwIfAborted(options?.signal)
+
     if (!doc) {
       return null
     }
@@ -1539,14 +1544,19 @@ export class SQLiteCollection<T extends Document> implements Collection<T> {
       sort?: SortSpec<T>
       returnDocument?: "before" | "after"
       upsert?: boolean
+      signal?: AbortSignal
     }
   ): Promise<T | null> {
+    throwIfAborted(options?.signal)
+
     const returnDoc = options?.returnDocument ?? "after"
     const normalizedFilter = this.normalizeFilter(filter)
 
     // Find the document
     const findOptions = options?.sort ? { sort: options.sort } : undefined
     const existing = await this.findOne(normalizedFilter, findOptions)
+
+    throwIfAborted(options?.signal)
 
     if (!existing) {
       // Handle upsert
@@ -1581,14 +1591,19 @@ export class SQLiteCollection<T extends Document> implements Collection<T> {
       sort?: SortSpec<T>
       returnDocument?: "before" | "after"
       upsert?: boolean
+      signal?: AbortSignal
     }
   ): Promise<T | null> {
+    throwIfAborted(options?.signal)
+
     const returnDoc = options?.returnDocument ?? "after"
     const normalizedFilter = this.normalizeFilter(filter)
 
     // Find the document
     const findOptions = options?.sort ? { sort: options.sort } : undefined
     const existing = await this.findOne(normalizedFilter, findOptions)
+
+    throwIfAborted(options?.signal)
 
     if (!existing) {
       // Handle upsert
