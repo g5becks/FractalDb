@@ -903,8 +903,11 @@ export class SQLiteCollection<T extends Document> implements Collection<T> {
    * ```
    */
   insertOne(
-    doc: Omit<T, "_id" | "createdAt" | "updatedAt"> & { _id?: string }
+    doc: Omit<T, "_id" | "createdAt" | "updatedAt"> & { _id?: string },
+    options?: { signal?: AbortSignal }
   ): Promise<T> {
+    throwIfAborted(options?.signal)
+
     const now = Date.now()
     const _id = doc._id ?? this.idGenerator()
 
@@ -992,18 +995,28 @@ export class SQLiteCollection<T extends Document> implements Collection<T> {
   async updateOne(
     filter: string | QueryFilter<T>,
     update: Omit<Partial<T>, "_id" | "createdAt" | "updatedAt">,
-    options?: { upsert?: boolean }
+    options?: { upsert?: boolean; signal?: AbortSignal }
   ): Promise<T | null> {
+    throwIfAborted(options?.signal)
+
     const normalizedFilter = this.normalizeFilter(filter)
-    const existing = await this.findOne(normalizedFilter)
+    const existing = await this.findOne(
+      normalizedFilter,
+      options?.signal ? { signal: options.signal } : undefined
+    )
+
+    throwIfAborted(options?.signal)
 
     if (!existing) {
       if (options?.upsert) {
         // Merge filter fields into document for upsert
         const filterFields =
           typeof filter === "string" ? { _id: filter } : filter
+        const signalOpt = options?.signal
+          ? { signal: options.signal }
+          : undefined
         // biome-ignore lint/suspicious/noExplicitAny: Type assertion needed for flexible filter merging
-        return this.insertOne({ ...filterFields, ...update } as any)
+        return this.insertOne({ ...filterFields, ...update } as any, signalOpt)
       }
       return null
     }
@@ -1079,8 +1092,11 @@ export class SQLiteCollection<T extends Document> implements Collection<T> {
    */
   replaceOne(
     filter: string | QueryFilter<T>,
-    doc: Omit<T, "_id" | "createdAt" | "updatedAt">
+    doc: Omit<T, "_id" | "createdAt" | "updatedAt">,
+    options?: { signal?: AbortSignal }
   ): Promise<T | null> {
+    throwIfAborted(options?.signal)
+
     const normalizedFilter = this.normalizeFilter(filter)
 
     // Find the document ID to replace
@@ -1095,6 +1111,9 @@ export class SQLiteCollection<T extends Document> implements Collection<T> {
     const row = this.db
       .prepare<{ _id: string; createdAt: number }, SQLQueryBindings[]>(querySql)
       .get(...params)
+
+    throwIfAborted(options?.signal)
+
     if (!row) {
       return Promise.resolve(null)
     }
@@ -1148,7 +1167,12 @@ export class SQLiteCollection<T extends Document> implements Collection<T> {
    * const deleted = await users.deleteOne({ status: 'inactive' });
    * ```
    */
-  deleteOne(filter: string | QueryFilter<T>): Promise<boolean> {
+  deleteOne(
+    filter: string | QueryFilter<T>,
+    options?: { signal?: AbortSignal }
+  ): Promise<boolean> {
+    throwIfAborted(options?.signal)
+
     const normalizedFilter = this.normalizeFilter(filter)
 
     // Optimization: If filter is just { _id: 'xxx' }, use direct delete
