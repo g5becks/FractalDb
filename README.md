@@ -21,6 +21,8 @@ Unlike MongoDB or other client-server databases, StrataDB runs **in-process** wi
 - **Text Search** - Multi-field search with case-insensitive matching
 - **Cursor Pagination** - Efficient, stable pagination for large datasets
 - **Field Projection** - Clean `select`/`omit` helpers for controlling returned fields
+- **Operation Cancellation** - AbortSignal support for canceling long-running operations
+- **Automatic Retries** - Configurable retry logic for transient failures
 
 ## Installation
 
@@ -85,6 +87,76 @@ const page2 = await users.find(
 // Field projection
 const names = await users.find({}, { select: ['name', 'email'] })
 const safe = await users.find({}, { omit: ['password'] })
+```
+
+## Operation Cancellation
+
+Cancel long-running operations using AbortSignal:
+
+```typescript
+const controller = new AbortController()
+
+// Cancel after 5 seconds
+setTimeout(() => controller.abort(), 5000)
+
+try {
+  const results = await users.find(
+    { age: { $gte: 18 } },
+    { signal: controller.signal }
+  )
+} catch (error) {
+  if (error instanceof AbortedError) {
+    console.log('Operation was cancelled')
+  }
+}
+
+// Use AbortSignal.timeout() for automatic timeout
+const results = await users.find(
+  {},
+  { signal: AbortSignal.timeout(5000) }
+)
+```
+
+## Automatic Retries
+
+Configure retry behavior at database, collection, or operation level:
+
+```typescript
+// Database-level: applies to all collections
+const db = new Strata({
+  database: 'app.db',
+  retry: {
+    retries: 3,
+    minTimeout: 100,
+    maxRetryTime: 5000
+  }
+})
+
+// Collection-level: overrides database settings
+const users = db.collection('users', schema, {
+  retry: {
+    retries: 5,
+    minTimeout: 50
+  }
+})
+
+// Operation-level: overrides collection settings
+await users.insertOne(
+  { name: 'Alice', email: 'alice@example.com', age: 30 },
+  { retry: { retries: 2, minTimeout: 10 } }
+)
+
+// Disable retries for specific operation
+await users.find({}, { retry: false })
+
+// Combine with AbortSignal
+await users.find(
+  {},
+  {
+    signal: AbortSignal.timeout(10000),
+    retry: { retries: 3, minTimeout: 100 }
+  }
+)
 ```
 
 ## Type Safety
