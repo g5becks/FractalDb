@@ -850,10 +850,15 @@ export type Collection<T extends Document> = {
    *   { name: 'Charlie', email: 'charlie@example.com', age: 35, role: 'user' }
    * ]);
    * console.log(`Inserted ${result.insertedCount} users`);
+   *
+   * // With abort signal
+   * const controller = new AbortController();
+   * const result = await users.insertMany(docs, { signal: controller.signal });
    * ```
    */
   insertMany(
-    docs: readonly Omit<T, "_id" | "createdAt" | "updatedAt">[]
+    docs: readonly Omit<T, "_id" | "createdAt" | "updatedAt">[],
+    options?: { ordered?: boolean; signal?: AbortSignal }
   ): Promise<InsertManyResult<T>>
 
   /**
@@ -882,11 +887,16 @@ export type Collection<T extends Document> = {
    *   { role: 'admin' },
    *   { $set: { badge: 'admin' } }
    * );
+   *
+   * // With abort signal
+   * const controller = new AbortController();
+   * const result = await users.updateMany(filter, update, { signal: controller.signal });
    * ```
    */
   updateMany(
     filter: QueryFilter<T>,
-    update: Omit<Partial<T>, "_id" | "createdAt" | "updatedAt">
+    update: Omit<Partial<T>, "_id" | "createdAt" | "updatedAt">,
+    options?: { signal?: AbortSignal }
   ): Promise<UpdateResult>
 
   /**
@@ -911,9 +921,16 @@ export type Collection<T extends Document> = {
    *
    * // Delete all documents (use with caution!)
    * await users.deleteMany({});
+   *
+   * // With abort signal
+   * const controller = new AbortController();
+   * const result = await users.deleteMany(filter, { signal: controller.signal });
    * ```
    */
-  deleteMany(filter: QueryFilter<T>): Promise<DeleteResult>
+  deleteMany(
+    filter: QueryFilter<T>,
+    options?: { signal?: AbortSignal }
+  ): Promise<DeleteResult>
 
   // ===== Utility Methods =====
 
