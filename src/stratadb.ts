@@ -1,4 +1,5 @@
 import { Database as SQLiteDatabase } from "bun:sqlite"
+import { throwIfAborted } from "./abort-utils.js"
 import {
   type CollectionBuilder,
   CollectionBuilderImpl,
@@ -180,7 +181,12 @@ export class Strata implements StrataDBInterface {
    * @param fn - Function to execute
    * @returns Result of the function
    */
-  async execute<R>(fn: (tx: Transaction) => R | Promise<R>): Promise<R> {
+  async execute<R>(
+    fn: (tx: Transaction) => R | Promise<R>,
+    options?: { signal?: AbortSignal }
+  ): Promise<R> {
+    throwIfAborted(options?.signal)
+
     const tx = this.transaction()
     try {
       const result = await fn(tx)
