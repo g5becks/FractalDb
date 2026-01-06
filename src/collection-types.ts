@@ -492,9 +492,16 @@ export type Collection<T extends Document> = {
    *     console.error('Invalid user:', err.message);
    *   }
    * }
+   *
+   * // With abort signal
+   * const controller = new AbortController();
+   * const user = await users.insertOne(doc, { signal: controller.signal });
    * ```
    */
-  insertOne(doc: Omit<T, "_id" | "createdAt" | "updatedAt">): Promise<T>
+  insertOne(
+    doc: Omit<T, "_id" | "createdAt" | "updatedAt">,
+    options?: { signal?: AbortSignal }
+  ): Promise<T>
 
   /**
    * Update a single document matching the query filter or ID.
@@ -533,12 +540,16 @@ export type Collection<T extends Document> = {
    *   { role: 'user' },
    *   { upsert: true }
    * );
+   *
+   * // With abort signal
+   * const controller = new AbortController();
+   * await users.updateOne(filter, update, { signal: controller.signal });
    * ```
    */
   updateOne(
     filter: string | QueryFilter<T>,
     update: Omit<Partial<T>, "_id" | "createdAt" | "updatedAt">,
-    options?: { upsert?: boolean }
+    options?: { upsert?: boolean; signal?: AbortSignal }
   ): Promise<T | null>
 
   /**
@@ -586,11 +597,16 @@ export type Collection<T extends Document> = {
    *     role: 'admin'
    *   }
    * );
+   *
+   * // With abort signal
+   * const controller = new AbortController();
+   * const replaced = await users.replaceOne(filter, doc, { signal: controller.signal });
    * ```
    */
   replaceOne(
     filter: string | QueryFilter<T>,
-    doc: Omit<T, "_id" | "createdAt" | "updatedAt">
+    doc: Omit<T, "_id" | "createdAt" | "updatedAt">,
+    options?: { signal?: AbortSignal }
   ): Promise<T | null>
 
   /**
@@ -623,9 +639,16 @@ export type Collection<T extends Document> = {
    *   status: 'inactive',
    *   lastLogin: { $lt: Date.now() - 90 * 24 * 60 * 60 * 1000 } // 90 days
    * })
+   *
+   * // With abort signal
+   * const controller = new AbortController();
+   * const deleted = await users.deleteOne(filter, { signal: controller.signal });
    * ```
    */
-  deleteOne(filter: string | QueryFilter<T>): Promise<boolean>
+  deleteOne(
+    filter: string | QueryFilter<T>,
+    options?: { signal?: AbortSignal }
+  ): Promise<boolean>
 
   // ===== Atomic Find-and-Modify Operations =====
 
