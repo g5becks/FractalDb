@@ -959,68 +959,73 @@ export class SQLiteCollection<T extends Document> implements Collection<T> {
    */
   insertOne(
     doc: Omit<T, "_id" | "createdAt" | "updatedAt"> & { _id?: string },
-    options?: { signal?: AbortSignal }
+    options?: { signal?: AbortSignal; retry?: RetryOptions | false },
   ): Promise<T> {
-    throwIfAborted(options?.signal)
+    return withRetry(
+      () => {
+        throwIfAborted(options?.signal)
 
-    const now = Date.now()
-    const _id = doc._id ?? this.idGenerator()
+        const now = Date.now()
+        const _id = doc._id ?? this.idGenerator()
 
-    // Build the full document
-    const fullDoc = buildCompleteDocument<T>(doc, {
-      _id,
-      createdAt: now,
-      updatedAt: now,
-    })
+        // Build the full document
+        const fullDoc = buildCompleteDocument<T>(doc, {
+          _id,
+          createdAt: now,
+          updatedAt: now,
+        })
 
-    // Validate using schema validator if provided
-    if (this.schema.validate && !this.schema.validate(fullDoc)) {
-      throw new ValidationError(
-        "Document validation failed: Document does not match the schema. " +
-          "Check that all required fields are present and have correct types.",
-        undefined,
-        fullDoc
-      )
-    }
+        // Validate using schema validator if provided
+        if (this.schema.validate && !this.schema.validate(fullDoc)) {
+          throw new ValidationError(
+            "Document validation failed: Document does not match the schema. " +
+              "Check that all required fields are present and have correct types.",
+            undefined,
+            fullDoc,
+          )
+        }
 
-    // Serialize body (excludes id which is stored separately)
-    const { _id: docId, ...bodyData } = fullDoc
-    const body = stringify(bodyData)
+        // Serialize body (excludes id which is stored separately)
+        const { _id: docId, ...bodyData } = fullDoc
+        const body = stringify(bodyData)
 
-    try {
-      const stmt = this.db.prepare(
-        `INSERT INTO ${this.name} (_id, body, createdAt, updatedAt) VALUES (?, jsonb(?), ?, ?)`
-      )
-      stmt.run(docId, body, now, now)
+        try {
+          const stmt = this.db.prepare(
+            `INSERT INTO ${this.name} (_id, body, createdAt, updatedAt) VALUES (?, jsonb(?), ?, ?)`,
+          )
+          stmt.run(docId, body, now, now)
 
-      return Promise.resolve(fullDoc)
-    } catch (error) {
-      // Handle unique constraint violations
-      if (
-        error instanceof Error &&
-        error.message.includes("UNIQUE constraint failed")
-      ) {
-        // Extract field name from error message
-        const match = error.message.match(UNIQUE_CONSTRAINT_REGEX)
-        const field = match?.[1]?.replace(UNDERSCORE_PREFIX_REGEX, "") // Remove underscore prefix from generated columns
+          return Promise.resolve(fullDoc)
+        } catch (error) {
+          // Handle unique constraint violations
+          if (
+            error instanceof Error &&
+            error.message.includes("UNIQUE constraint failed")
+          ) {
+            // Extract field name from error message
+            const match = error.message.match(UNIQUE_CONSTRAINT_REGEX)
+            const field = match?.[1]?.replace(UNDERSCORE_PREFIX_REGEX, "") // Remove underscore prefix from generated columns
 
-        // Get the value that violated the constraint
-        const value = field
-          ? (fullDoc as Record<string, unknown>)[field]
-          : undefined
+            // Get the value that violated the constraint
+            const value = field
+              ? (fullDoc as Record<string, unknown>)[field]
+              : undefined
 
-        // Use helper to build actionable error message
-        const message = field
-          ? `Duplicate value for unique field '${field}': ${JSON.stringify(value)} in collection '${this.name}'. ` +
-            "A document with this value already exists. " +
-            "Use updateOne() with { upsert: true } to update existing documents, " +
-            "or use findOne() to check for existence before inserting."
-          : "Unique constraint violation occurred"
+            // Use helper to build actionable error message
+            const message = field
+              ? `Duplicate value for unique field '${field}': ${JSON.stringify(value)} in collection '${this.name}'. ` +
+                "A document with this value already exists. " +
+                "Use updateOne() with { upsert: true } to update existing documents, " +
+                "or use findOne() to check for existence before inserting."
+              : "Unique constraint violation occurred"
 
-        throw new UniqueConstraintError(message, field, value)
-      }
-      throw error
-    }
+            throw new UniqueConstraintError(message, field, value)
+          }
+          throw error
+        }
+      },
+      this.buildRetryOptions(options?.retry, options?.signal),
+    )
   }
 
   /**
@@ -1148,58 +1153,65 @@ export class SQLiteCollection<T extends Document> implements Collection<T> {
   replaceOne(
     filter: string | QueryFilter<T>,
     doc: Omit<T, "_id" | "createdAt" | "updatedAt">,
-    options?: { signal?: AbortSignal }
+    options?: { signal?: AbortSignal; retry?: RetryOptions | false },
   ): Promise<T | null> {
-    throwIfAborted(options?.signal)
+    return withRetry(
+      () => {
+        throwIfAborted(options?.signal)
 
-    const normalizedFilter = this.normalizeFilter(filter)
+        const normalizedFilter = this.normalizeFilter(filter)
 
-    // Find the document ID to replace
-    const { sql: whereClause, params } =
-      this.translator.translate(normalizedFilter)
-    let querySql = `SELECT _id, json_extract(body, '$.createdAt') as createdAt FROM ${this.name}`
-    if (whereClause && whereClause !== "1=1") {
-      querySql += ` WHERE ${whereClause}`
-    }
-    querySql += " LIMIT 1"
+        // Find the document ID to replace
+        const { sql: whereClause, params } =
+          this.translator.translate(normalizedFilter)
+        let querySql = `SELECT _id, json_extract(body, '$.createdAt') as createdAt FROM ${this.name}`
+        if (whereClause && whereClause !== "1=1") {
+          querySql += ` WHERE ${whereClause}`
+        }
+        querySql += " LIMIT 1"
 
-    const row = this.db
-      .prepare<{ _id: string; createdAt: number }, SQLQueryBindings[]>(querySql)
-      .get(...params)
+        const row = this.db
+          .prepare<{ _id: string; createdAt: number }, SQLQueryBindings[]>(
+            querySql,
+          )
+          .get(...params)
 
-    throwIfAborted(options?.signal)
+        throwIfAborted(options?.signal)
 
-    if (!row) {
-      return Promise.resolve(null)
-    }
+        if (!row) {
+          return Promise.resolve(null)
+        }
 
-    const now = Date.now()
+        const now = Date.now()
 
-    // Build full document with preserved _id and createdAt
-    const fullDoc = buildCompleteDocument<T>(doc, {
-      _id: row._id,
-      createdAt: row.createdAt,
-      updatedAt: now,
-    })
+        // Build full document with preserved _id and createdAt
+        const fullDoc = buildCompleteDocument<T>(doc, {
+          _id: row._id,
+          createdAt: row.createdAt,
+          updatedAt: now,
+        })
 
-    if (this.schema.validate && !this.schema.validate(fullDoc)) {
-      throw new ValidationError(
-        `Document validation failed during replace for filter '${JSON.stringify(filter)}': Document does not match the schema. ` +
-          "Check that all required fields are present and have correct types.",
-        undefined,
-        fullDoc
-      )
-    }
+        if (this.schema.validate && !this.schema.validate(fullDoc)) {
+          throw new ValidationError(
+            `Document validation failed during replace for filter '${JSON.stringify(filter)}': Document does not match the schema. ` +
+              "Check that all required fields are present and have correct types.",
+            undefined,
+            fullDoc,
+          )
+        }
 
-    const { _id: replaceDocId, ...bodyData } = fullDoc
-    const body = stringify(bodyData)
-    this.db
-      .prepare(
-        `UPDATE ${this.name} SET body = jsonb(?), updatedAt = ? WHERE _id = ?`
-      )
-      .run(body, now, replaceDocId)
+        const { _id: replaceDocId, ...bodyData } = fullDoc
+        const body = stringify(bodyData)
+        this.db
+          .prepare(
+            `UPDATE ${this.name} SET body = jsonb(?), updatedAt = ? WHERE _id = ?`,
+          )
+          .run(body, now, replaceDocId)
 
-    return Promise.resolve(fullDoc)
+        return Promise.resolve(fullDoc)
+      },
+      this.buildRetryOptions(options?.retry, options?.signal),
+    )
   }
 
   /**
@@ -1224,41 +1236,46 @@ export class SQLiteCollection<T extends Document> implements Collection<T> {
    */
   deleteOne(
     filter: string | QueryFilter<T>,
-    options?: { signal?: AbortSignal }
+    options?: { signal?: AbortSignal; retry?: RetryOptions | false },
   ): Promise<boolean> {
-    throwIfAborted(options?.signal)
+    return withRetry(
+      () => {
+        throwIfAborted(options?.signal)
 
-    const normalizedFilter = this.normalizeFilter(filter)
+        const normalizedFilter = this.normalizeFilter(filter)
 
-    // Optimization: If filter is just { _id: 'xxx' }, use direct delete
-    if (
-      "_id" in normalizedFilter &&
-      Object.keys(normalizedFilter).length === 1
-    ) {
-      const stmt = this.db.prepare(`DELETE FROM ${this.name} WHERE _id = ?`)
-      const result = stmt.run(normalizedFilter._id as string)
-      return Promise.resolve(result.changes > 0)
-    }
+        // Optimization: If filter is just { _id: 'xxx' }, use direct delete
+        if (
+          "_id" in normalizedFilter &&
+          Object.keys(normalizedFilter).length === 1
+        ) {
+          const stmt = this.db.prepare(`DELETE FROM ${this.name} WHERE _id = ?`)
+          const result = stmt.run(normalizedFilter._id as string)
+          return Promise.resolve(result.changes > 0)
+        }
 
-    // For complex filters: find first match, then delete by ID
-    const { sql: whereClause, params } =
-      this.translator.translate(normalizedFilter)
-    let findSql = `SELECT _id FROM ${this.name}`
-    if (whereClause && whereClause !== "1=1") {
-      findSql += ` WHERE ${whereClause}`
-    }
-    findSql += " LIMIT 1"
+        // For complex filters: find first match, then delete by ID
+        const { sql: whereClause, params } =
+          this.translator.translate(normalizedFilter)
+        let findSql = `SELECT _id FROM ${this.name}`
+        if (whereClause && whereClause !== "1=1") {
+          findSql += ` WHERE ${whereClause}`
+        }
+        findSql += " LIMIT 1"
 
-    const row = this.db
-      .prepare<{ _id: string }, SQLQueryBindings[]>(findSql)
-      .get(...params)
-    if (!row) {
-      return Promise.resolve(false)
-    }
+        const row = this.db
+          .prepare<{ _id: string }, SQLQueryBindings[]>(findSql)
+          .get(...params)
+        if (!row) {
+          return Promise.resolve(false)
+        }
 
-    const stmt = this.db.prepare(`DELETE FROM ${this.name} WHERE _id = ?`)
-    const result = stmt.run(row._id)
-    return Promise.resolve(result.changes > 0)
+        const stmt = this.db.prepare(`DELETE FROM ${this.name} WHERE _id = ?`)
+        const result = stmt.run(row._id)
+        return Promise.resolve(result.changes > 0)
+      },
+      this.buildRetryOptions(options?.retry, options?.signal),
+    )
   }
 
   /**
@@ -1320,68 +1337,79 @@ export class SQLiteCollection<T extends Document> implements Collection<T> {
     docs: readonly (Omit<T, "_id" | "createdAt" | "updatedAt"> & {
       _id?: string
     })[],
-    options?: { ordered?: boolean; signal?: AbortSignal }
+    options?: {
+      ordered?: boolean
+      signal?: AbortSignal
+      retry?: RetryOptions | false
+    },
   ): Promise<InsertManyResult<T>> {
-    throwIfAborted(options?.signal)
+    return withRetry(
+      () => {
+        throwIfAborted(options?.signal)
 
-    const ordered = options?.ordered ?? true
-    const now = Date.now()
-    const insertedDocs: T[] = []
-    const insertedIds: string[] = []
-    const errors: {
-      index: number
-      error: Error
-      document: Omit<T, "_id" | "createdAt" | "updatedAt"> & { _id?: string }
-    }[] = []
+        const ordered = options?.ordered ?? true
+        const now = Date.now()
+        const insertedDocs: T[] = []
+        const insertedIds: string[] = []
+        const errors: {
+          index: number
+          error: Error
+          document: Omit<T, "_id" | "createdAt" | "updatedAt"> & {
+            _id?: string
+          }
+        }[] = []
 
-    const stmt = this.db.prepare(
-      `INSERT INTO ${this.name} (_id, body, createdAt, updatedAt) VALUES (?, jsonb(?), ?, ?)`
-    )
+        const stmt = this.db.prepare(
+          `INSERT INTO ${this.name} (_id, body, createdAt, updatedAt) VALUES (?, jsonb(?), ?, ?)`,
+        )
 
-    for (let i = 0; i < docs.length; i++) {
-      throwIfAborted(options?.signal)
+        for (let i = 0; i < docs.length; i++) {
+          throwIfAborted(options?.signal)
 
-      const doc = docs[i]
-      if (!doc) {
-        continue
-      }
+          const doc = docs[i]
+          if (!doc) {
+            continue
+          }
 
-      try {
-        const _id = doc._id ?? this.idGenerator()
-        const fullDoc = buildCompleteDocument<T>(doc, {
-          _id,
-          createdAt: now,
-          updatedAt: now,
+          try {
+            const _id = doc._id ?? this.idGenerator()
+            const fullDoc = buildCompleteDocument<T>(doc, {
+              _id,
+              createdAt: now,
+              updatedAt: now,
+            })
+
+            // Validate if validator is provided
+            if (this.schema.validate && !this.schema.validate(fullDoc)) {
+              throw new ValidationError(
+                `Document validation failed in batch insert at index ${i}: Document does not match the schema. ` +
+                  "Check that all required fields are present and have correct types.",
+                undefined,
+                fullDoc,
+              )
+            }
+
+            const { _id: docId, ...bodyData } = fullDoc
+            const body = stringify(bodyData)
+            stmt.run(docId, body, now, now)
+
+            insertedDocs.push(fullDoc)
+            insertedIds.push(_id)
+          } catch (error) {
+            const err = this.handleInsertError(error, i, doc, errors)
+            if (ordered && err) {
+              break
+            }
+          }
+        }
+
+        return Promise.resolve({
+          documents: insertedDocs,
+          insertedCount: insertedDocs.length,
         })
-
-        // Validate if validator is provided
-        if (this.schema.validate && !this.schema.validate(fullDoc)) {
-          throw new ValidationError(
-            `Document validation failed in batch insert at index ${i}: Document does not match the schema. ` +
-              "Check that all required fields are present and have correct types.",
-            undefined,
-            fullDoc
-          )
-        }
-
-        const { _id: docId, ...bodyData } = fullDoc
-        const body = stringify(bodyData)
-        stmt.run(docId, body, now, now)
-
-        insertedDocs.push(fullDoc)
-        insertedIds.push(_id)
-      } catch (error) {
-        const err = this.handleInsertError(error, i, doc, errors)
-        if (ordered && err) {
-          break
-        }
-      }
-    }
-
-    return Promise.resolve({
-      documents: insertedDocs,
-      insertedCount: insertedDocs.length,
-    })
+      },
+      this.buildRetryOptions(options?.retry, options?.signal),
+    )
   }
 
   /**
@@ -1418,83 +1446,88 @@ export class SQLiteCollection<T extends Document> implements Collection<T> {
   updateMany(
     filter: QueryFilter<T>,
     update: Omit<Partial<T>, "_id" | "createdAt" | "updatedAt">,
-    options?: { signal?: AbortSignal }
+    options?: { signal?: AbortSignal; retry?: RetryOptions | false },
   ): Promise<UpdateResult> {
-    throwIfAborted(options?.signal)
+    return withRetry(
+      () => {
+        throwIfAborted(options?.signal)
 
-    const { sql: whereClause, params } = this.translator.translate(filter)
+        const { sql: whereClause, params } = this.translator.translate(filter)
 
-    // Find all matching documents
-    let selectSql = `SELECT _id, json(body) as body FROM ${this.name}`
-    if (whereClause) {
-      selectSql += ` WHERE ${whereClause}`
-    }
+        // Find all matching documents
+        let selectSql = `SELECT _id, json(body) as body FROM ${this.name}`
+        if (whereClause) {
+          selectSql += ` WHERE ${whereClause}`
+        }
 
-    const stmt = this.db.prepare<
-      { _id: string; body: string },
-      SQLQueryBindings[]
-    >(selectSql)
-    const rows = stmt.all(...params)
-    const matchedCount = rows.length
+        const stmt = this.db.prepare<
+          { _id: string; body: string },
+          SQLQueryBindings[]
+        >(selectSql)
+        const rows = stmt.all(...params)
+        const matchedCount = rows.length
 
-    if (matchedCount === 0) {
-      return Promise.resolve({
-        matchedCount: 0,
-        modifiedCount: 0,
-      })
-    }
+        if (matchedCount === 0) {
+          return Promise.resolve({
+            matchedCount: 0,
+            modifiedCount: 0,
+          })
+        }
 
-    const now = Date.now()
-    const updatedDocs: T[] = []
+        const now = Date.now()
+        const updatedDocs: T[] = []
 
-    // Prepare all updated documents and validate before committing
-    for (const row of rows) {
-      throwIfAborted(options?.signal)
+        // Prepare all updated documents and validate before committing
+        for (const row of rows) {
+          throwIfAborted(options?.signal)
 
-      const existingDoc = JSON.parse(row.body) as Omit<T, "_id">
-      const mergedDoc = mergeDocumentUpdate<
-        T,
-        typeof update & { _id: string; updatedAt: number }
-      >(existingDoc, {
-        ...update,
-        _id: row._id,
-        updatedAt: now,
-      })
+          const existingDoc = JSON.parse(row.body) as Omit<T, "_id">
+          const mergedDoc = mergeDocumentUpdate<
+            T,
+            typeof update & { _id: string; updatedAt: number }
+          >(existingDoc, {
+            ...update,
+            _id: row._id,
+            updatedAt: now,
+          })
 
-      if (this.schema.validate && !this.schema.validate(mergedDoc)) {
-        throw new ValidationError(
-          `Document validation failed during batch update for id '${row._id}': Document does not match the schema. ` +
-            "Check that all required fields are present and have correct types.",
-          undefined,
-          mergedDoc
+          if (this.schema.validate && !this.schema.validate(mergedDoc)) {
+            throw new ValidationError(
+              `Document validation failed during batch update for id '${row._id}': Document does not match the schema. ` +
+                "Check that all required fields are present and have correct types.",
+              undefined,
+              mergedDoc,
+            )
+          }
+
+          updatedDocs.push(mergedDoc)
+        }
+
+        // Use transaction for atomic update
+        const updateStmt = this.db.prepare(
+          `UPDATE ${this.name} SET body = jsonb(?), updatedAt = ? WHERE _id = ?`,
         )
-      }
 
-      updatedDocs.push(mergedDoc)
-    }
+        this.db.exec("BEGIN TRANSACTION")
+        try {
+          for (const doc of updatedDocs) {
+            const { _id, ...bodyData } = doc
+            const body = stringify(bodyData)
+            updateStmt.run(body, now, _id)
+          }
+          this.db.exec("COMMIT")
+        } catch (error) {
+          this.db.exec("ROLLBACK")
+          throw error
+        }
 
-    // Use transaction for atomic update
-    const updateStmt = this.db.prepare(
-      `UPDATE ${this.name} SET body = jsonb(?), updatedAt = ? WHERE _id = ?`
+        return Promise.resolve({
+          matchedCount,
+          modifiedCount: updatedDocs.length,
+        })
+      },
+      this.buildRetryOptions(options?.retry, options?.signal),
     )
-
-    this.db.exec("BEGIN TRANSACTION")
-    try {
-      for (const doc of updatedDocs) {
-        const { _id, ...bodyData } = doc
-        const body = stringify(bodyData)
-        updateStmt.run(body, now, _id)
-      }
-      this.db.exec("COMMIT")
-    } catch (error) {
-      this.db.exec("ROLLBACK")
-      throw error
-    }
-
-    return Promise.resolve({
-      matchedCount,
-      modifiedCount: updatedDocs.length,
-    })
   }
 
   /**
@@ -1521,30 +1554,35 @@ export class SQLiteCollection<T extends Document> implements Collection<T> {
    */
   deleteMany(
     filter: QueryFilter<T>,
-    options?: { signal?: AbortSignal }
+    options?: { signal?: AbortSignal; retry?: RetryOptions | false },
   ): Promise<DeleteResult> {
-    throwIfAborted(options?.signal)
+    return withRetry(
+      () => {
+        throwIfAborted(options?.signal)
 
-    const { sql: whereClause, params } = this.translator.translate(filter)
+        const { sql: whereClause, params } = this.translator.translate(filter)
 
-    let sql = `DELETE FROM ${this.name}`
-    if (whereClause) {
-      sql += ` WHERE ${whereClause}`
-    }
+        let sql = `DELETE FROM ${this.name}`
+        if (whereClause) {
+          sql += ` WHERE ${whereClause}`
+        }
 
-    this.db.exec("BEGIN TRANSACTION")
-    try {
-      const stmt = this.db.prepare(sql)
-      const result = stmt.run(...params)
-      this.db.exec("COMMIT")
+        this.db.exec("BEGIN TRANSACTION")
+        try {
+          const stmt = this.db.prepare(sql)
+          const result = stmt.run(...params)
+          this.db.exec("COMMIT")
 
-      return Promise.resolve({
-        deletedCount: result.changes,
-      })
-    } catch (error) {
-      this.db.exec("ROLLBACK")
-      throw error
-    }
+          return Promise.resolve({
+            deletedCount: result.changes,
+          })
+        } catch (error) {
+          this.db.exec("ROLLBACK")
+          throw error
+        }
+      },
+      this.buildRetryOptions(options?.retry, options?.signal),
+    )
   }
 
   // ===== Atomic Find-and-Modify Operations =====
