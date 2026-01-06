@@ -278,6 +278,7 @@ export type StrataDB = {
    * Executes a function within a transaction.
    *
    * @param fn - Function to execute within transaction
+   * @param options - Optional options including signal for cancellation
    * @returns Result of the function
    *
    * @remarks
@@ -290,9 +291,18 @@ export type StrataDB = {
    *   await users.insertOne({ name: 'Alice' });
    *   await users.insertOne({ name: 'Bob' });
    * });
+   *
+   * // With abort signal
+   * const controller = new AbortController();
+   * await db.execute(async (tx) => {
+   *   // transaction operations
+   * }, { signal: controller.signal });
    * ```
    */
-  execute<R>(fn: (tx: Transaction) => R | Promise<R>): Promise<R>
+  execute<R>(
+    fn: (tx: Transaction) => R | Promise<R>,
+    options?: { signal?: AbortSignal }
+  ): Promise<R>
 
   /**
    * Closes the database connection.
