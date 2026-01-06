@@ -311,3 +311,78 @@ describe("AbortSignal Integration - Write Operations", () => {
     }
   })
 })
+
+describe("AbortSignal.timeout() Compatibility", () => {
+  let db: Strata
+  let collection: ReturnType<typeof db.collection<TestDoc>>
+
+  beforeEach(() => {
+    db = new Strata({ database: ":memory:" })
+    const schema = createSchema<TestDoc>()
+      .field("name", { type: "TEXT", indexed: true })
+      .field("value", { type: "INTEGER", indexed: true })
+      .build()
+    collection = db.collection("test", schema)
+  })
+
+  afterEach(() => {
+    db.close()
+  })
+
+  it("find works correctly with AbortSignal.timeout()", async () => {
+    await collection.insertOne({ name: "test", value: 1 })
+
+    // Use a long timeout that won't trigger
+    const result = await collection.find(
+      {},
+      {
+        signal: AbortSignal.timeout(5000),
+      }
+    )
+
+    expect(result).toHaveLength(1)
+    expect(result[0].name).toBe("test")
+  })
+
+  it("insertOne works correctly with AbortSignal.timeout()", async () => {
+    // Use a long timeout that won't trigger
+    const doc = await collection.insertOne(
+      { name: "test", value: 1 },
+      { signal: AbortSignal.timeout(5000) }
+    )
+
+    expect(doc.name).toBe("test")
+    expect(doc.value).toBe(1)
+  })
+})
+
+describe("db.execute with AbortSignal", () => {
+  let db: Strata
+
+  beforeEach(() => {
+    db = new Strata({ database: ":memory:" })
+  })
+
+  afterEach(() => {
+    db.close()
+  })
+
+  it("throws AbortedError when signal is pre-aborted", async () => {
+    const controller = new AbortController()
+    controller.abort()
+
+    try {
+      await db.execute(
+        // biome-ignore lint/suspicious/useAwait: test code
+        async () => {
+          // This should not execute
+          return "result"
+        },
+        { signal: controller.signal }
+      )
+      expect.unreachable("Should have thrown")
+    } catch (error) {
+      expect(error).toBeInstanceOf(AbortedError)
+    }
+  })
+})
