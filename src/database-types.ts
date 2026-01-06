@@ -143,6 +143,30 @@ export type CollectionOptions = {
    * ```
    */
   readonly enableCache?: boolean
+
+  /**
+   * Retry configuration for this collection.
+   *
+   * @remarks
+   * Overrides the database-level `retry` setting for this specific collection.
+   * Pass `false` to explicitly disable retries for this collection.
+   *
+   * @defaultValue Inherits from database-level setting (no retries by default)
+   *
+   * @see {@link DatabaseOptions.retry} for global default
+   *
+   * @example
+   * ```typescript
+   * // Enable retries for a specific collection
+   * const users = db.collection('users', userSchema, {
+   *   retry: { retries: 3, minTimeout: 1000 }
+   * });
+   *
+   * // Disable retries for a collection
+   * const logs = db.collection('logs', logSchema, { retry: false });
+   * ```
+   */
+  readonly retry?: RetryOptions | false
 }
 
 /**
