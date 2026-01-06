@@ -22,7 +22,11 @@ import type {
 } from "./query-options-types.js"
 import type { QueryFilter } from "./query-types.js"
 import type { RetryOptions } from "./retry-types.js"
-import { mergeRetryOptions } from "./retry-utils.js"
+import {
+  mergeRetryOptions,
+  type RetryableOptions,
+  withRetry,
+} from "./retry-utils.js"
 import type { SchemaDefinition } from "./schema-types.js"
 import { SQLiteQueryTranslator } from "./sqlite-query-translator.js"
 
@@ -107,9 +111,24 @@ export class SQLiteCollection<T extends Document> implements Collection<T> {
   private readonly idGenerator: () => string
 
   /** Merged retry options for this collection */
-  // biome-ignore lint/correctness/noUnusedPrivateClassMembers: will be used in next tasks
-  // @ts-expect-error - will be used in next tasks (178-180)
   private readonly retryOptions: RetryOptions | undefined
+
+  /**
+   * Builds retry options for an operation, merging collection and operation-level options.
+   */
+  private buildRetryOptions(
+    operationRetry?: RetryOptions | false,
+    signal?: AbortSignal
+  ): RetryableOptions | undefined {
+    const merged = mergeRetryOptions(this.retryOptions, operationRetry)
+    if (!merged) {
+      return signal ? { signal } : undefined
+    }
+    if (signal) {
+      return { ...merged, signal }
+    }
+    return merged
+  }
 
   /**
    * Creates a new SQLite collection.
@@ -591,20 +610,28 @@ export class SQLiteCollection<T extends Document> implements Collection<T> {
    * }
    * ```
    */
-  findById(id: string, options?: { signal?: AbortSignal }): Promise<T | null> {
-    throwIfAborted(options?.signal)
+  findById(
+    id: string,
+    options?: { signal?: AbortSignal; retry?: RetryOptions | false }
+  ): Promise<T | null> {
+    return withRetry(
+      () => {
+        throwIfAborted(options?.signal)
 
-    const stmt = this.db.prepare<{ _id: string; body: string }, [string]>(
-      `SELECT _id, json(body) as body FROM ${this.name} WHERE _id = ?`
+        const stmt = this.db.prepare<{ _id: string; body: string }, [string]>(
+          `SELECT _id, json(body) as body FROM ${this.name} WHERE _id = ?`
+        )
+        const row = stmt.get(id)
+
+        if (!row) {
+          return Promise.resolve(null)
+        }
+
+        const doc = JSON.parse(row.body) as Omit<T, "_id">
+        return Promise.resolve({ _id: row._id, ...doc } as T)
+      },
+      this.buildRetryOptions(options?.retry, options?.signal)
     )
-    const row = stmt.get(id)
-
-    if (!row) {
-      return Promise.resolve(null)
-    }
-
-    const doc = JSON.parse(row.body) as Omit<T, "_id">
-    return Promise.resolve({ _id: row._id, ...doc } as T)
   }
 
   /**
@@ -658,75 +685,83 @@ export class SQLiteCollection<T extends Document> implements Collection<T> {
     filter: QueryFilter<T>,
     options?: QueryOptions<T>
   ): Promise<readonly T[]> {
-    throwIfAborted(options?.signal)
+    return withRetry(
+      () => {
+        throwIfAborted(options?.signal)
 
-    const { sql: whereClause, params } = this.translator.translate(filter)
+        const { sql: whereClause, params } = this.translator.translate(filter)
 
-    let sql = `SELECT _id, json(body) as body FROM ${this.name}`
+        let sql = `SELECT _id, json(body) as body FROM ${this.name}`
 
-    // Build WHERE clause combining filter and search
-    const whereParts: string[] = []
-    const allParams: SQLQueryBindings[] = [...params]
+        // Build WHERE clause combining filter and search
+        const whereParts: string[] = []
+        const allParams: SQLQueryBindings[] = [...params]
 
-    if (whereClause) {
-      whereParts.push(whereClause)
-    }
+        if (whereClause) {
+          whereParts.push(whereClause)
+        }
 
-    // Add search clause if provided
-    if (options?.search) {
-      const searchResult = this.buildSearchClause(options.search)
-      if (searchResult) {
-        whereParts.push(searchResult.sql)
-        allParams.push(...searchResult.params)
-      }
-    }
+        // Add search clause if provided
+        if (options?.search) {
+          const searchResult = this.buildSearchClause(options.search)
+          if (searchResult) {
+            whereParts.push(searchResult.sql)
+            allParams.push(...searchResult.params)
+          }
+        }
 
-    // Add cursor clause if provided (requires sort)
-    if (options?.cursor && options?.sort) {
-      const cursorResult = this.buildCursorClause(options.cursor, options.sort)
-      if (cursorResult) {
-        whereParts.push(cursorResult.sql)
-        allParams.push(...cursorResult.params)
-      }
-    }
+        // Add cursor clause if provided (requires sort)
+        if (options?.cursor && options?.sort) {
+          const cursorResult = this.buildCursorClause(
+            options.cursor,
+            options.sort
+          )
+          if (cursorResult) {
+            whereParts.push(cursorResult.sql)
+            allParams.push(...cursorResult.params)
+          }
+        }
 
-    if (whereParts.length > 0) {
-      sql += ` WHERE ${whereParts.join(" AND ")}`
-    }
+        if (whereParts.length > 0) {
+          sql += ` WHERE ${whereParts.join(" AND ")}`
+        }
 
-    // Apply sort
-    if (options?.sort) {
-      sql += this.buildSortClause(options.sort)
-    }
+        // Apply sort
+        if (options?.sort) {
+          sql += this.buildSortClause(options.sort)
+        }
 
-    // Apply limit and skip
-    if (options?.limit !== undefined) {
-      sql += ` LIMIT ${options.limit}`
-    }
-    if (options?.skip !== undefined) {
-      sql += ` OFFSET ${options.skip}`
-    }
+        // Apply limit and skip
+        if (options?.limit !== undefined) {
+          sql += ` LIMIT ${options.limit}`
+        }
+        if (options?.skip !== undefined) {
+          sql += ` OFFSET ${options.skip}`
+        }
 
-    const stmt = this.db.prepare<
-      { _id: string; body: string },
-      SQLQueryBindings[]
-    >(sql)
-    const rows = stmt.all(...allParams)
+        const stmt = this.db.prepare<
+          { _id: string; body: string },
+          SQLQueryBindings[]
+        >(sql)
+        const rows = stmt.all(...allParams)
 
-    throwIfAborted(options?.signal)
+        throwIfAborted(options?.signal)
 
-    let results = rows.map((row) => {
-      const doc = JSON.parse(row.body) as Omit<T, "_id">
-      return { _id: row._id, ...doc } as T
-    })
+        let results = rows.map((row) => {
+          const doc = JSON.parse(row.body) as Omit<T, "_id">
+          return { _id: row._id, ...doc } as T
+        })
 
-    // Apply projection (select/omit/projection)
-    const projection = this.normalizeProjection(options)
-    if (projection) {
-      results = this.applyProjection(results, projection) as T[]
-    }
+        // Apply projection (select/omit/projection)
+        const projection = this.normalizeProjection(options)
+        if (projection) {
+          results = this.applyProjection(results, projection) as T[]
+        }
 
-    return Promise.resolve(results)
+        return Promise.resolve(results)
+      },
+      this.buildRetryOptions(options?.retry, options?.signal)
+    )
   }
 
   /**
@@ -792,20 +827,25 @@ export class SQLiteCollection<T extends Document> implements Collection<T> {
    */
   count(
     filter: QueryFilter<T>,
-    options?: { signal?: AbortSignal }
+    options?: { signal?: AbortSignal; retry?: RetryOptions | false }
   ): Promise<number> {
-    throwIfAborted(options?.signal)
+    return withRetry(
+      () => {
+        throwIfAborted(options?.signal)
 
-    const { sql: whereClause, params } = this.translator.translate(filter)
+        const { sql: whereClause, params } = this.translator.translate(filter)
 
-    let sql = `SELECT COUNT(*) as count FROM ${this.name}`
-    if (whereClause) {
-      sql += ` WHERE ${whereClause}`
-    }
+        let sql = `SELECT COUNT(*) as count FROM ${this.name}`
+        if (whereClause) {
+          sql += ` WHERE ${whereClause}`
+        }
 
-    const stmt = this.db.prepare<{ count: number }, SQLQueryBindings[]>(sql)
-    const row = stmt.get(...params)
-    return Promise.resolve(row?.count ?? 0)
+        const stmt = this.db.prepare<{ count: number }, SQLQueryBindings[]>(sql)
+        const row = stmt.get(...params)
+        return Promise.resolve(row?.count ?? 0)
+      },
+      this.buildRetryOptions(options?.retry, options?.signal)
+    )
   }
 
   /**
@@ -1662,39 +1702,44 @@ export class SQLiteCollection<T extends Document> implements Collection<T> {
   distinct<K extends keyof Omit<T, "_id" | "createdAt" | "updatedAt">>(
     field: K,
     filter?: QueryFilter<T>,
-    options?: { signal?: AbortSignal }
+    options?: { signal?: AbortSignal; retry?: RetryOptions | false }
   ): Promise<T[K][]> {
-    throwIfAborted(options?.signal)
+    return withRetry(
+      () => {
+        throwIfAborted(options?.signal)
 
-    const fieldStr = String(field)
+        const fieldStr = String(field)
 
-    // Determine if field is indexed
-    const indexedField = this.schema.fields.find(
-      (f) => String(f.name) === fieldStr && f.indexed
+        // Determine if field is indexed
+        const indexedField = this.schema.fields.find(
+          (f) => String(f.name) === fieldStr && f.indexed
+        )
+        const column = indexedField
+          ? `_${fieldStr}`
+          : `jsonb_extract(body, '$.${fieldStr}')`
+
+        // Build query
+        let sql = `SELECT DISTINCT ${column} as value FROM ${this.name}`
+        let params: SQLQueryBindings[] = []
+
+        if (filter) {
+          const { sql: whereClause, params: filterParams } =
+            this.translator.translate(filter)
+          if (whereClause) {
+            sql += ` WHERE ${whereClause}`
+            params = filterParams
+          }
+        }
+
+        sql += " ORDER BY value"
+
+        const stmt = this.db.prepare<{ value: T[K] }, SQLQueryBindings[]>(sql)
+        const rows = stmt.all(...params)
+
+        return Promise.resolve(rows.map((row) => row.value))
+      },
+      this.buildRetryOptions(options?.retry, options?.signal)
     )
-    const column = indexedField
-      ? `_${fieldStr}`
-      : `jsonb_extract(body, '$.${fieldStr}')`
-
-    // Build query
-    let sql = `SELECT DISTINCT ${column} as value FROM ${this.name}`
-    let params: SQLQueryBindings[] = []
-
-    if (filter) {
-      const { sql: whereClause, params: filterParams } =
-        this.translator.translate(filter)
-      if (whereClause) {
-        sql += ` WHERE ${whereClause}`
-        params = filterParams
-      }
-    }
-
-    sql += " ORDER BY value"
-
-    const stmt = this.db.prepare<{ value: T[K] }, SQLQueryBindings[]>(sql)
-    const rows = stmt.all(...params)
-
-    return Promise.resolve(rows.map((row) => row.value))
   }
 
   /**
@@ -1702,15 +1747,23 @@ export class SQLiteCollection<T extends Document> implements Collection<T> {
    *
    * @returns Promise resolving to the estimated document count
    */
-  estimatedDocumentCount(options?: { signal?: AbortSignal }): Promise<number> {
-    throwIfAborted(options?.signal)
+  estimatedDocumentCount(options?: {
+    signal?: AbortSignal
+    retry?: RetryOptions | false
+  }): Promise<number> {
+    return withRetry(
+      () => {
+        throwIfAborted(options?.signal)
 
-    // Use SQLite's internal statistics for fast estimate
-    const stmt = this.db.prepare<{ count: number }, []>(
-      `SELECT COUNT(*) as count FROM ${this.name}`
+        // Use SQLite's internal statistics for fast estimate
+        const stmt = this.db.prepare<{ count: number }, []>(
+          `SELECT COUNT(*) as count FROM ${this.name}`
+        )
+        const result = stmt.get()
+        return Promise.resolve(result?.count ?? 0)
+      },
+      this.buildRetryOptions(options?.retry, options?.signal)
     )
-    const result = stmt.get()
-    return Promise.resolve(result?.count ?? 0)
   }
 
   /**
