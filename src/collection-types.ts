@@ -1022,9 +1022,13 @@ export type Collection<T extends Document> = {
    * if (confirm('Really delete all users?')) {
    *   await users.drop();
    * }
+   *
+   * // With abort signal
+   * const controller = new AbortController();
+   * await collection.drop({ signal: controller.signal });
    * ```
    */
-  drop(): Promise<void>
+  drop(options?: { signal?: AbortSignal }): Promise<void>
 
   // ===== Validation =====
 
@@ -1056,9 +1060,13 @@ export type Collection<T extends Document> = {
    *     console.error(`Error: ${err.message}`);
    *   }
    * }
+   *
+   * // With abort signal
+   * const controller = new AbortController();
+   * await users.validate(doc, { signal: controller.signal });
    * ```
    */
-  validate(doc: unknown): Promise<T>
+  validate(doc: unknown, options?: { signal?: AbortSignal }): Promise<T>
 
   /**
    * Validate a document against the schema (sync).
