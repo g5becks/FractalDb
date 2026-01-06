@@ -1,0 +1,352 @@
+import { describe, expect, test } from "bun:test"
+import {
+  ConnectionError,
+  ConstraintError,
+  SchemaValidationError,
+  TransactionError,
+  UniqueConstraintError,
+  ValidationError,
+} from "../../src/errors.js"
+import {
+  defaultShouldRetry,
+  mergeRetryOptions,
+  withRetry,
+} from "../../src/retry-utils.js"
+
+describe("withRetry", () => {
+  test("executes operation once when retries is 0", async () => {
+    let callCount = 0
+    const operation = async () => {
+      callCount += 1
+      return Promise.resolve("success")
+    }
+
+    const result = await withRetry(operation, { retries: 0 })
+
+    expect(result).toBe("success")
+    expect(callCount).toBe(1)
+  })
+
+  test("executes operation once when retries is undefined", async () => {
+    let callCount = 0
+    const operation = async () => {
+      callCount += 1
+      return Promise.resolve("success")
+    }
+
+    const result = await withRetry(operation)
+
+    expect(result).toBe("success")
+    expect(callCount).toBe(1)
+  })
+
+  test("retries on retryable errors", async () => {
+    let callCount = 0
+    const operation = async () => {
+      callCount += 1
+      if (callCount < 3) {
+        throw new ConnectionError("Connection failed")
+      }
+      return Promise.resolve("success")
+    }
+
+    const result = await withRetry(operation, {
+      retries: 3,
+      minTimeout: 1,
+      maxTimeout: 1,
+    })
+
+    expect(result).toBe("success")
+    expect(callCount).toBe(3)
+  })
+
+  test("stops on non-retryable errors", async () => {
+    let callCount = 0
+    const operation = async () => {
+      callCount += 1
+      throw new ValidationError("Invalid data", "field", "value")
+    }
+
+    try {
+      await withRetry(operation, {
+        retries: 3,
+        minTimeout: 1,
+        shouldRetry: defaultShouldRetry,
+      })
+      expect.unreachable()
+    } catch (error) {
+      expect(error).toBeInstanceOf(ValidationError)
+      expect(callCount).toBe(1)
+    }
+  })
+
+  test("respects maxRetryTime", async () => {
+    const operation = async () => {
+      throw new ConnectionError("Connection failed")
+    }
+
+    const startTime = Date.now()
+    try {
+      await withRetry(operation, {
+        retries: 100,
+        minTimeout: 10,
+        maxRetryTime: 50,
+      })
+      expect.unreachable()
+    } catch {
+      const elapsed = Date.now() - startTime
+      expect(elapsed).toBeLessThan(200)
+    }
+  })
+
+  test("calls onFailedAttempt on each failure", async () => {
+    const attempts: number[] = []
+    let callCount = 0
+    const operation = async () => {
+      callCount += 1
+      if (callCount < 3) {
+        throw new ConnectionError("Connection failed")
+      }
+      return Promise.resolve("success")
+    }
+
+    await withRetry(operation, {
+      retries: 3,
+      minTimeout: 1,
+      maxTimeout: 1,
+      onFailedAttempt: (context) => {
+        attempts.push(context.attemptNumber)
+      },
+    })
+
+    expect(attempts).toEqual([1, 2])
+  })
+
+  test("respects shouldRetry predicate", async () => {
+    let callCount = 0
+    const operation = async () => {
+      callCount += 1
+      throw new Error("Custom error")
+    }
+
+    try {
+      await withRetry(operation, {
+        retries: 3,
+        minTimeout: 1,
+        shouldRetry: () => false,
+      })
+      expect.unreachable()
+    } catch {
+      expect(callCount).toBe(1)
+    }
+  })
+
+  test("respects shouldConsumeRetry predicate", async () => {
+    let callCount = 0
+    const operation = async () => {
+      callCount += 1
+      throw new Error("Custom error")
+    }
+
+    try {
+      await withRetry(operation, {
+        retries: 2,
+        minTimeout: 1,
+        maxTimeout: 1,
+        shouldConsumeRetry: () => false,
+        maxRetryTime: 50,
+      })
+      expect.unreachable()
+    } catch {
+      // Should retry many times without consuming retries, until maxRetryTime
+      expect(callCount).toBeGreaterThan(2)
+    }
+  })
+})
+
+describe("mergeRetryOptions", () => {
+  test("returns undefined when operation-level is false", () => {
+    const result = mergeRetryOptions({ retries: 3 }, { retries: 5 }, false)
+
+    expect(result).toBeUndefined()
+  })
+
+  test("returns undefined when collection-level is false", () => {
+    const result = mergeRetryOptions({ retries: 3 }, false, { retries: 5 })
+
+    expect(result).toBeUndefined()
+  })
+
+  test("merges options with correct precedence", () => {
+    const result = mergeRetryOptions(
+      { retries: 3, minTimeout: 1000, factor: 2 },
+      { retries: 5, minTimeout: 2000 },
+      { maxTimeout: 10_000 }
+    )
+
+    expect(result).toEqual({
+      retries: 5,
+      minTimeout: 2000,
+      factor: 2,
+      maxTimeout: 10_000,
+    })
+  })
+
+  test("handles undefined options", () => {
+    const result = mergeRetryOptions(undefined, undefined, { retries: 3 })
+
+    expect(result).toEqual({ retries: 3 })
+  })
+
+  test("returns empty object when all options are undefined", () => {
+    const result = mergeRetryOptions()
+
+    expect(result).toEqual({})
+  })
+})
+
+describe("defaultShouldRetry", () => {
+  test("returns false for ValidationError", () => {
+    const error = new ValidationError("Invalid", "field", "value")
+    const result = defaultShouldRetry({
+      error,
+      attemptNumber: 1,
+      retriesLeft: 2,
+      retriesConsumed: 0,
+    })
+
+    expect(result).toBe(false)
+  })
+
+  test("returns false for SchemaValidationError", () => {
+    const error = new SchemaValidationError("Invalid schema", "field")
+    const result = defaultShouldRetry({
+      error,
+      attemptNumber: 1,
+      retriesLeft: 2,
+      retriesConsumed: 0,
+    })
+
+    expect(result).toBe(false)
+  })
+
+  test("returns false for UniqueConstraintError", () => {
+    const error = new UniqueConstraintError("Duplicate", "field")
+    const result = defaultShouldRetry({
+      error,
+      attemptNumber: 1,
+      retriesLeft: 2,
+      retriesConsumed: 0,
+    })
+
+    expect(result).toBe(false)
+  })
+
+  test("returns false for ConstraintError", () => {
+    const error = new ConstraintError("Constraint failed")
+    const result = defaultShouldRetry({
+      error,
+      attemptNumber: 1,
+      retriesLeft: 2,
+      retriesConsumed: 0,
+    })
+
+    expect(result).toBe(false)
+  })
+
+  test("returns true for ConnectionError", () => {
+    const error = new ConnectionError("Connection failed")
+    const result = defaultShouldRetry({
+      error,
+      attemptNumber: 1,
+      retriesLeft: 2,
+      retriesConsumed: 0,
+    })
+
+    expect(result).toBe(true)
+  })
+
+  test("returns true for TransactionError", () => {
+    const error = new TransactionError("Transaction failed")
+    const result = defaultShouldRetry({
+      error,
+      attemptNumber: 1,
+      retriesLeft: 2,
+      retriesConsumed: 0,
+    })
+
+    expect(result).toBe(true)
+  })
+
+  test("returns true for SQLITE_BUSY (code 5)", () => {
+    const error = Object.assign(new Error("Database busy"), { code: 5 })
+    const result = defaultShouldRetry({
+      error,
+      attemptNumber: 1,
+      retriesLeft: 2,
+      retriesConsumed: 0,
+    })
+
+    expect(result).toBe(true)
+  })
+
+  test("returns true for SQLITE_LOCKED (code 6)", () => {
+    const error = Object.assign(new Error("Database locked"), { code: 6 })
+    const result = defaultShouldRetry({
+      error,
+      attemptNumber: 1,
+      retriesLeft: 2,
+      retriesConsumed: 0,
+    })
+
+    expect(result).toBe(true)
+  })
+
+  test("returns true for SQLITE_NOMEM (code 7)", () => {
+    const error = Object.assign(new Error("Out of memory"), { code: 7 })
+    const result = defaultShouldRetry({
+      error,
+      attemptNumber: 1,
+      retriesLeft: 2,
+      retriesConsumed: 0,
+    })
+
+    expect(result).toBe(true)
+  })
+
+  test("returns true for SQLITE_IOERR (code 10)", () => {
+    const error = Object.assign(new Error("I/O error"), { code: 10 })
+    const result = defaultShouldRetry({
+      error,
+      attemptNumber: 1,
+      retriesLeft: 2,
+      retriesConsumed: 0,
+    })
+
+    expect(result).toBe(true)
+  })
+
+  test("returns false for unknown errors", () => {
+    const error = new Error("Unknown error")
+    const result = defaultShouldRetry({
+      error,
+      attemptNumber: 1,
+      retriesLeft: 2,
+      retriesConsumed: 0,
+    })
+
+    expect(result).toBe(false)
+  })
+
+  test("returns false for non-retryable SQLite codes", () => {
+    const error = Object.assign(new Error("Other error"), { code: 99 })
+    const result = defaultShouldRetry({
+      error,
+      attemptNumber: 1,
+      retriesLeft: 2,
+      retriesConsumed: 0,
+    })
+
+    expect(result).toBe(false)
+  })
+})
