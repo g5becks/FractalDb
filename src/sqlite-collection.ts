@@ -959,7 +959,7 @@ export class SQLiteCollection<T extends Document> implements Collection<T> {
    */
   insertOne(
     doc: Omit<T, "_id" | "createdAt" | "updatedAt"> & { _id?: string },
-    options?: { signal?: AbortSignal; retry?: RetryOptions | false },
+    options?: { signal?: AbortSignal; retry?: RetryOptions | false }
   ): Promise<T> {
     return withRetry(
       () => {
@@ -981,7 +981,7 @@ export class SQLiteCollection<T extends Document> implements Collection<T> {
             "Document validation failed: Document does not match the schema. " +
               "Check that all required fields are present and have correct types.",
             undefined,
-            fullDoc,
+            fullDoc
           )
         }
 
@@ -991,7 +991,7 @@ export class SQLiteCollection<T extends Document> implements Collection<T> {
 
         try {
           const stmt = this.db.prepare(
-            `INSERT INTO ${this.name} (_id, body, createdAt, updatedAt) VALUES (?, jsonb(?), ?, ?)`,
+            `INSERT INTO ${this.name} (_id, body, createdAt, updatedAt) VALUES (?, jsonb(?), ?, ?)`
           )
           stmt.run(docId, body, now, now)
 
@@ -1024,7 +1024,7 @@ export class SQLiteCollection<T extends Document> implements Collection<T> {
           throw error
         }
       },
-      this.buildRetryOptions(options?.retry, options?.signal),
+      this.buildRetryOptions(options?.retry, options?.signal)
     )
   }
 
@@ -1153,7 +1153,7 @@ export class SQLiteCollection<T extends Document> implements Collection<T> {
   replaceOne(
     filter: string | QueryFilter<T>,
     doc: Omit<T, "_id" | "createdAt" | "updatedAt">,
-    options?: { signal?: AbortSignal; retry?: RetryOptions | false },
+    options?: { signal?: AbortSignal; retry?: RetryOptions | false }
   ): Promise<T | null> {
     return withRetry(
       () => {
@@ -1172,7 +1172,7 @@ export class SQLiteCollection<T extends Document> implements Collection<T> {
 
         const row = this.db
           .prepare<{ _id: string; createdAt: number }, SQLQueryBindings[]>(
-            querySql,
+            querySql
           )
           .get(...params)
 
@@ -1196,7 +1196,7 @@ export class SQLiteCollection<T extends Document> implements Collection<T> {
             `Document validation failed during replace for filter '${JSON.stringify(filter)}': Document does not match the schema. ` +
               "Check that all required fields are present and have correct types.",
             undefined,
-            fullDoc,
+            fullDoc
           )
         }
 
@@ -1204,13 +1204,13 @@ export class SQLiteCollection<T extends Document> implements Collection<T> {
         const body = stringify(bodyData)
         this.db
           .prepare(
-            `UPDATE ${this.name} SET body = jsonb(?), updatedAt = ? WHERE _id = ?`,
+            `UPDATE ${this.name} SET body = jsonb(?), updatedAt = ? WHERE _id = ?`
           )
           .run(body, now, replaceDocId)
 
         return Promise.resolve(fullDoc)
       },
-      this.buildRetryOptions(options?.retry, options?.signal),
+      this.buildRetryOptions(options?.retry, options?.signal)
     )
   }
 
@@ -1236,7 +1236,7 @@ export class SQLiteCollection<T extends Document> implements Collection<T> {
    */
   deleteOne(
     filter: string | QueryFilter<T>,
-    options?: { signal?: AbortSignal; retry?: RetryOptions | false },
+    options?: { signal?: AbortSignal; retry?: RetryOptions | false }
   ): Promise<boolean> {
     return withRetry(
       () => {
@@ -1274,7 +1274,7 @@ export class SQLiteCollection<T extends Document> implements Collection<T> {
         const result = stmt.run(row._id)
         return Promise.resolve(result.changes > 0)
       },
-      this.buildRetryOptions(options?.retry, options?.signal),
+      this.buildRetryOptions(options?.retry, options?.signal)
     )
   }
 
@@ -1341,7 +1341,7 @@ export class SQLiteCollection<T extends Document> implements Collection<T> {
       ordered?: boolean
       signal?: AbortSignal
       retry?: RetryOptions | false
-    },
+    }
   ): Promise<InsertManyResult<T>> {
     return withRetry(
       () => {
@@ -1360,7 +1360,7 @@ export class SQLiteCollection<T extends Document> implements Collection<T> {
         }[] = []
 
         const stmt = this.db.prepare(
-          `INSERT INTO ${this.name} (_id, body, createdAt, updatedAt) VALUES (?, jsonb(?), ?, ?)`,
+          `INSERT INTO ${this.name} (_id, body, createdAt, updatedAt) VALUES (?, jsonb(?), ?, ?)`
         )
 
         for (let i = 0; i < docs.length; i++) {
@@ -1385,7 +1385,7 @@ export class SQLiteCollection<T extends Document> implements Collection<T> {
                 `Document validation failed in batch insert at index ${i}: Document does not match the schema. ` +
                   "Check that all required fields are present and have correct types.",
                 undefined,
-                fullDoc,
+                fullDoc
               )
             }
 
@@ -1408,7 +1408,7 @@ export class SQLiteCollection<T extends Document> implements Collection<T> {
           insertedCount: insertedDocs.length,
         })
       },
-      this.buildRetryOptions(options?.retry, options?.signal),
+      this.buildRetryOptions(options?.retry, options?.signal)
     )
   }
 
@@ -1446,7 +1446,7 @@ export class SQLiteCollection<T extends Document> implements Collection<T> {
   updateMany(
     filter: QueryFilter<T>,
     update: Omit<Partial<T>, "_id" | "createdAt" | "updatedAt">,
-    options?: { signal?: AbortSignal; retry?: RetryOptions | false },
+    options?: { signal?: AbortSignal; retry?: RetryOptions | false }
   ): Promise<UpdateResult> {
     return withRetry(
       () => {
@@ -1496,7 +1496,7 @@ export class SQLiteCollection<T extends Document> implements Collection<T> {
               `Document validation failed during batch update for id '${row._id}': Document does not match the schema. ` +
                 "Check that all required fields are present and have correct types.",
               undefined,
-              mergedDoc,
+              mergedDoc
             )
           }
 
@@ -1505,7 +1505,7 @@ export class SQLiteCollection<T extends Document> implements Collection<T> {
 
         // Use transaction for atomic update
         const updateStmt = this.db.prepare(
-          `UPDATE ${this.name} SET body = jsonb(?), updatedAt = ? WHERE _id = ?`,
+          `UPDATE ${this.name} SET body = jsonb(?), updatedAt = ? WHERE _id = ?`
         )
 
         this.db.exec("BEGIN TRANSACTION")
@@ -1526,7 +1526,7 @@ export class SQLiteCollection<T extends Document> implements Collection<T> {
           modifiedCount: updatedDocs.length,
         })
       },
-      this.buildRetryOptions(options?.retry, options?.signal),
+      this.buildRetryOptions(options?.retry, options?.signal)
     )
   }
 
@@ -1554,7 +1554,7 @@ export class SQLiteCollection<T extends Document> implements Collection<T> {
    */
   deleteMany(
     filter: QueryFilter<T>,
-    options?: { signal?: AbortSignal; retry?: RetryOptions | false },
+    options?: { signal?: AbortSignal; retry?: RetryOptions | false }
   ): Promise<DeleteResult> {
     return withRetry(
       () => {
@@ -1581,7 +1581,7 @@ export class SQLiteCollection<T extends Document> implements Collection<T> {
           throw error
         }
       },
-      this.buildRetryOptions(options?.retry, options?.signal),
+      this.buildRetryOptions(options?.retry, options?.signal)
     )
   }
 
@@ -1615,25 +1615,34 @@ export class SQLiteCollection<T extends Document> implements Collection<T> {
    */
   async findOneAndDelete(
     filter: string | QueryFilter<T>,
-    options?: { sort?: SortSpec<T>; signal?: AbortSignal }
-  ): Promise<T | null> {
-    throwIfAborted(options?.signal)
-
-    // Normalize and find the document first
-    const normalizedFilter = this.normalizeFilter(filter)
-    const doc = await this.findOne(normalizedFilter, options)
-
-    throwIfAborted(options?.signal)
-
-    if (!doc) {
-      return null
+    options?: {
+      sort?: SortSpec<T>
+      signal?: AbortSignal
+      retry?: RetryOptions | false
     }
+  ): Promise<T | null> {
+    return withRetry(
+      async () => {
+        throwIfAborted(options?.signal)
 
-    // Delete by ID
-    const stmt = this.db.prepare(`DELETE FROM ${this.name} WHERE _id = ?`)
-    stmt.run(doc._id)
+        // Normalize and find the document first
+        const normalizedFilter = this.normalizeFilter(filter)
+        const doc = await this.findOne(normalizedFilter, options)
 
-    return doc
+        throwIfAborted(options?.signal)
+
+        if (!doc) {
+          return null
+        }
+
+        // Delete by ID
+        const stmt = this.db.prepare(`DELETE FROM ${this.name} WHERE _id = ?`)
+        stmt.run(doc._id)
+
+        return doc
+      },
+      this.buildRetryOptions(options?.retry, options?.signal)
+    )
   }
 
   /**
@@ -1652,35 +1661,41 @@ export class SQLiteCollection<T extends Document> implements Collection<T> {
       returnDocument?: "before" | "after"
       upsert?: boolean
       signal?: AbortSignal
+      retry?: RetryOptions | false
     }
   ): Promise<T | null> {
-    throwIfAborted(options?.signal)
+    return withRetry(
+      async () => {
+        throwIfAborted(options?.signal)
 
-    const returnDoc = options?.returnDocument ?? "after"
-    const normalizedFilter = this.normalizeFilter(filter)
+        const returnDoc = options?.returnDocument ?? "after"
+        const normalizedFilter = this.normalizeFilter(filter)
 
-    // Find the document
-    const findOptions = options?.sort ? { sort: options.sort } : undefined
-    const existing = await this.findOne(normalizedFilter, findOptions)
+        // Find the document
+        const findOptions = options?.sort ? { sort: options.sort } : undefined
+        const existing = await this.findOne(normalizedFilter, findOptions)
 
-    throwIfAborted(options?.signal)
+        throwIfAborted(options?.signal)
 
-    if (!existing) {
-      // Handle upsert
-      if (options?.upsert) {
-        const inserted = await this.insertOne(
-          update as Omit<T, "_id" | "createdAt" | "updatedAt">
-        )
-        return returnDoc === "after" ? inserted : null
-      }
-      return null
-    }
+        if (!existing) {
+          // Handle upsert
+          if (options?.upsert) {
+            const inserted = await this.insertOne(
+              update as Omit<T, "_id" | "createdAt" | "updatedAt">
+            )
+            return returnDoc === "after" ? inserted : null
+          }
+          return null
+        }
 
-    // Update by _id
-    const before = existing
-    const afterUpdate = await this.updateOne(existing._id, update)
+        // Update by _id
+        const before = existing
+        const afterUpdate = await this.updateOne(existing._id, update)
 
-    return returnDoc === "before" ? before : afterUpdate
+        return returnDoc === "before" ? before : afterUpdate
+      },
+      this.buildRetryOptions(options?.retry, options?.signal)
+    )
   }
 
   /**
@@ -1699,33 +1714,39 @@ export class SQLiteCollection<T extends Document> implements Collection<T> {
       returnDocument?: "before" | "after"
       upsert?: boolean
       signal?: AbortSignal
+      retry?: RetryOptions | false
     }
   ): Promise<T | null> {
-    throwIfAborted(options?.signal)
+    return withRetry(
+      async () => {
+        throwIfAborted(options?.signal)
 
-    const returnDoc = options?.returnDocument ?? "after"
-    const normalizedFilter = this.normalizeFilter(filter)
+        const returnDoc = options?.returnDocument ?? "after"
+        const normalizedFilter = this.normalizeFilter(filter)
 
-    // Find the document
-    const findOptions = options?.sort ? { sort: options.sort } : undefined
-    const existing = await this.findOne(normalizedFilter, findOptions)
+        // Find the document
+        const findOptions = options?.sort ? { sort: options.sort } : undefined
+        const existing = await this.findOne(normalizedFilter, findOptions)
 
-    throwIfAborted(options?.signal)
+        throwIfAborted(options?.signal)
 
-    if (!existing) {
-      // Handle upsert
-      if (options?.upsert) {
-        const inserted = await this.insertOne(replacement)
-        return returnDoc === "after" ? inserted : null
-      }
-      return null
-    }
+        if (!existing) {
+          // Handle upsert
+          if (options?.upsert) {
+            const inserted = await this.insertOne(replacement)
+            return returnDoc === "after" ? inserted : null
+          }
+          return null
+        }
 
-    // Replace by _id
-    const before = existing
-    const afterReplace = await this.replaceOne(existing._id, replacement)
+        // Replace by _id
+        const before = existing
+        const afterReplace = await this.replaceOne(existing._id, replacement)
 
-    return returnDoc === "before" ? before : afterReplace
+        return returnDoc === "before" ? before : afterReplace
+      },
+      this.buildRetryOptions(options?.retry, options?.signal)
+    )
   }
 
   // ===== Utility Methods =====
@@ -1809,11 +1830,18 @@ export class SQLiteCollection<T extends Document> implements Collection<T> {
    *
    * @returns Promise resolving when the collection is dropped
    */
-  drop(options?: { signal?: AbortSignal }): Promise<void> {
-    throwIfAborted(options?.signal)
-
-    this.db.exec(`DROP TABLE IF EXISTS ${this.name}`)
-    return Promise.resolve()
+  drop(options?: {
+    signal?: AbortSignal
+    retry?: RetryOptions | false
+  }): Promise<void> {
+    return withRetry(
+      () => {
+        throwIfAborted(options?.signal)
+        this.db.exec(`DROP TABLE IF EXISTS ${this.name}`)
+        return Promise.resolve()
+      },
+      this.buildRetryOptions(options?.retry, options?.signal)
+    )
   }
 
   /**
@@ -1836,19 +1864,27 @@ export class SQLiteCollection<T extends Document> implements Collection<T> {
    * }
    * ```
    */
-  validate(doc: unknown, options?: { signal?: AbortSignal }): Promise<T> {
-    throwIfAborted(options?.signal)
+  validate(
+    doc: unknown,
+    options?: { signal?: AbortSignal; retry?: RetryOptions | false }
+  ): Promise<T> {
+    return withRetry(
+      () => {
+        throwIfAborted(options?.signal)
 
-    if (!this.schema.validate) {
-      // No validator configured, trust the document
-      return Promise.resolve(doc as T)
-    }
+        if (!this.schema.validate) {
+          // No validator configured, trust the document
+          return Promise.resolve(doc as T)
+        }
 
-    if (this.schema.validate(doc)) {
-      return Promise.resolve(doc as T)
-    }
+        if (this.schema.validate(doc)) {
+          return Promise.resolve(doc as T)
+        }
 
-    throw new ValidationError("Document validation failed", undefined, doc)
+        throw new ValidationError("Document validation failed", undefined, doc)
+      },
+      this.buildRetryOptions(options?.retry, options?.signal)
+    )
   }
 
   /**

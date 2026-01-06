@@ -1,9 +1,11 @@
 ---
 id: task-180
 title: Implement retry wrapper in SQLiteCollection atomic and utility methods
-status: To Do
-assignee: []
+status: In Progress
+assignee:
+  - '@agent'
 created_date: '2026-01-06 00:20'
+updated_date: '2026-01-06 03:15'
 labels:
   - retry
   - implementation
