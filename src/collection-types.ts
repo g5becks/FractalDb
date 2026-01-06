@@ -6,6 +6,7 @@ import type {
   SortSpec,
 } from "./query-options-types.js"
 import type { QueryFilter } from "./query-types.js"
+import type { RetryOptions } from "./retry-types.js"
 import type { SchemaDefinition } from "./schema-types.js"
 
 /**
@@ -219,7 +220,10 @@ export type Collection<T extends Document> = {
    * const user = await users.findById(id, { signal: controller.signal });
    * ```
    */
-  findById(id: string, options?: { signal?: AbortSignal }): Promise<T | null>
+  findById(
+    id: string,
+    options?: { signal?: AbortSignal; retry?: RetryOptions | false }
+  ): Promise<T | null>
 
   /**
    * Find all documents matching the query filter.
@@ -369,7 +373,7 @@ export type Collection<T extends Document> = {
    */
   count(
     filter: QueryFilter<T>,
-    options?: { signal?: AbortSignal }
+    options?: { signal?: AbortSignal; retry?: RetryOptions | false }
   ): Promise<number>
 
   /**
@@ -969,7 +973,7 @@ export type Collection<T extends Document> = {
   distinct<K extends keyof Omit<T, "_id" | "createdAt" | "updatedAt">>(
     field: K,
     filter?: QueryFilter<T>,
-    options?: { signal?: AbortSignal }
+    options?: { signal?: AbortSignal; retry?: RetryOptions | false }
   ): Promise<T[K][]>
 
   /**
@@ -999,7 +1003,10 @@ export type Collection<T extends Document> = {
    * const estimate = await users.estimatedDocumentCount({ signal: controller.signal });
    * ```
    */
-  estimatedDocumentCount(options?: { signal?: AbortSignal }): Promise<number>
+  estimatedDocumentCount(options?: {
+    signal?: AbortSignal
+    retry?: RetryOptions | false
+  }): Promise<number>
 
   /**
    * Drop the collection (delete the table).

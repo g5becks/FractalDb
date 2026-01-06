@@ -1,3 +1,5 @@
+import type { RetryOptions } from "./retry-types.js"
+
 /**
  * Sort specification for query result ordering.
  *
@@ -563,6 +565,13 @@ export type QueryOptionsBase<T> = {
    * When the signal is aborted, the operation will throw an AbortedError.
    */
   readonly signal?: AbortSignal
+
+  /**
+   * Retry configuration for this operation.
+   * Overrides collection and database-level retry settings.
+   * Pass `false` to disable retries for this operation.
+   */
+  readonly retry?: RetryOptions | false
 }
 
 /**
@@ -807,6 +816,13 @@ export type QueryOptions<T> = {
    * When the signal is aborted, the operation will throw an AbortedError.
    */
   readonly signal?: AbortSignal
+
+  /**
+   * Retry configuration for this operation.
+   * Overrides collection and database-level retry settings.
+   * Pass `false` to disable retries for this operation.
+   */
+  readonly retry?: RetryOptions | false
 }
 
 /**
