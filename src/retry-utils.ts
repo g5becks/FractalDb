@@ -1,3 +1,4 @@
+import pRetry from "p-retry"
 import {
   ConnectionError,
   ConstraintError,
@@ -6,7 +7,7 @@ import {
   UniqueConstraintError,
   ValidationError,
 } from "./errors.js"
-import type { RetryContext } from "./retry-types.js"
+import type { RetryContext, RetryOptions } from "./retry-types.js"
 
 /**
  * SQLite error codes that are safe to retry.
@@ -16,6 +17,13 @@ import type { RetryContext } from "./retry-types.js"
  * - 10: SQLITE_IOERR - disk I/O error
  */
 export const RETRYABLE_SQLITE_CODES = [5, 6, 7, 10] as const
+
+/**
+ * Retry options with optional AbortSignal support.
+ */
+export type RetryableOptions = RetryOptions & {
+  signal?: AbortSignal
+}
 
 /**
  * Default retry logic for database operations.
@@ -64,4 +72,63 @@ export function defaultShouldRetry(context: RetryContext): boolean {
 
   // Don't retry unknown errors
   return false
+}
+
+/**
+ * Wraps an async operation with automatic retry logic.
+ *
+ * @param operation - The async function to execute with retry
+ * @param options - Retry configuration options
+ * @returns The result of the operation
+ *
+ * @example
+ * ```typescript
+ * const result = await withRetry(
+ *   async () => db.execute('SELECT * FROM users'),
+ *   { retries: 3, signal: abortController.signal }
+ * )
+ * ```
+ */
+export function withRetry<T>(
+  operation: () => Promise<T>,
+  options?: RetryableOptions
+): Promise<T> {
+  // Skip retry wrapper if retries is 0 or undefined
+  if (!options?.retries) {
+    return operation()
+  }
+
+  const pRetryOptions: Record<string, unknown> = {
+    retries: options.retries,
+  }
+
+  if (options.factor !== undefined) {
+    pRetryOptions.factor = options.factor
+  }
+  if (options.minTimeout !== undefined) {
+    pRetryOptions.minTimeout = options.minTimeout
+  }
+  if (options.maxTimeout !== undefined) {
+    pRetryOptions.maxTimeout = options.maxTimeout
+  }
+  if (options.randomize !== undefined) {
+    pRetryOptions.randomize = options.randomize
+  }
+  if (options.maxRetryTime !== undefined) {
+    pRetryOptions.maxRetryTime = options.maxRetryTime
+  }
+  if (options.onFailedAttempt !== undefined) {
+    pRetryOptions.onFailedAttempt = options.onFailedAttempt
+  }
+  if (options.shouldRetry !== undefined) {
+    pRetryOptions.shouldRetry = options.shouldRetry
+  }
+  if (options.shouldConsumeRetry !== undefined) {
+    pRetryOptions.shouldConsumeRetry = options.shouldConsumeRetry
+  }
+  if (options.signal !== undefined) {
+    pRetryOptions.signal = options.signal
+  }
+
+  return pRetry(operation, pRetryOptions as Parameters<typeof pRetry>[1])
 }
