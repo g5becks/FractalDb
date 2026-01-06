@@ -686,11 +686,15 @@ export type Collection<T extends Document> = {
    *   { status: 'inactive' },
    *   { sort: { createdAt: 1 } }
    * );
+   *
+   * // With abort signal
+   * const controller = new AbortController();
+   * const deleted = await users.findOneAndDelete(filter, { signal: controller.signal });
    * ```
    */
   findOneAndDelete(
     filter: string | QueryFilter<T>,
-    options?: { sort?: SortSpec<T> }
+    options?: { sort?: SortSpec<T>; signal?: AbortSignal }
   ): Promise<T | null>
 
   /**
@@ -741,6 +745,10 @@ export type Collection<T extends Document> = {
    *   { name: 'New User', age: 25 },
    *   { upsert: true, returnDocument: 'after' }
    * );
+   *
+   * // With abort signal
+   * const controller = new AbortController();
+   * const updated = await users.findOneAndUpdate(filter, update, { signal: controller.signal });
    * ```
    */
   findOneAndUpdate(
@@ -750,6 +758,7 @@ export type Collection<T extends Document> = {
       sort?: SortSpec<T>
       returnDocument?: "before" | "after"
       upsert?: boolean
+      signal?: AbortSignal
     }
   ): Promise<T | null>
 
@@ -797,6 +806,10 @@ export type Collection<T extends Document> = {
    *     tags: []
    *   }
    * );
+   *
+   * // With abort signal
+   * const controller = new AbortController();
+   * const replaced = await users.findOneAndReplace(filter, replacement, { signal: controller.signal });
    * ```
    */
   findOneAndReplace(
@@ -806,6 +819,7 @@ export type Collection<T extends Document> = {
       sort?: SortSpec<T>
       returnDocument?: "before" | "after"
       upsert?: boolean
+      signal?: AbortSignal
     }
   ): Promise<T | null>
 
