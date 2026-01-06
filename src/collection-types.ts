@@ -477,6 +477,22 @@ export type Collection<T extends Document> = {
    * **Validation:**
    * If validation fails, throws `ValidationError` with details.
    *
+  /**
+   * Insert a single document into the collection.
+   *
+   * @param doc - Document to insert (without _id, createdAt, updatedAt)
+   * @returns Promise resolving to the inserted document with generated _id
+   *
+   * @remarks
+   * Validates the document against the schema before inserting.
+   * Automatically generates:
+   * - `_id`: UUID v4
+   * - `createdAt`: Current timestamp
+   * - `updatedAt`: Current timestamp (if schema has this field)
+   *
+   * **Validation:**
+   * If validation fails, throws `ValidationError` with details.
+   *
    * @throws {ValidationError} If document fails schema validation
    * @throws {ConstraintError} If unique constraint is violated
    *
@@ -504,7 +520,7 @@ export type Collection<T extends Document> = {
    */
   insertOne(
     doc: Omit<T, "_id" | "createdAt" | "updatedAt">,
-    options?: { signal?: AbortSignal }
+    options?: { signal?: AbortSignal; retry?: RetryOptions | false }
   ): Promise<T>
 
   /**
@@ -553,7 +569,11 @@ export type Collection<T extends Document> = {
   updateOne(
     filter: string | QueryFilter<T>,
     update: Omit<Partial<T>, "_id" | "createdAt" | "updatedAt">,
-    options?: { upsert?: boolean; signal?: AbortSignal }
+    options?: {
+      upsert?: boolean
+      signal?: AbortSignal
+      retry?: RetryOptions | false
+    }
   ): Promise<T | null>
 
   /**
@@ -610,7 +630,7 @@ export type Collection<T extends Document> = {
   replaceOne(
     filter: string | QueryFilter<T>,
     doc: Omit<T, "_id" | "createdAt" | "updatedAt">,
-    options?: { signal?: AbortSignal }
+    options?: { signal?: AbortSignal; retry?: RetryOptions | false }
   ): Promise<T | null>
 
   /**
@@ -651,7 +671,7 @@ export type Collection<T extends Document> = {
    */
   deleteOne(
     filter: string | QueryFilter<T>,
-    options?: { signal?: AbortSignal }
+    options?: { signal?: AbortSignal; retry?: RetryOptions | false }
   ): Promise<boolean>
 
   // ===== Atomic Find-and-Modify Operations =====
@@ -862,7 +882,11 @@ export type Collection<T extends Document> = {
    */
   insertMany(
     docs: readonly Omit<T, "_id" | "createdAt" | "updatedAt">[],
-    options?: { ordered?: boolean; signal?: AbortSignal }
+    options?: {
+      ordered?: boolean
+      signal?: AbortSignal
+      retry?: RetryOptions | false
+    }
   ): Promise<InsertManyResult<T>>
 
   /**
@@ -900,7 +924,7 @@ export type Collection<T extends Document> = {
   updateMany(
     filter: QueryFilter<T>,
     update: Omit<Partial<T>, "_id" | "createdAt" | "updatedAt">,
-    options?: { signal?: AbortSignal }
+    options?: { signal?: AbortSignal; retry?: RetryOptions | false }
   ): Promise<UpdateResult>
 
   /**
@@ -933,7 +957,7 @@ export type Collection<T extends Document> = {
    */
   deleteMany(
     filter: QueryFilter<T>,
-    options?: { signal?: AbortSignal }
+    options?: { signal?: AbortSignal; retry?: RetryOptions | false }
   ): Promise<DeleteResult>
 
   // ===== Utility Methods =====
