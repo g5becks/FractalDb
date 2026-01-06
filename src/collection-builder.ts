@@ -210,7 +210,9 @@ export class CollectionBuilderImpl<T extends Document>
       this.collectionName,
       schema,
       this.idGenerator,
-      this.enableCacheOption
+      this.enableCacheOption,
+      undefined,
+      undefined
     )
   }
 }

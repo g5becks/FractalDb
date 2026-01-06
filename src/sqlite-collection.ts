@@ -21,6 +21,8 @@ import type {
   TextSearchSpec,
 } from "./query-options-types.js"
 import type { QueryFilter } from "./query-types.js"
+import type { RetryOptions } from "./retry-types.js"
+import { mergeRetryOptions } from "./retry-utils.js"
 import type { SchemaDefinition } from "./schema-types.js"
 import { SQLiteQueryTranslator } from "./sqlite-query-translator.js"
 
@@ -104,6 +106,11 @@ export class SQLiteCollection<T extends Document> implements Collection<T> {
   /** ID generator function for creating document IDs */
   private readonly idGenerator: () => string
 
+  /** Merged retry options for this collection */
+  // biome-ignore lint/correctness/noUnusedPrivateClassMembers: will be used in next tasks
+  // @ts-expect-error - will be used in next tasks (178-180)
+  private readonly retryOptions: RetryOptions | undefined
+
   /**
    * Creates a new SQLite collection.
    *
@@ -112,6 +119,8 @@ export class SQLiteCollection<T extends Document> implements Collection<T> {
    * @param schema - Schema definition for the document type
    * @param idGenerator - Function to generate unique document IDs
    * @param enableCache - Whether to enable query caching (default: false)
+   * @param databaseRetryOptions - Database-level retry configuration
+   * @param collectionRetryOptions - Collection-level retry configuration
    *
    * @remarks
    * The constructor automatically creates the table and indexes if they don't exist.
@@ -122,13 +131,19 @@ export class SQLiteCollection<T extends Document> implements Collection<T> {
     name: string,
     schema: SchemaDefinition<T>,
     idGenerator: () => string,
-    enableCache = false
+    enableCache = false,
+    databaseRetryOptions?: RetryOptions,
+    collectionRetryOptions?: RetryOptions | false
   ) {
     this.db = db
     this.name = name
     this.schema = schema
     this.idGenerator = idGenerator
     this.translator = new SQLiteQueryTranslator(schema, { enableCache })
+    this.retryOptions = mergeRetryOptions(
+      databaseRetryOptions,
+      collectionRetryOptions
+    )
 
     // Initialize table and indexes
     this.createTable()

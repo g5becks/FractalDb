@@ -13,6 +13,7 @@ import type {
   Transaction,
 } from "./database-types.js"
 import { generateId } from "./id-generator.js"
+import type { RetryOptions } from "./retry-types.js"
 import type { SchemaDefinition } from "./schema-types.js"
 import { SQLiteCollection } from "./sqlite-collection.js"
 
@@ -57,6 +58,7 @@ export class Strata implements StrataDBInterface {
   private readonly idGeneratorFn: () => string
   private readonly onCloseCallback: (() => void) | undefined
   private readonly enableCacheDefault: boolean
+  private readonly retryOptionsDefault: RetryOptions | undefined
   private readonly collections = new Map<string, Collection<Document>>()
 
   /**
@@ -75,6 +77,7 @@ export class Strata implements StrataDBInterface {
     this.idGeneratorFn = options.idGenerator ?? generateId
     this.onCloseCallback = options.onClose
     this.enableCacheDefault = options.enableCache ?? false
+    this.retryOptionsDefault = options.retry
   }
 
   /**
@@ -131,7 +134,9 @@ export class Strata implements StrataDBInterface {
       name,
       schema,
       this.idGeneratorFn,
-      enableCache
+      enableCache,
+      this.retryOptionsDefault,
+      options?.retry
     )
     this.collections.set(name, collection as Collection<Document>)
 
