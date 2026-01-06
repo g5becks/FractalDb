@@ -58,7 +58,6 @@ export type {
   Transaction,
 } from "./database-types.js"
 // Error types
-// biome-ignore lint/performance/noBarrelFile: library entry point requires re-exports
 export {
   AbortedError,
   ConnectionError,
@@ -101,7 +100,6 @@ export type {
 } from "./query-types.js"
 // Retry types and utilities
 export type { RetryContext, RetryOptions } from "./retry-types.js"
-// biome-ignore lint/performance/noBarrelFile: library entry point requires re-exports
 export {
   defaultShouldRetry,
   mergeRetryOptions,

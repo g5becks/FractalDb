@@ -686,6 +686,7 @@ export class SQLiteCollection<T extends Document> implements Collection<T> {
     options?: QueryOptions<T>
   ): Promise<readonly T[]> {
     return withRetry(
+      // biome-ignore lint/complexity/noExcessiveCognitiveComplexity: complex query logic
       () => {
         throwIfAborted(options?.signal)
 
@@ -962,6 +963,7 @@ export class SQLiteCollection<T extends Document> implements Collection<T> {
     options?: { signal?: AbortSignal; retry?: RetryOptions | false }
   ): Promise<T> {
     return withRetry(
+      // biome-ignore lint/complexity/noExcessiveCognitiveComplexity: complex insert logic
       () => {
         throwIfAborted(options?.signal)
 
@@ -1344,6 +1346,7 @@ export class SQLiteCollection<T extends Document> implements Collection<T> {
     }
   ): Promise<InsertManyResult<T>> {
     return withRetry(
+      // biome-ignore lint/complexity/noExcessiveCognitiveComplexity: complex batch insert logic
       () => {
         throwIfAborted(options?.signal)
 
@@ -1613,6 +1616,7 @@ export class SQLiteCollection<T extends Document> implements Collection<T> {
    * );
    * ```
    */
+  // biome-ignore lint/suspicious/useAwait: wrapper for retry logic
   async findOneAndDelete(
     filter: string | QueryFilter<T>,
     options?: {
@@ -1653,6 +1657,7 @@ export class SQLiteCollection<T extends Document> implements Collection<T> {
    * @param options - Update options (sort, returnDocument, upsert)
    * @returns Promise resolving to the document before or after update, or null if not found
    */
+  // biome-ignore lint/suspicious/useAwait: wrapper for retry logic
   async findOneAndUpdate(
     filter: string | QueryFilter<T>,
     update: Omit<Partial<T>, "_id" | "createdAt" | "updatedAt">,
@@ -1706,6 +1711,7 @@ export class SQLiteCollection<T extends Document> implements Collection<T> {
    * @param options - Replace options (sort, returnDocument, upsert)
    * @returns Promise resolving to the document before or after replacement, or null if not found
    */
+  // biome-ignore lint/suspicious/useAwait: wrapper for retry logic
   async findOneAndReplace(
     filter: string | QueryFilter<T>,
     replacement: Omit<T, "_id" | "createdAt" | "updatedAt">,

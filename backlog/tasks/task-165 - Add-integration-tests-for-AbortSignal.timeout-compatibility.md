@@ -1,11 +1,11 @@
 ---
 id: task-165
 title: Add integration tests for AbortSignal.timeout compatibility
-status: In Progress
+status: Done
 assignee:
   - '@agent'
 created_date: '2026-01-05 23:50'
-updated_date: '2026-01-06 03:50'
+updated_date: '2026-01-06 03:51'
 labels:
   - abort-signal
   - testing
@@ -24,10 +24,10 @@ Add integration tests verifying AbortSignal.timeout() works correctly with colle
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 Test AbortSignal.timeout() works correctly with find operation
-- [ ] #2 Test AbortSignal.timeout() works correctly with insertOne operation
-- [ ] #3 Test db.execute throws AbortedError when signal is pre-aborted
-- [ ] #4 All tests pass with bun test
+- [x] #1 Test AbortSignal.timeout() works correctly with find operation
+- [x] #2 Test AbortSignal.timeout() works correctly with insertOne operation
+- [x] #3 Test db.execute throws AbortedError when signal is pre-aborted
+- [x] #4 All tests pass with bun test
 <!-- AC:END -->
 
 ## Implementation Plan
@@ -38,3 +38,15 @@ Add integration tests verifying AbortSignal.timeout() works correctly with colle
 3. Add test for db.execute with pre-aborted signal
 4. Run bun test to verify
 <!-- SECTION:PLAN:END -->
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+Added integration tests for AbortSignal.timeout() compatibility:
+
+- AbortSignal.timeout() with find: Verified long timeout allows operation to complete successfully
+- AbortSignal.timeout() with insertOne: Verified long timeout allows operation to complete successfully
+- db.execute with pre-aborted signal: Verified throws AbortedError before executing callback
+
+All 3 new tests pass. Full test suite: 615 tests pass, 0 failures.
+<!-- SECTION:NOTES:END -->

@@ -16,6 +16,7 @@ import {
 describe("withRetry", () => {
   test("executes operation once when retries is 0", async () => {
     let callCount = 0
+    // biome-ignore lint/suspicious/useAwait: test helper needs to be async
     const operation = async () => {
       callCount += 1
       return Promise.resolve("success")
@@ -29,6 +30,7 @@ describe("withRetry", () => {
 
   test("executes operation once when retries is undefined", async () => {
     let callCount = 0
+    // biome-ignore lint/suspicious/useAwait: test helper needs to be async
     const operation = async () => {
       callCount += 1
       return Promise.resolve("success")
@@ -42,6 +44,7 @@ describe("withRetry", () => {
 
   test("retries on retryable errors", async () => {
     let callCount = 0
+    // biome-ignore lint/suspicious/useAwait: test helper needs to be async
     const operation = async () => {
       callCount += 1
       if (callCount < 3) {
@@ -62,6 +65,7 @@ describe("withRetry", () => {
 
   test("stops on non-retryable errors", async () => {
     let callCount = 0
+    // biome-ignore lint/suspicious/useAwait: test helper needs to be async
     const operation = async () => {
       callCount += 1
       throw new ValidationError("Invalid data", "field", "value")
@@ -81,6 +85,7 @@ describe("withRetry", () => {
   })
 
   test("respects maxRetryTime", async () => {
+    // biome-ignore lint/suspicious/useAwait: test helper needs to be async
     const operation = async () => {
       throw new ConnectionError("Connection failed")
     }
@@ -102,6 +107,7 @@ describe("withRetry", () => {
   test("calls onFailedAttempt on each failure", async () => {
     const attempts: number[] = []
     let callCount = 0
+    // biome-ignore lint/suspicious/useAwait: test helper needs to be async
     const operation = async () => {
       callCount += 1
       if (callCount < 3) {
@@ -124,6 +130,7 @@ describe("withRetry", () => {
 
   test("respects shouldRetry predicate", async () => {
     let callCount = 0
+    // biome-ignore lint/suspicious/useAwait: test helper needs to be async
     const operation = async () => {
       callCount += 1
       throw new Error("Custom error")
@@ -143,6 +150,7 @@ describe("withRetry", () => {
 
   test("respects shouldConsumeRetry predicate", async () => {
     let callCount = 0
+    // biome-ignore lint/suspicious/useAwait: test helper needs to be async
     const operation = async () => {
       callCount += 1
       throw new Error("Custom error")
