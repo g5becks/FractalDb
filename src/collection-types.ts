@@ -200,6 +200,7 @@ export type Collection<T extends Document> = {
    * Find a single document by its ID.
    *
    * @param id - The document ID to search for
+   * @param options - Optional options including signal for cancellation
    * @returns Promise resolving to the document, or null if not found
    *
    * @remarks
@@ -212,9 +213,13 @@ export type Collection<T extends Document> = {
    * if (user) {
    *   console.log(user.name);
    * }
+   *
+   * // With abort signal
+   * const controller = new AbortController();
+   * const user = await users.findById(id, { signal: controller.signal });
    * ```
    */
-  findById(id: string): Promise<T | null>
+  findById(id: string, options?: { signal?: AbortSignal }): Promise<T | null>
 
   /**
    * Find all documents matching the query filter.
@@ -336,6 +341,7 @@ export type Collection<T extends Document> = {
    * Count documents matching the query filter.
    *
    * @param filter - Query filter to match documents
+   * @param options - Optional options including signal for cancellation
    * @returns Promise resolving to the count of matching documents
    *
    * @remarks
@@ -355,9 +361,16 @@ export type Collection<T extends Document> = {
    *
    * // Count adults
    * const adultCount = await users.count({ age: { $gte: 18 } });
+   *
+   * // With abort signal
+   * const controller = new AbortController();
+   * const count = await users.count({}, { signal: controller.signal });
    * ```
    */
-  count(filter: QueryFilter<T>): Promise<number>
+  count(
+    filter: QueryFilter<T>,
+    options?: { signal?: AbortSignal }
+  ): Promise<number>
 
   /**
    * Search for documents across multiple fields.
@@ -872,6 +885,7 @@ export type Collection<T extends Document> = {
    *
    * @param field - The field name to get distinct values for
    * @param filter - Optional query filter to narrow results
+   * @param options - Optional options including signal for cancellation
    * @returns Promise resolving to array of unique values for the field
    *
    * @remarks
@@ -892,16 +906,22 @@ export type Collection<T extends Document> = {
    *
    * // Get unique tags (array field)
    * const tags = await users.distinct('tags');
+   *
+   * // With abort signal
+   * const controller = new AbortController();
+   * const ages = await users.distinct('age', {}, { signal: controller.signal });
    * ```
    */
   distinct<K extends keyof Omit<T, "_id" | "createdAt" | "updatedAt">>(
     field: K,
-    filter?: QueryFilter<T>
+    filter?: QueryFilter<T>,
+    options?: { signal?: AbortSignal }
   ): Promise<T[K][]>
 
   /**
    * Get an estimated count of documents in the collection.
    *
+   * @param options - Optional options including signal for cancellation
    * @returns Promise resolving to the estimated document count
    *
    * @remarks
@@ -919,9 +939,13 @@ export type Collection<T extends Document> = {
    * // Compare with exact count
    * const exact = await users.count({});
    * console.log(`Exact: ${exact}, Estimated: ${estimate}`);
+   *
+   * // With abort signal
+   * const controller = new AbortController();
+   * const estimate = await users.estimatedDocumentCount({ signal: controller.signal });
    * ```
    */
-  estimatedDocumentCount(): Promise<number>
+  estimatedDocumentCount(options?: { signal?: AbortSignal }): Promise<number>
 
   /**
    * Drop the collection (delete the table).
