@@ -132,3 +132,45 @@ export function withRetry<T>(
 
   return pRetry(operation, pRetryOptions as Parameters<typeof pRetry>[1])
 }
+
+/**
+ * Merges retry options from database, collection, and operation levels.
+ * Operation-level options take precedence over collection-level, which take precedence over database-level.
+ *
+ * @param database - Database-level retry options
+ * @param collection - Collection-level retry options
+ * @param operation - Operation-level retry options
+ * @returns Merged retry options, or undefined if retry is disabled
+ *
+ * @example
+ * ```typescript
+ * const options = mergeRetryOptions(
+ *   { retries: 3 },
+ *   { retries: 5, minTimeout: 2000 },
+ *   { maxTimeout: 10000 }
+ * )
+ * // Result: { retries: 5, minTimeout: 2000, maxTimeout: 10000 }
+ * ```
+ */
+export function mergeRetryOptions(
+  database?: RetryOptions | false,
+  collection?: RetryOptions | false,
+  operation?: RetryOptions | false
+): RetryOptions | undefined {
+  // Operation-level false disables retry
+  if (operation === false) {
+    return
+  }
+
+  // Collection-level false disables retry
+  if (collection === false) {
+    return
+  }
+
+  // Merge with precedence: operation > collection > database
+  return {
+    ...database,
+    ...collection,
+    ...operation,
+  } as RetryOptions
+}
