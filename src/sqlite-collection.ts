@@ -1265,8 +1265,10 @@ export class SQLiteCollection<T extends Document> implements Collection<T> {
     docs: readonly (Omit<T, "_id" | "createdAt" | "updatedAt"> & {
       _id?: string
     })[],
-    options?: { ordered?: boolean }
+    options?: { ordered?: boolean; signal?: AbortSignal }
   ): Promise<InsertManyResult<T>> {
+    throwIfAborted(options?.signal)
+
     const ordered = options?.ordered ?? true
     const now = Date.now()
     const insertedDocs: T[] = []
@@ -1282,6 +1284,8 @@ export class SQLiteCollection<T extends Document> implements Collection<T> {
     )
 
     for (let i = 0; i < docs.length; i++) {
+      throwIfAborted(options?.signal)
+
       const doc = docs[i]
       if (!doc) {
         continue
@@ -1358,8 +1362,11 @@ export class SQLiteCollection<T extends Document> implements Collection<T> {
    */
   updateMany(
     filter: QueryFilter<T>,
-    update: Omit<Partial<T>, "_id" | "createdAt" | "updatedAt">
+    update: Omit<Partial<T>, "_id" | "createdAt" | "updatedAt">,
+    options?: { signal?: AbortSignal }
   ): Promise<UpdateResult> {
+    throwIfAborted(options?.signal)
+
     const { sql: whereClause, params } = this.translator.translate(filter)
 
     // Find all matching documents
@@ -1387,6 +1394,8 @@ export class SQLiteCollection<T extends Document> implements Collection<T> {
 
     // Prepare all updated documents and validate before committing
     for (const row of rows) {
+      throwIfAborted(options?.signal)
+
       const existingDoc = JSON.parse(row.body) as Omit<T, "_id">
       const mergedDoc = mergeDocumentUpdate<
         T,
@@ -1455,7 +1464,12 @@ export class SQLiteCollection<T extends Document> implements Collection<T> {
    * await users.deleteMany({});
    * ```
    */
-  deleteMany(filter: QueryFilter<T>): Promise<DeleteResult> {
+  deleteMany(
+    filter: QueryFilter<T>,
+    options?: { signal?: AbortSignal }
+  ): Promise<DeleteResult> {
+    throwIfAborted(options?.signal)
+
     const { sql: whereClause, params } = this.translator.translate(filter)
 
     let sql = `DELETE FROM ${this.name}`
