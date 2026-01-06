@@ -433,3 +433,39 @@ export class TransactionAbortedError extends StrataDBError {
   readonly category = "transaction" as const
   readonly code = "TRANSACTION_ABORTED"
 }
+
+/**
+ * Error thrown when an operation is aborted via AbortSignal.
+ *
+ * @remarks
+ * This error is thrown when an AbortSignal is triggered during an operation.
+ * The original abort reason is preserved in the `reason` property.
+ *
+ * When used with retry, p-retry will automatically stop retrying when this error is thrown.
+ *
+ * @example
+ * ```typescript
+ * const controller = new AbortController();
+ * setTimeout(() => controller.abort(), 100);
+ *
+ * try {
+ *   await users.find({}, { signal: controller.signal });
+ * } catch (error) {
+ *   if (error instanceof AbortedError) {
+ *     console.log('Operation aborted:', error.reason);
+ *   }
+ * }
+ * ```
+ */
+export class AbortedError extends StrataDBError {
+  readonly category = "database" as const
+  readonly code = "OPERATION_ABORTED"
+
+  /** The abort reason from the AbortSignal */
+  readonly reason?: unknown
+
+  constructor(message: string, reason?: unknown) {
+    super(message)
+    this.reason = reason
+  }
+}

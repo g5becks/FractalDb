@@ -32,6 +32,9 @@
  * ```
  */
 
+// Abort utilities
+// biome-ignore lint/performance/noBarrelFile: library entry point requires re-exports
+export { createAbortPromise, throwIfAborted } from "./abort-utils.js"
 export type { CollectionBuilder } from "./collection-builder.js"
 // Collection types
 export type {
@@ -57,6 +60,7 @@ export type {
 // Error types
 // biome-ignore lint/performance/noBarrelFile: library entry point requires re-exports
 export {
+  AbortedError,
   ConnectionError,
   QueryError,
   StrataDBError,
