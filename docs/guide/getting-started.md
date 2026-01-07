@@ -79,7 +79,16 @@ const db = new Strata({
   idGenerator: () => nanoid(),
 
   // Query caching for repeated patterns (default: false)
-  enableCache: true
+  enableCache: true,
+
+  // Automatic retry for transient failures (v0.4.0+)
+  retry: {
+    retries: 3,           // Max retry attempts
+    minTimeout: 100,      // Initial delay (ms)
+    maxTimeout: 5000,     // Max delay between retries
+    factor: 2,            // Exponential backoff multiplier
+    randomize: true       // Add jitter to prevent thundering herd
+  }
 })
 ```
 
@@ -88,3 +97,4 @@ const db = new Strata({
 - [Collections](/guide/collections) - CRUD operations and atomic methods
 - [Queries](/guide/queries) - Query operators and filtering
 - [Schemas](/guide/schemas) - Indexes, validation, and configuration
+- [Retries & Cancellation](/guide/retries-and-cancellation) - Automatic retries and AbortSignal support

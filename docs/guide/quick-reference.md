@@ -31,7 +31,7 @@ const userSchema = createSchema<User>()
   .build()
 
 // Initialize database
-const db = new Strata({ 
+const db = new Strata({
   database: ':memory:'  // or 'path/to/file.db'
 })
 
@@ -107,9 +107,9 @@ const safe = await users.find({}, { omit: ['password', 'ssn'] })   // Exclude th
 
 ```typescript
 // Update single document by ID
-const result = await users.updateOne('user-id', { 
-  name: 'Alice Updated', 
-  age: 31 
+const result = await users.updateOne('user-id', {
+  name: 'Alice Updated',
+  age: 31
 })
 // Returns: { matchedCount: number, modifiedCount: number }
 
@@ -167,7 +167,7 @@ await users.find({ age: { $lte: 65 } })  // Less than or equal
 // $in - value in array
 await users.find({ status: { $in: ['active', 'pending'] } })
 
-// $nin - value not in array  
+// $nin - value not in array
 await users.find({ status: { $nin: ['suspended', 'banned'] } })
 
 // $all - array contains all values (for array fields)
@@ -177,13 +177,13 @@ await users.find({ tags: { $all: ['admin', 'verified'] } })
 await posts.find({ comments: { $size: 0 } })  // No comments
 
 // $elemMatch - array has element matching condition
-await users.find({ 
-  hobbies: { 
-    $elemMatch: { 
-      category: 'sports', 
-      level: { $gte: 5 } 
-    } 
-  } 
+await users.find({
+  hobbies: {
+    $elemMatch: {
+      category: 'sports',
+      level: { $gte: 5 }
+    }
+  }
 })
 ```
 
@@ -293,10 +293,10 @@ const userSchema = createSchema<User>()
 const result = await db.execute(async (tx) => {
   const usersTx = tx.collection('users', userSchema)
   const accountsTx = tx.collection('accounts', accountSchema)
-  
+
   const user = await usersTx.insertOne(userData)
   await accountsTx.insertOne({ userId: user.document.id, balance: 0 })
-  
+
   return { userId: user.document.id }
 })
 
@@ -331,20 +331,123 @@ const users = db.collection('users', userSchema, { enableCache: true })
 const tempCollection = db.collection('temp', tempSchema, { enableCache: false })
 ```
 
+### Cancellation & Retries (v0.4.0+)
+
+```typescript
+import { AbortedError, defaultShouldRetry } from 'stratadb'
+
+// ============================================
+// CANCELLATION
+// ============================================
+
+// Simple timeout
+const results = await users.find({}, { signal: AbortSignal.timeout(5000) })
+
+// Manual control with AbortController
+const controller = new AbortController()
+setTimeout(() => controller.abort(), 5000)
+await users.find({}, { signal: controller.signal })
+
+// Cancel transactions
+await db.execute(async (tx) => {
+  await tx.collection('users', userSchema).insertOne(doc)
+}, { signal: controller.signal })
+
+// Handle cancellation errors
+try {
+  await users.find({}, { signal: AbortSignal.timeout(100) })
+} catch (error) {
+  if (error instanceof AbortedError) {
+    console.log('Cancelled:', error.reason)
+  }
+}
+
+// ============================================
+// RETRY CONFIGURATION LEVELS
+// ============================================
+
+// Database level (applies to all operations)
+const db = new Strata({
+  database: 'app.db',
+  retry: { retries: 3, minTimeout: 100, maxTimeout: 5000 }
+})
+
+// Collection level (overrides database)
+const users = db.collection('users', userSchema, {
+  retry: { retries: 5, minTimeout: 50 }
+})
+
+// Disable retries for a collection
+const logs = db.collection('logs', logSchema, { retry: false })
+
+// Operation level (overrides collection)
+await users.insertOne(doc, { retry: { retries: 10 } })
+
+// Disable retries for specific operation
+await users.find({}, { retry: false })
+
+// ============================================
+// FULL RETRY OPTIONS
+// ============================================
+
+await users.insertOne(doc, {
+  retry: {
+    retries: 5,              // Max retry attempts
+    factor: 2,               // Exponential backoff multiplier
+    minTimeout: 100,         // Initial delay (ms)
+    maxTimeout: 10000,       // Max delay between retries (ms)
+    maxRetryTime: 30000,     // Overall timeout for all retries (ms)
+    randomize: true,         // Add jitter
+
+    // Logging callback
+    onFailedAttempt: (ctx) => {
+      console.log(`Attempt ${ctx.attemptNumber} failed: ${ctx.error.message}`)
+      console.log(`Retrying in ${ctx.delay}ms (${ctx.retriesLeft} left)`)
+    },
+
+    // Custom retry decision
+    shouldRetry: (ctx) => {
+      return defaultShouldRetry(ctx) && ctx.elapsedTime < 10000
+    },
+
+    // Control retry budget
+    shouldConsumeRetry: (ctx) => {
+      return !ctx.error.message.includes('rate limit')
+    }
+  }
+})
+
+// ============================================
+// COMBINING CANCELLATION + RETRIES
+// ============================================
+
+const controller = new AbortController()
+setTimeout(() => controller.abort(), 10000) // 10s overall timeout
+
+await users.insertOne(doc, {
+  signal: controller.signal,
+  retry: { retries: 5, minTimeout: 500 }
+})
+```
+
 ## Error Handling
 
 ```typescript
-import { 
-  ValidationError, 
-  UniqueConstraintError, 
-  QueryError, 
-  TransactionError 
+import {
+  ValidationError,
+  UniqueConstraintError,
+  QueryError,
+  TransactionError,
+  AbortedError
 } from 'stratadb'
 
 try {
-  await users.insertOne(invalidData)
+  await users.insertOne(invalidData, { signal: AbortSignal.timeout(5000) })
 } catch (error) {
-  if (error instanceof ValidationError) {
+  if (error instanceof AbortedError) {
+    console.log('Operation cancelled or timed out')
+    console.log('Reason:', error.reason)
+  } else if (error instanceof ValidationError) {
     console.log(`Validation error on field: ${error.field}`)
     console.log(`Value that failed: ${error.value}`)
     console.log(`Error message: ${error.message}`)
@@ -372,12 +475,12 @@ const newId = generateId()  // Generates UUID v7 string
 ### Timestamps
 
 ```typescript
-import { 
-  nowTimestamp, 
-  timestampToDate, 
-  dateToTimestamp, 
+import {
+  nowTimestamp,
+  timestampToDate,
+  dateToTimestamp,
   isTimestampInRange,
-  timestampDiff 
+  timestampDiff
 } from 'stratadb'
 
 const now = nowTimestamp()                    // Current timestamp

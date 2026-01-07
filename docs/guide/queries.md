@@ -135,6 +135,60 @@ await users.find(
 )
 ```
 
+## Cancellation and Retries (v0.4.0+)
+
+All query operations support cancellation and automatic retries.
+
+### Cancellation
+
+Cancel long-running queries with AbortSignal:
+
+```typescript
+// Simple timeout
+const results = await users.find(
+  { status: 'active' },
+  { signal: AbortSignal.timeout(5000) }
+)
+
+// With AbortController for manual control
+const controller = new AbortController()
+setTimeout(() => controller.abort('Query took too long'), 5000)
+
+try {
+  const results = await users.find({}, { signal: controller.signal })
+} catch (error) {
+  if (error instanceof AbortedError) {
+    console.log('Query cancelled:', error.reason)
+  }
+}
+```
+
+### Retries
+
+Configure automatic retries for transient failures:
+
+```typescript
+// Retry with custom configuration
+const results = await users.find(
+  { status: 'active' },
+  {
+    retry: {
+      retries: 3,
+      minTimeout: 100,
+      onFailedAttempt: (ctx) => console.log(`Retry ${ctx.attemptNumber}...`)
+    }
+  }
+)
+
+// Disable retries for a specific query
+const user = await users.findOne(
+  { email: 'user@example.com' },
+  { retry: false }
+)
+```
+
+See [Retries & Cancellation](/guide/retries-and-cancellation) for complete documentation.
+
 ## Field Projection (v0.3.0+)
 
 Control which fields are returned using `select` or `omit`:

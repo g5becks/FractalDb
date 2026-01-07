@@ -34,6 +34,7 @@ const adults = await users.find({ age: { $gte: 18 } });
 
 ## Classes
 
+- [AbortedError](classes/AbortedError.md)
 - [ConnectionError](classes/ConnectionError.md)
 - [QueryError](classes/QueryError.md)
 - [Strata](classes/Strata.md)
@@ -70,6 +71,8 @@ const adults = await users.find({ age: { $gte: 18 } });
 - [ProjectionSpec](type-aliases/ProjectionSpec.md)
 - [QueryFilter](type-aliases/QueryFilter.md)
 - [QueryOptions](type-aliases/QueryOptions.md)
+- [RetryContext](type-aliases/RetryContext.md)
+- [RetryOptions](type-aliases/RetryOptions.md)
 - [SchemaBuilder](type-aliases/SchemaBuilder.md)
 - [SchemaDefinition](type-aliases/SchemaDefinition.md)
 - [SchemaField](type-aliases/SchemaField.md)
@@ -86,9 +89,12 @@ const adults = await users.find({ age: { $gte: 18 } });
 
 - [createSchema](functions/createSchema.md)
 - [dateToTimestamp](functions/dateToTimestamp.md)
+- [defaultShouldRetry](functions/defaultShouldRetry.md)
 - [generateId](functions/generateId.md)
 - [isTimestampInRange](functions/isTimestampInRange.md)
 - [isValidTimestamp](functions/isValidTimestamp.md)
+- [mergeRetryOptions](functions/mergeRetryOptions.md)
 - [nowTimestamp](functions/nowTimestamp.md)
 - [timestampDiff](functions/timestampDiff.md)
 - [timestampToDate](functions/timestampToDate.md)
+- [withRetry](functions/withRetry.md)

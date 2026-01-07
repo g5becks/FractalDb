@@ -48,8 +48,8 @@ chmod 755 ./data
 
 2. Use absolute paths if relative paths fail:
 ```typescript
-const db = new Strata({ 
-  database: '/absolute/path/to/your/app.db' 
+const db = new Strata({
+  database: '/absolute/path/to/your/app.db'
 })
 ```
 
@@ -62,15 +62,86 @@ const db = new Strata({ database: ':memory:' })
 
 **Problem**: Error like "SQLITE_BUSY: database is locked"
 
-**Solution**: This typically occurs with concurrent writes. StrataDB handles most cases automatically, but if you encounter this:
+**Solution**: This typically occurs with concurrent writes. Enable automatic retries to handle transient lock conflicts (v0.4.0+):
 
 ```typescript
-// Use transactions for multiple operations
+// Database-level retry configuration
+const db = new Strata({
+  database: 'app.db',
+  retry: {
+    retries: 3,
+    minTimeout: 100,
+    maxTimeout: 2000
+  }
+})
+```
+
+StrataDB automatically retries on these SQLite error codes:
+- `5` (SQLITE_BUSY) - Database is locked
+- `6` (SQLITE_LOCKED) - Table is locked
+- `7` (SQLITE_NOMEM) - Out of memory
+- `10` (SQLITE_IOERR) - Disk I/O error
+
+For critical operations, use more aggressive retry settings:
+
+```typescript
+await users.insertMany(criticalData, {
+  retry: {
+    retries: 5,
+    minTimeout: 50,
+    maxTimeout: 5000,
+    onFailedAttempt: (ctx) => {
+      console.log(`Database locked, retry ${ctx.attemptNumber}...`)
+    }
+  }
+})
+```
+
+If retries don't help, use transactions to batch operations:
+
+```typescript
 await db.execute(async (tx) => {
   const users = tx.collection('users', userSchema)
-  // Perform multiple operations in one transaction
   await users.insertOne(data1)
   await users.insertOne(data2)
+})
+```
+
+### Operation Timeouts
+
+**Problem**: Operations hang or take too long
+
+**Solution**: Use AbortSignal to set timeouts (v0.4.0+):
+
+```typescript
+import { AbortedError } from 'stratadb'
+
+// Simple timeout
+const results = await users.find(
+  { status: 'active' },
+  { signal: AbortSignal.timeout(5000) }
+)
+
+// With error handling
+try {
+  const results = await users.find({}, { signal: AbortSignal.timeout(5000) })
+} catch (error) {
+  if (error instanceof AbortedError) {
+    console.log('Query timed out after 5 seconds')
+  }
+  throw error
+}
+
+// Combine timeout with retries
+const controller = new AbortController()
+setTimeout(() => controller.abort(), 30000) // 30s overall timeout
+
+await users.insertMany(largeDataset, {
+  signal: controller.signal,
+  retry: {
+    retries: 5,
+    minTimeout: 500
+  }
 })
 ```
 
@@ -128,10 +199,10 @@ const userSchema = createSchema<User>()
 
 // ✅ Correct - specify the exact path for indexing
 const userSchema = createSchema<User>()
-  .field('profileBio', { 
+  .field('profileBio', {
     path: '$.profile.bio', // Path to nested property
-    type: 'TEXT', 
-    indexed: true 
+    type: 'TEXT',
+    indexed: true
   })
   .build()
 
@@ -163,21 +234,21 @@ const userSchema = createSchema<User>()
 2. **Use query caching** for repeated patterns:
 ```typescript
 // Enable caching for frequently repeated queries
-const db = new Strata({ 
-  database: 'app.db', 
-  enableCache: true 
+const db = new Strata({
+  database: 'app.db',
+  enableCache: true
 })
 ```
 
 3. **Optimize complex queries**:
 ```typescript
 // ❌ Multiple OR conditions can be slow
-await users.find({ 
+await users.find({
   $or: [
     { status: 'active' },
     { status: 'pending' },
     { status: 'trial' }
-  ] 
+  ]
 })
 
 // ✅ Single $in query is more efficient
@@ -195,7 +266,7 @@ await users.find({ status: { $in: ['active', 'pending', 'trial'] } })
 const oneOffQueries = db.collection('temp', schema, { enableCache: false })
 
 // Or limit the cache size by disabling global cache and enabling only where needed
-const db = new Strata({ 
+const db = new Strata({
   database: 'app.db',
   enableCache: false  // Disable globally
 })

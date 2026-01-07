@@ -162,10 +162,13 @@ await users.drop()
 ## Error Handling
 
 ```typescript
-import { UniqueConstraintError, ValidationError } from 'stratadb'
+import { UniqueConstraintError, ValidationError, AbortedError } from 'stratadb'
 
 try {
-  await users.insertOne({ email: 'duplicate@example.com' })
+  await users.insertOne(
+    { email: 'duplicate@example.com' },
+    { signal: AbortSignal.timeout(5000) }
+  )
 } catch (err) {
   if (err instanceof UniqueConstraintError) {
     console.error(`Duplicate value for ${err.field}`)
@@ -173,8 +176,62 @@ try {
   if (err instanceof ValidationError) {
     console.error(`Invalid document: ${err.message}`)
   }
+  if (err instanceof AbortedError) {
+    console.error('Operation timed out or was cancelled')
+  }
 }
 ```
+
+## Cancellation and Retries
+
+All collection methods support cancellation and automatic retries (v0.4.0+).
+
+### Cancellation
+
+```typescript
+// Cancel with timeout
+const results = await users.find(
+  { age: { $gte: 18 } },
+  { signal: AbortSignal.timeout(5000) }
+)
+
+// Cancel with AbortController
+const controller = new AbortController()
+setTimeout(() => controller.abort(), 5000)
+
+await users.insertOne(doc, { signal: controller.signal })
+```
+
+### Collection-Level Retries
+
+```typescript
+// Configure retries for a collection
+const users = db.collection('users', userSchema, {
+  retry: {
+    retries: 3,
+    minTimeout: 100,
+    maxTimeout: 5000
+  }
+})
+
+// All operations on this collection will use these retry settings
+await users.insertOne(doc)
+await users.find({})
+```
+
+### Operation-Level Retries
+
+```typescript
+// Override retry settings for a specific operation
+await users.insertOne(criticalDoc, {
+  retry: { retries: 5, minTimeout: 50 }
+})
+
+// Disable retries for a specific operation
+await users.find({}, { retry: false })
+```
+
+See [Retries & Cancellation](/guide/retries-and-cancellation) for complete documentation.
 
 ## Validation
 

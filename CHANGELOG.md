@@ -139,3 +139,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - All changes are backward compatible
 - Existing `projection` option continues to work alongside new `select`/`omit` helpers
 - The `search` option in `find()` remains available for complex queries requiring filters
+
+const UserError = errorSet<User>({
+  name: "UserError", 
+  kinds: ["not_found", "suspended"] as const,
+})

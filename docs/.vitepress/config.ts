@@ -40,6 +40,10 @@ export default defineConfigWithTheme<ThemeConfig>({
             { text: "Transactions", link: "/guide/transactions" },
             { text: "Validation", link: "/guide/validation" },
             { text: "Indexes", link: "/guide/indexes" },
+            {
+              text: "Retries & Cancellation",
+              link: "/guide/retries-and-cancellation",
+            },
           ],
         },
         {
