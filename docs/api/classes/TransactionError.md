@@ -2,7 +2,7 @@
 
 # Class: TransactionError
 
-Defined in: [src/errors.ts:405](https://github.com/g5becks/StrataDB/blob/7791c9d2c0eca8b064c87359859d54870cd83af8/src/errors.ts#L405)
+Defined in: [src/errors.ts:405](https://github.com/g5becks/StrataDb/blob/56b93c15dc2c602cd539356668e05ed574e9a8c7/src/errors.ts#L405)
 
 Base class for transaction-related errors.
 
@@ -36,7 +36,7 @@ try {
 new TransactionError(message): TransactionError;
 ```
 
-Defined in: [src/errors.ts:46](https://github.com/g5becks/StrataDB/blob/7791c9d2c0eca8b064c87359859d54870cd83af8/src/errors.ts#L46)
+Defined in: [src/errors.ts:46](https://github.com/g5becks/StrataDb/blob/56b93c15dc2c602cd539356668e05ed574e9a8c7/src/errors.ts#L46)
 
 #### Parameters
 
@@ -60,7 +60,7 @@ Defined in: [src/errors.ts:46](https://github.com/g5becks/StrataDB/blob/7791c9d2
 readonly category: "transaction";
 ```
 
-Defined in: [src/errors.ts:406](https://github.com/g5becks/StrataDB/blob/7791c9d2c0eca8b064c87359859d54870cd83af8/src/errors.ts#L406)
+Defined in: [src/errors.ts:406](https://github.com/g5becks/StrataDb/blob/56b93c15dc2c602cd539356668e05ed574e9a8c7/src/errors.ts#L406)
 
 Error category for grouping related error types
 
@@ -92,7 +92,7 @@ The cause of the error.
 readonly code: "TRANSACTION_ERROR" = "TRANSACTION_ERROR";
 ```
 
-Defined in: [src/errors.ts:407](https://github.com/g5becks/StrataDB/blob/7791c9d2c0eca8b064c87359859d54870cd83af8/src/errors.ts#L407)
+Defined in: [src/errors.ts:407](https://github.com/g5becks/StrataDb/blob/56b93c15dc2c602cd539356668e05ed574e9a8c7/src/errors.ts#L407)
 
 Unique error code for programmatic identification
 

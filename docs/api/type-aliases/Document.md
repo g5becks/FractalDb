@@ -1,12 +1,12 @@
 [stratadb](../index.md) / Document
 
-# Type Alias: Document\<T\>
+# Type Alias: Document&lt;T&gt;
 
 ```ts
 type Document<T> = object & ReadonlyDeep<T>;
 ```
 
-Defined in: [src/core-types.ts:60](https://github.com/g5becks/StrataDB/blob/7791c9d2c0eca8b064c87359859d54870cd83af8/src/core-types.ts#L60)
+Defined in: [src/core-types.ts:60](https://github.com/g5becks/StrataDb/blob/56b93c15dc2c602cd539356668e05ed574e9a8c7/src/core-types.ts#L60)
 
 Document type with immutable ID.
 
@@ -24,7 +24,7 @@ Unique identifier for the document (immutable)
 
 ### T
 
-`T` = `Record`\<`string`, `unknown`\>
+`T` = `Record`&lt;`string`, `unknown`&gt;
 
 The document shape (your custom fields)
 

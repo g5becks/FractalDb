@@ -8,6 +8,7 @@
   "entryFileName": "index.md",
   "useCodeBlocks": true,
   "sanitizeComments": true,
+  "useHTMLEncodedBrackets": true,
   "sidebar": {
     "autoConfiguration": true,
     "format": "vitepress",

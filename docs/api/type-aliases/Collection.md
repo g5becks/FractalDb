@@ -1,12 +1,12 @@
 [stratadb](../index.md) / Collection
 
-# Type Alias: Collection\<T\>
+# Type Alias: Collection&lt;T&gt;
 
 ```ts
 type Collection<T> = object;
 ```
 
-Defined in: [src/collection-types.ts:181](https://github.com/g5becks/StrataDB/blob/7791c9d2c0eca8b064c87359859d54870cd83af8/src/collection-types.ts#L181)
+Defined in: [src/collection-types.ts:187](https://github.com/g5becks/StrataDb/blob/56b93c15dc2c602cd539356668e05ed574e9a8c7/src/collection-types.ts#L187)
 
 MongoDB-like collection interface for type-safe document operations.
 
@@ -108,7 +108,7 @@ The document type, must extend Document
 readonly name: string;
 ```
 
-Defined in: [src/collection-types.ts:185](https://github.com/g5becks/StrataDB/blob/7791c9d2c0eca8b064c87359859d54870cd83af8/src/collection-types.ts#L185)
+Defined in: [src/collection-types.ts:191](https://github.com/g5becks/StrataDb/blob/56b93c15dc2c602cd539356668e05ed574e9a8c7/src/collection-types.ts#L191)
 
 Collection name (table name in SQLite).
 
@@ -120,7 +120,7 @@ Collection name (table name in SQLite).
 readonly schema: SchemaDefinition<T>;
 ```
 
-Defined in: [src/collection-types.ts:190](https://github.com/g5becks/StrataDB/blob/7791c9d2c0eca8b064c87359859d54870cd83af8/src/collection-types.ts#L190)
+Defined in: [src/collection-types.ts:196](https://github.com/g5becks/StrataDb/blob/56b93c15dc2c602cd539356668e05ed574e9a8c7/src/collection-types.ts#L196)
 
 Schema definition for this collection.
 
@@ -129,10 +129,10 @@ Schema definition for this collection.
 ### count()
 
 ```ts
-count(filter): Promise<number>;
+count(filter, options?): Promise<number>;
 ```
 
-Defined in: [src/collection-types.ts:329](https://github.com/g5becks/StrataDB/blob/7791c9d2c0eca8b064c87359859d54870cd83af8/src/collection-types.ts#L329)
+Defined in: [src/collection-types.ts:374](https://github.com/g5becks/StrataDb/blob/56b93c15dc2c602cd539356668e05ed574e9a8c7/src/collection-types.ts#L374)
 
 Count documents matching the query filter.
 
@@ -140,13 +140,25 @@ Count documents matching the query filter.
 
 ##### filter
 
-[`QueryFilter`](QueryFilter.md)\<`T`\>
+[`QueryFilter`](QueryFilter.md)&lt;`T`&gt;
 
 Query filter to match documents
 
+##### options?
+
+Optional options including signal for cancellation
+
+###### retry?
+
+[`RetryOptions`](RetryOptions.md) \| `false`
+
+###### signal?
+
+`AbortSignal`
+
 #### Returns
 
-`Promise`\<`number`\>
+`Promise`&lt;`number`&gt;
 
 Promise resolving to the count of matching documents
 
@@ -169,6 +181,10 @@ const adminCount = await users.count({
 
 // Count adults
 const adultCount = await users.count({ age: { $gte: 18 } });
+
+// With abort signal
+const controller = new AbortController();
+const count = await users.count({}, { signal: controller.signal });
 ```
 
 ***
@@ -176,10 +192,10 @@ const adultCount = await users.count({ age: { $gte: 18 } });
 ### deleteMany()
 
 ```ts
-deleteMany(filter): Promise<DeleteResult>;
+deleteMany(filter, options?): Promise<DeleteResult>;
 ```
 
-Defined in: [src/collection-types.ts:752](https://github.com/g5becks/StrataDB/blob/7791c9d2c0eca8b064c87359859d54870cd83af8/src/collection-types.ts#L752)
+Defined in: [src/collection-types.ts:964](https://github.com/g5becks/StrataDb/blob/56b93c15dc2c602cd539356668e05ed574e9a8c7/src/collection-types.ts#L964)
 
 Delete multiple documents matching the query filter.
 
@@ -187,13 +203,23 @@ Delete multiple documents matching the query filter.
 
 ##### filter
 
-[`QueryFilter`](QueryFilter.md)\<`T`\>
+[`QueryFilter`](QueryFilter.md)&lt;`T`&gt;
 
 Query filter to find documents to delete
 
+##### options?
+
+###### retry?
+
+[`RetryOptions`](RetryOptions.md) \| `false`
+
+###### signal?
+
+`AbortSignal`
+
 #### Returns
 
-`Promise`\<[`DeleteResult`](DeleteResult.md)\>
+`Promise`&lt;[`DeleteResult`](DeleteResult.md)&gt;
 
 Promise resolving to delete result with statistics
 
@@ -215,6 +241,10 @@ console.log(`Deleted ${result.deletedCount} users`);
 
 // Delete all documents (use with caution!)
 await users.deleteMany({});
+
+// With abort signal
+const controller = new AbortController();
+const result = await users.deleteMany(filter, { signal: controller.signal });
 ```
 
 ***
@@ -222,10 +252,10 @@ await users.deleteMany({});
 ### deleteOne()
 
 ```ts
-deleteOne(filter): Promise<boolean>;
+deleteOne(filter, options?): Promise<boolean>;
 ```
 
-Defined in: [src/collection-types.ts:501](https://github.com/g5becks/StrataDB/blob/7791c9d2c0eca8b064c87359859d54870cd83af8/src/collection-types.ts#L501)
+Defined in: [src/collection-types.ts:672](https://github.com/g5becks/StrataDb/blob/56b93c15dc2c602cd539356668e05ed574e9a8c7/src/collection-types.ts#L672)
 
 Delete a single document by ID or filter.
 
@@ -235,11 +265,21 @@ Delete a single document by ID or filter.
 
 Document ID (string) or query filter
 
-`string` | [`QueryFilter`](QueryFilter.md)\<`T`\>
+`string` | [`QueryFilter`](QueryFilter.md)&lt;`T`&gt;
+
+##### options?
+
+###### retry?
+
+[`RetryOptions`](RetryOptions.md) \| `false`
+
+###### signal?
+
+`AbortSignal`
 
 #### Returns
 
-`Promise`\<`boolean`\>
+`Promise`&lt;`boolean`&gt;
 
 Promise resolving to `true` if document was deleted, `false` if not found
 
@@ -269,6 +309,10 @@ const deleted = await users.deleteOne({
   status: 'inactive',
   lastLogin: { $lt: Date.now() - 90 * 24 * 60 * 60 * 1000 } // 90 days
 })
+
+// With abort signal
+const controller = new AbortController();
+const deleted = await users.deleteOne(filter, { signal: controller.signal });
 ```
 
 ***
@@ -276,10 +320,13 @@ const deleted = await users.deleteOne({
 ### distinct()
 
 ```ts
-distinct<K>(field, filter?): Promise<T[K][]>;
+distinct<K>(
+   field, 
+   filter?, 
+   options?): Promise<T[K][]>;
 ```
 
-Defined in: [src/collection-types.ts:783](https://github.com/g5becks/StrataDB/blob/7791c9d2c0eca8b064c87359859d54870cd83af8/src/collection-types.ts#L783)
+Defined in: [src/collection-types.ts:1003](https://github.com/g5becks/StrataDb/blob/56b93c15dc2c602cd539356668e05ed574e9a8c7/src/collection-types.ts#L1003)
 
 Find distinct values for a specified field across the collection.
 
@@ -299,13 +346,25 @@ The field name to get distinct values for
 
 ##### filter?
 
-[`QueryFilter`](QueryFilter.md)\<`T`\>
+[`QueryFilter`](QueryFilter.md)&lt;`T`&gt;
 
 Optional query filter to narrow results
 
+##### options?
+
+Optional options including signal for cancellation
+
+###### retry?
+
+[`RetryOptions`](RetryOptions.md) \| `false`
+
+###### signal?
+
+`AbortSignal`
+
 #### Returns
 
-`Promise`\<`T`\[`K`\][]\>
+`Promise`&lt;`T`\[`K`\][]&gt;
 
 Promise resolving to array of unique values for the field
 
@@ -329,6 +388,10 @@ const activeRoles = await users.distinct('role', { active: true });
 
 // Get unique tags (array field)
 const tags = await users.distinct('tags');
+
+// With abort signal
+const controller = new AbortController();
+const ages = await users.distinct('age', {}, { signal: controller.signal });
 ```
 
 ***
@@ -336,16 +399,28 @@ const tags = await users.distinct('tags');
 ### drop()
 
 ```ts
-drop(): Promise<void>;
+drop(options?): Promise<void>;
 ```
 
-Defined in: [src/collection-types.ts:835](https://github.com/g5becks/StrataDB/blob/7791c9d2c0eca8b064c87359859d54870cd83af8/src/collection-types.ts#L835)
+Defined in: [src/collection-types.ts:1068](https://github.com/g5becks/StrataDb/blob/56b93c15dc2c602cd539356668e05ed574e9a8c7/src/collection-types.ts#L1068)
 
 Drop the collection (delete the table).
 
+#### Parameters
+
+##### options?
+
+###### retry?
+
+[`RetryOptions`](RetryOptions.md) \| `false`
+
+###### signal?
+
+`AbortSignal`
+
 #### Returns
 
-`Promise`\<`void`\>
+`Promise`&lt;`void`&gt;
 
 Promise resolving when the collection is dropped
 
@@ -367,6 +442,10 @@ await tempCollection.drop();
 if (confirm('Really delete all users?')) {
   await users.drop();
 }
+
+// With abort signal
+const controller = new AbortController();
+await collection.drop({ signal: controller.signal });
 ```
 
 ***
@@ -374,16 +453,30 @@ if (confirm('Really delete all users?')) {
 ### estimatedDocumentCount()
 
 ```ts
-estimatedDocumentCount(): Promise<number>;
+estimatedDocumentCount(options?): Promise<number>;
 ```
 
-Defined in: [src/collection-types.ts:810](https://github.com/g5becks/StrataDB/blob/7791c9d2c0eca8b064c87359859d54870cd83af8/src/collection-types.ts#L810)
+Defined in: [src/collection-types.ts:1036](https://github.com/g5becks/StrataDb/blob/56b93c15dc2c602cd539356668e05ed574e9a8c7/src/collection-types.ts#L1036)
 
 Get an estimated count of documents in the collection.
 
+#### Parameters
+
+##### options?
+
+Optional options including signal for cancellation
+
+###### retry?
+
+[`RetryOptions`](RetryOptions.md) \| `false`
+
+###### signal?
+
+`AbortSignal`
+
 #### Returns
 
-`Promise`\<`number`\>
+`Promise`&lt;`number`&gt;
 
 Promise resolving to the estimated document count
 
@@ -404,41 +497,53 @@ console.log(`Approximately ${estimate} users`);
 // Compare with exact count
 const exact = await users.count({});
 console.log(`Exact: ${exact}, Estimated: ${estimate}`);
+
+// With abort signal
+const controller = new AbortController();
+const estimate = await users.estimatedDocumentCount({ signal: controller.signal });
 ```
 
 ***
 
 ### find()
 
+#### Call Signature
+
 ```ts
-find(filter, options?): Promise<readonly T[]>;
+find<K>(filter, options): Promise<readonly Pick<T, K | keyof T & "_id">[]>;
 ```
 
-Defined in: [src/collection-types.ts:258](https://github.com/g5becks/StrataDB/blob/7791c9d2c0eca8b064c87359859d54870cd83af8/src/collection-types.ts#L258)
+Defined in: [src/collection-types.ts:273](https://github.com/g5becks/StrataDb/blob/56b93c15dc2c602cd539356668e05ed574e9a8c7/src/collection-types.ts#L273)
 
 Find all documents matching the query filter.
 
-#### Parameters
+##### Type Parameters
 
-##### filter
+###### K
 
-[`QueryFilter`](QueryFilter.md)\<`T`\>
+`K` *extends* `string` \| `number` \| `symbol`
+
+##### Parameters
+
+###### filter
+
+[`QueryFilter`](QueryFilter.md)&lt;`T`&gt;
 
 Query filter to match documents
 
-##### options?
+###### options
 
-[`QueryOptions`](QueryOptions.md)\<`T`\>
+[`QueryOptionsWithSelect`](QueryOptionsWithSelect.md)&lt;`T`, `K`&gt;
 
 Query options for sorting, pagination, and projection
 
-#### Returns
+##### Returns
 
-`Promise`\<readonly `T`[]\>
+`Promise`&lt;readonly `Pick`&lt;`T`, `K` \| keyof `T` & `"_id"`&gt;[]&gt;
 
 Promise resolving to array of matching documents
 
-#### Remarks
+##### Remarks
 
 Returns all documents that match the filter. For large result sets,
 use `limit` and `skip` options for pagination.
@@ -448,7 +553,7 @@ use `limit` and `skip` options for pagination.
 - Non-indexed fields use jsonb_extract (slower)
 - Consider adding indexes for frequently queried fields
 
-#### Example
+##### Example
 
 ```typescript
 // Find all active admins
@@ -477,15 +582,65 @@ const results = await users.find({
 });
 ```
 
+#### Call Signature
+
+```ts
+find<K>(filter, options): Promise<readonly Omit<T, K>[]>;
+```
+
+Defined in: [src/collection-types.ts:279](https://github.com/g5becks/StrataDb/blob/56b93c15dc2c602cd539356668e05ed574e9a8c7/src/collection-types.ts#L279)
+
+##### Type Parameters
+
+###### K
+
+`K` *extends* `string` \| `number` \| `symbol`
+
+##### Parameters
+
+###### filter
+
+[`QueryFilter`](QueryFilter.md)&lt;`T`&gt;
+
+###### options
+
+[`QueryOptionsWithOmit`](QueryOptionsWithOmit.md)&lt;`T`, `K`&gt;
+
+##### Returns
+
+`Promise`&lt;readonly `Omit`&lt;`T`, `K`&gt;[]&gt;
+
+#### Call Signature
+
+```ts
+find(filter, options?): Promise<readonly T[]>;
+```
+
+Defined in: [src/collection-types.ts:285](https://github.com/g5becks/StrataDb/blob/56b93c15dc2c602cd539356668e05ed574e9a8c7/src/collection-types.ts#L285)
+
+##### Parameters
+
+###### filter
+
+[`QueryFilter`](QueryFilter.md)&lt;`T`&gt;
+
+###### options?
+
+[`QueryOptions`](QueryOptions.md)&lt;`T`&gt;
+
+##### Returns
+
+`Promise`&lt;readonly `T`[]&gt;
+
 ***
 
 ### findById()
 
 ```ts
-findById(id): Promise<T | null>;
+findById(id, options?): Promise<T | null>;
 ```
 
-Defined in: [src/collection-types.ts:212](https://github.com/g5becks/StrataDB/blob/7791c9d2c0eca8b064c87359859d54870cd83af8/src/collection-types.ts#L212)
+Defined in: [src/collection-types.ts:223](https://github.com/g5becks/StrataDb/blob/56b93c15dc2c602cd539356668e05ed574e9a8c7/src/collection-types.ts#L223)
 
 Find a single document by its ID.
 
@@ -497,9 +652,21 @@ Find a single document by its ID.
 
 The document ID to search for
 
+##### options?
+
+Optional options including signal for cancellation
+
+###### retry?
+
+[`RetryOptions`](RetryOptions.md) \| `false`
+
+###### signal?
+
+`AbortSignal`
+
 #### Returns
 
-`Promise`\<`T` \| `null`\>
+`Promise`&lt;`T` \| `null`&gt;
 
 Promise resolving to the document, or null if not found
 
@@ -515,41 +682,53 @@ const user = await users.findById('123e4567-e89b-12d3-a456-426614174000');
 if (user) {
   console.log(user.name);
 }
+
+// With abort signal
+const controller = new AbortController();
+const user = await users.findById(id, { signal: controller.signal });
 ```
 
 ***
 
 ### findOne()
 
+#### Call Signature
+
 ```ts
-findOne(filter, options?): Promise<T | null>;
+findOne<K>(filter, options): Promise<Pick<T, keyof T & "_id" | K> | null>;
 ```
 
-Defined in: [src/collection-types.ts:299](https://github.com/g5becks/StrataDB/blob/7791c9d2c0eca8b064c87359859d54870cd83af8/src/collection-types.ts#L299)
+Defined in: [src/collection-types.ts:327](https://github.com/g5becks/StrataDb/blob/56b93c15dc2c602cd539356668e05ed574e9a8c7/src/collection-types.ts#L327)
 
 Find the first document matching the query filter or ID.
 
-#### Parameters
+##### Type Parameters
 
-##### filter
+###### K
+
+`K` *extends* `string` \| `number` \| `symbol`
+
+##### Parameters
+
+###### filter
 
 Document ID or query filter to match documents
 
-`string` | [`QueryFilter`](QueryFilter.md)\<`T`\>
+`string` | [`QueryFilter`](QueryFilter.md)&lt;`T`&gt;
 
-##### options?
+###### options
 
-`Omit`\<[`QueryOptions`](QueryOptions.md)\<`T`\>, `"limit"` \| `"skip"`\>
+`Omit`&lt;[`QueryOptionsWithSelect`](QueryOptionsWithSelect.md)&lt;`T`, `K`&gt;, `"limit"` \| `"skip"`&gt;
 
 Query options for sorting and projection
 
-#### Returns
+##### Returns
 
-`Promise`\<`T` \| `null`\>
+`Promise`&lt;`Pick`&lt;`T`, keyof `T` & `"_id"` \| `K`&gt; \| `null`&gt;
 
 Promise resolving to the first matching document, or null if none found
 
-#### Remarks
+##### Remarks
 
 Equivalent to `find(filter, { ...options, limit: 1 })[0]` but more efficient
 since it stops after finding the first match.
@@ -558,7 +737,7 @@ Accepts either a string ID or a full QueryFilter object for flexible querying:
 - String ID: `{ _id: string }` filter is applied automatically
 - QueryFilter: Full MongoDB-style query filtering
 
-#### Example
+##### Example
 
 ```typescript
 // Find by document ID
@@ -583,6 +762,56 @@ if (exists) {
 }
 ```
 
+#### Call Signature
+
+```ts
+findOne<K>(filter, options): Promise<Omit<T, K> | null>;
+```
+
+Defined in: [src/collection-types.ts:333](https://github.com/g5becks/StrataDb/blob/56b93c15dc2c602cd539356668e05ed574e9a8c7/src/collection-types.ts#L333)
+
+##### Type Parameters
+
+###### K
+
+`K` *extends* `string` \| `number` \| `symbol`
+
+##### Parameters
+
+###### filter
+
+`string` | [`QueryFilter`](QueryFilter.md)&lt;`T`&gt;
+
+###### options
+
+`Omit`&lt;[`QueryOptionsWithOmit`](QueryOptionsWithOmit.md)&lt;`T`, `K`&gt;, `"limit"` \| `"skip"`&gt;
+
+##### Returns
+
+`Promise`&lt;`Omit`&lt;`T`, `K`&gt; \| `null`&gt;
+
+#### Call Signature
+
+```ts
+findOne(filter, options?): Promise<T | null>;
+```
+
+Defined in: [src/collection-types.ts:339](https://github.com/g5becks/StrataDb/blob/56b93c15dc2c602cd539356668e05ed574e9a8c7/src/collection-types.ts#L339)
+
+##### Parameters
+
+###### filter
+
+`string` | [`QueryFilter`](QueryFilter.md)&lt;`T`&gt;
+
+###### options?
+
+`Omit`&lt;[`QueryOptions`](QueryOptions.md)&lt;`T`&gt;, `"limit"` \| `"skip"`&gt;
+
+##### Returns
+
+`Promise`&lt;`T` \| `null`&gt;
+
 ***
 
 ### findOneAndDelete()
@@ -591,7 +820,7 @@ if (exists) {
 findOneAndDelete(filter, options?): Promise<T | null>;
 ```
 
-Defined in: [src/collection-types.ts:541](https://github.com/g5becks/StrataDB/blob/7791c9d2c0eca8b064c87359859d54870cd83af8/src/collection-types.ts#L541)
+Defined in: [src/collection-types.ts:719](https://github.com/g5becks/StrataDb/blob/56b93c15dc2c602cd539356668e05ed574e9a8c7/src/collection-types.ts#L719)
 
 Find and delete a single document atomically.
 
@@ -601,19 +830,27 @@ Find and delete a single document atomically.
 
 Document ID (string) or query filter
 
-`string` | [`QueryFilter`](QueryFilter.md)\<`T`\>
+`string` | [`QueryFilter`](QueryFilter.md)&lt;`T`&gt;
 
 ##### options?
 
 Query options (sort)
 
+###### retry?
+
+[`RetryOptions`](RetryOptions.md) \| `false`
+
+###### signal?
+
+`AbortSignal`
+
 ###### sort?
 
-[`SortSpec`](SortSpec.md)\<`T`\>
+[`SortSpec`](SortSpec.md)&lt;`T`&gt;
 
 #### Returns
 
-`Promise`\<`T` \| `null`\>
+`Promise`&lt;`T` \| `null`&gt;
 
 Promise resolving to the deleted document, or null if not found
 
@@ -646,6 +883,10 @@ const deleted = await users.findOneAndDelete(
   { status: 'inactive' },
   { sort: { createdAt: 1 } }
 );
+
+// With abort signal
+const controller = new AbortController();
+const deleted = await users.findOneAndDelete(filter, { signal: controller.signal });
 ```
 
 ***
@@ -656,10 +897,10 @@ const deleted = await users.findOneAndDelete(
 findOneAndReplace(
    filter, 
    replacement, 
-options?): Promise<T | null>;
+   options?): Promise<T | null>;
 ```
 
-Defined in: [src/collection-types.ts:652](https://github.com/g5becks/StrataDB/blob/7791c9d2c0eca8b064c87359859d54870cd83af8/src/collection-types.ts#L652)
+Defined in: [src/collection-types.ts:844](https://github.com/g5becks/StrataDb/blob/56b93c15dc2c602cd539356668e05ed574e9a8c7/src/collection-types.ts#L844)
 
 Find and replace a single document atomically.
 
@@ -669,11 +910,11 @@ Find and replace a single document atomically.
 
 Document ID (string) or query filter
 
-`string` | [`QueryFilter`](QueryFilter.md)\<`T`\>
+`string` | [`QueryFilter`](QueryFilter.md)&lt;`T`&gt;
 
 ##### replacement
 
-`Omit`\<`T`, `"_id"` \| `"createdAt"` \| `"updatedAt"`\>
+`Omit`&lt;`T`, `"_id"` \| `"createdAt"` \| `"updatedAt"`&gt;
 
 Complete replacement document (without _id, createdAt, updatedAt)
 
@@ -681,13 +922,21 @@ Complete replacement document (without _id, createdAt, updatedAt)
 
 Replace options (sort, returnDocument, upsert)
 
+###### retry?
+
+[`RetryOptions`](RetryOptions.md) \| `false`
+
 ###### returnDocument?
 
 `"before"` \| `"after"`
 
+###### signal?
+
+`AbortSignal`
+
 ###### sort?
 
-[`SortSpec`](SortSpec.md)\<`T`\>
+[`SortSpec`](SortSpec.md)&lt;`T`&gt;
 
 ###### upsert?
 
@@ -695,7 +944,7 @@ Replace options (sort, returnDocument, upsert)
 
 #### Returns
 
-`Promise`\<`T` \| `null`\>
+`Promise`&lt;`T` \| `null`&gt;
 
 Promise resolving to the document before or after replacement, or null if not found
 
@@ -737,6 +986,10 @@ const replaced = await users.findOneAndReplace(
     tags: []
   }
 );
+
+// With abort signal
+const controller = new AbortController();
+const replaced = await users.findOneAndReplace(filter, replacement, { signal: controller.signal });
 ```
 
 ***
@@ -747,10 +1000,10 @@ const replaced = await users.findOneAndReplace(
 findOneAndUpdate(
    filter, 
    update, 
-options?): Promise<T | null>;
+   options?): Promise<T | null>;
 ```
 
-Defined in: [src/collection-types.ts:596](https://github.com/g5becks/StrataDB/blob/7791c9d2c0eca8b064c87359859d54870cd83af8/src/collection-types.ts#L596)
+Defined in: [src/collection-types.ts:782](https://github.com/g5becks/StrataDb/blob/56b93c15dc2c602cd539356668e05ed574e9a8c7/src/collection-types.ts#L782)
 
 Find and update a single document atomically.
 
@@ -760,11 +1013,11 @@ Find and update a single document atomically.
 
 Document ID (string) or query filter
 
-`string` | [`QueryFilter`](QueryFilter.md)\<`T`\>
+`string` | [`QueryFilter`](QueryFilter.md)&lt;`T`&gt;
 
 ##### update
 
-`Omit`\<`Partial`\<`T`\>, `"_id"` \| `"createdAt"` \| `"updatedAt"`\>
+`Omit`&lt;`Partial`&lt;`T`&gt;, `"_id"` \| `"createdAt"` \| `"updatedAt"`&gt;
 
 Partial document with fields to update
 
@@ -772,13 +1025,21 @@ Partial document with fields to update
 
 Update options (sort, returnDocument, upsert)
 
+###### retry?
+
+[`RetryOptions`](RetryOptions.md) \| `false`
+
 ###### returnDocument?
 
 `"before"` \| `"after"`
 
+###### signal?
+
+`AbortSignal`
+
 ###### sort?
 
-[`SortSpec`](SortSpec.md)\<`T`\>
+[`SortSpec`](SortSpec.md)&lt;`T`&gt;
 
 ###### upsert?
 
@@ -786,7 +1047,7 @@ Update options (sort, returnDocument, upsert)
 
 #### Returns
 
-`Promise`\<`T` \| `null`\>
+`Promise`&lt;`T` \| `null`&gt;
 
 Promise resolving to the document before or after update, or null if not found
 
@@ -832,6 +1093,10 @@ const result = await users.findOneAndUpdate(
   { name: 'New User', age: 25 },
   { upsert: true, returnDocument: 'after' }
 );
+
+// With abort signal
+const controller = new AbortController();
+const updated = await users.findOneAndUpdate(filter, update, { signal: controller.signal });
 ```
 
 ***
@@ -839,10 +1104,10 @@ const result = await users.findOneAndUpdate(
 ### insertMany()
 
 ```ts
-insertMany(docs): Promise<InsertManyResult<T>>;
+insertMany(docs, options?): Promise<InsertManyResult<T>>;
 ```
 
-Defined in: [src/collection-types.ts:691](https://github.com/g5becks/StrataDB/blob/7791c9d2c0eca8b064c87359859d54870cd83af8/src/collection-types.ts#L691)
+Defined in: [src/collection-types.ts:889](https://github.com/g5becks/StrataDb/blob/56b93c15dc2c602cd539356668e05ed574e9a8c7/src/collection-types.ts#L889)
 
 Insert multiple documents into the collection.
 
@@ -850,13 +1115,27 @@ Insert multiple documents into the collection.
 
 ##### docs
 
-readonly `Omit`\<`T`, `"_id"` \| `"createdAt"` \| `"updatedAt"`\>[]
+readonly `Omit`&lt;`T`, `"_id"` \| `"createdAt"` \| `"updatedAt"`&gt;[]
 
 Array of documents to insert
 
+##### options?
+
+###### ordered?
+
+`boolean`
+
+###### retry?
+
+[`RetryOptions`](RetryOptions.md) \| `false`
+
+###### signal?
+
+`AbortSignal`
+
 #### Returns
 
-`Promise`\<[`InsertManyResult`](InsertManyResult.md)\<`T`\>\>
+`Promise`&lt;[`InsertManyResult`](InsertManyResult.md)&lt;`T`&gt;&gt;
 
 Promise resolving to insert result with all new documents
 
@@ -886,6 +1165,10 @@ const result = await users.insertMany([
   { name: 'Charlie', email: 'charlie@example.com', age: 35, role: 'user' }
 ]);
 console.log(`Inserted ${result.insertedCount} users`);
+
+// With abort signal
+const controller = new AbortController();
+const result = await users.insertMany(docs, { signal: controller.signal });
 ```
 
 ***
@@ -893,10 +1176,10 @@ console.log(`Inserted ${result.insertedCount} users`);
 ### insertOne()
 
 ```ts
-insertOne(doc): Promise<T>;
+insertOne(doc, options?): Promise<T>;
 ```
 
-Defined in: [src/collection-types.ts:370](https://github.com/g5becks/StrataDB/blob/7791c9d2c0eca8b064c87359859d54870cd83af8/src/collection-types.ts#L370)
+Defined in: [src/collection-types.ts:521](https://github.com/g5becks/StrataDb/blob/56b93c15dc2c602cd539356668e05ed574e9a8c7/src/collection-types.ts#L521)
 
 Insert a single document into the collection.
 
@@ -904,13 +1187,23 @@ Insert a single document into the collection.
 
 ##### doc
 
-`Omit`\<`T`, `"_id"` \| `"createdAt"` \| `"updatedAt"`\>
+`Omit`&lt;`T`, `"_id"` \| `"createdAt"` \| `"updatedAt"`&gt;
 
 Document to insert (without _id, createdAt, updatedAt)
 
+##### options?
+
+###### retry?
+
+[`RetryOptions`](RetryOptions.md) \| `false`
+
+###### signal?
+
+`AbortSignal`
+
 #### Returns
 
-`Promise`\<`T`\>
+`Promise`&lt;`T`&gt;
 
 Promise resolving to the inserted document with generated _id
 
@@ -924,6 +1217,9 @@ Automatically generates:
 
 **Validation:**
 If validation fails, throws `ValidationError` with details.
+
+/**
+Insert a single document into the collection.
 
 #### Throws
 
@@ -950,6 +1246,10 @@ try {
     console.error('Invalid user:', err.message);
   }
 }
+
+// With abort signal
+const controller = new AbortController();
+const user = await users.insertOne(doc, { signal: controller.signal });
 ```
 
 ***
@@ -957,10 +1257,13 @@ try {
 ### replaceOne()
 
 ```ts
-replaceOne(filter, doc): Promise<T | null>;
+replaceOne(
+   filter, 
+   doc, 
+   options?): Promise<T | null>;
 ```
 
-Defined in: [src/collection-types.ts:464](https://github.com/g5becks/StrataDB/blob/7791c9d2c0eca8b064c87359859d54870cd83af8/src/collection-types.ts#L464)
+Defined in: [src/collection-types.ts:630](https://github.com/g5becks/StrataDb/blob/56b93c15dc2c602cd539356668e05ed574e9a8c7/src/collection-types.ts#L630)
 
 Replace a single document by ID or filter.
 
@@ -970,17 +1273,27 @@ Replace a single document by ID or filter.
 
 Document ID (string) or query filter
 
-`string` | [`QueryFilter`](QueryFilter.md)\<`T`\>
+`string` | [`QueryFilter`](QueryFilter.md)&lt;`T`&gt;
 
 ##### doc
 
-`Omit`\<`T`, `"_id"` \| `"createdAt"` \| `"updatedAt"`\>
+`Omit`&lt;`T`, `"_id"` \| `"createdAt"` \| `"updatedAt"`&gt;
 
 New document to replace with (without _id, createdAt, updatedAt)
 
+##### options?
+
+###### retry?
+
+[`RetryOptions`](RetryOptions.md) \| `false`
+
+###### signal?
+
+`AbortSignal`
+
 #### Returns
 
-`Promise`\<`T` \| `null`\>
+`Promise`&lt;`T` \| `null`&gt;
 
 Promise resolving to the replaced document, or null if not found
 
@@ -1026,17 +1339,184 @@ const replaced = await users.replaceOne(
     role: 'admin'
   }
 );
+
+// With abort signal
+const controller = new AbortController();
+const replaced = await users.replaceOne(filter, doc, { signal: controller.signal });
 ```
+
+***
+
+### search()
+
+#### Call Signature
+
+```ts
+search<K>(
+   text, 
+   fields, 
+   options): Promise<readonly Pick<T, keyof T & "_id" | K>[]>;
+```
+
+Defined in: [src/collection-types.ts:433](https://github.com/g5becks/StrataDb/blob/56b93c15dc2c602cd539356668e05ed574e9a8c7/src/collection-types.ts#L433)
+
+Search for documents across multiple fields.
+
+##### Type Parameters
+
+###### K
+
+`K` *extends* `string` \| `number` \| `symbol`
+
+##### Parameters
+
+###### text
+
+`string`
+
+The search text to find
+
+###### fields
+
+readonly (`string` \| keyof `T`)[]
+
+Array of field names to search within
+
+###### options
+
+`Omit`&lt;[`QueryOptionsWithSelect`](QueryOptionsWithSelect.md)&lt;`T`, `K`&gt;, `"search"`&gt; & `object`
+
+Optional query options (filter, sort, limit, projection, etc.)
+
+##### Returns
+
+`Promise`&lt;readonly `Pick`&lt;`T`, keyof `T` & `"_id"` \| `K`&gt;[]&gt;
+
+Promise resolving to array of matching documents
+
+##### Remarks
+
+Performs case-insensitive text search across the specified fields using
+SQL LIKE patterns. A document matches if the search text appears in ANY
+of the specified fields.
+
+**Search behavior:**
+- Case-insensitive by default
+- Matches partial strings (e.g., "script" matches "TypeScript")
+- Uses OR logic across fields (match in any field returns the document)
+
+**Performance:**
+- Indexed fields use generated columns for faster matching
+- Non-indexed fields use JSON extraction (slower for large datasets)
+- Consider indexing frequently searched fields
+
+**Comparison to find() with search option:**
+- `search()` is cleaner when text search is the primary operation
+- `find()` with `search` option is better when combining with complex filters
+
+##### Example
+
+```typescript
+// Search for "typescript" in title and content
+const articles = await posts.search('typescript', ['title', 'content']);
+
+// Search with additional filtering
+const results = await posts.search('react', ['title', 'content'], {
+  filter: { category: 'programming' },
+  sort: { createdAt: -1 },
+  limit: 10
+});
+
+// Search in nested fields
+const docs = await articles.search('hooks', ['title', 'metadata.keywords']);
+
+// Search with projection
+const titles = await posts.search('javascript', ['title', 'content'], {
+  select: ['title', 'author']
+});
+
+// Case-sensitive search
+const exact = await posts.search('TypeScript', ['title'], {
+  caseSensitive: true
+});
+```
+
+#### Call Signature
+
+```ts
+search<K>(
+   text, 
+   fields, 
+   options): Promise<readonly Omit<T, K>[]>;
+```
+
+Defined in: [src/collection-types.ts:443](https://github.com/g5becks/StrataDb/blob/56b93c15dc2c602cd539356668e05ed574e9a8c7/src/collection-types.ts#L443)
+
+##### Type Parameters
+
+###### K
+
+`K` *extends* `string` \| `number` \| `symbol`
+
+##### Parameters
+
+###### text
+
+`string`
+
+###### fields
+
+readonly (`string` \| keyof `T`)[]
+
+###### options
+
+`Omit`&lt;[`QueryOptionsWithOmit`](QueryOptionsWithOmit.md)&lt;`T`, `K`&gt;, `"search"`&gt; & `object`
+
+##### Returns
+
+`Promise`&lt;readonly `Omit`&lt;`T`, `K`&gt;[]&gt;
+
+#### Call Signature
+
+```ts
+search(
+   text, 
+   fields, 
+   options?): Promise<readonly T[]>;
+```
+
+Defined in: [src/collection-types.ts:453](https://github.com/g5becks/StrataDb/blob/56b93c15dc2c602cd539356668e05ed574e9a8c7/src/collection-types.ts#L453)
+
+##### Parameters
+
+###### text
+
+`string`
+
+###### fields
+
+readonly (`string` \| keyof `T`)[]
+
+###### options?
+
+`Omit`&lt;[`QueryOptions`](QueryOptions.md)&lt;`T`&gt;, `"search"`&gt; & `object`
+
+##### Returns
+
+`Promise`&lt;readonly `T`[]&gt;
 
 ***
 
 ### updateMany()
 
 ```ts
-updateMany(filter, update): Promise<UpdateResult>;
+updateMany(
+   filter, 
+   update, 
+   options?): Promise<UpdateResult>;
 ```
 
-Defined in: [src/collection-types.ts:723](https://github.com/g5becks/StrataDB/blob/7791c9d2c0eca8b064c87359859d54870cd83af8/src/collection-types.ts#L723)
+Defined in: [src/collection-types.ts:930](https://github.com/g5becks/StrataDb/blob/56b93c15dc2c602cd539356668e05ed574e9a8c7/src/collection-types.ts#L930)
 
 Update multiple documents matching the query filter.
 
@@ -1044,19 +1524,29 @@ Update multiple documents matching the query filter.
 
 ##### filter
 
-[`QueryFilter`](QueryFilter.md)\<`T`\>
+[`QueryFilter`](QueryFilter.md)&lt;`T`&gt;
 
 Query filter to find documents to update
 
 ##### update
 
-`Omit`\<`Partial`\<`T`\>, `"_id"` \| `"createdAt"` \| `"updatedAt"`\>
+`Omit`&lt;`Partial`&lt;`T`&gt;, `"_id"` \| `"createdAt"` \| `"updatedAt"`&gt;
 
 Update operations to apply
 
+##### options?
+
+###### retry?
+
+[`RetryOptions`](RetryOptions.md) \| `false`
+
+###### signal?
+
+`AbortSignal`
+
 #### Returns
 
-`Promise`\<[`UpdateResult`](UpdateResult.md)\>
+`Promise`&lt;[`UpdateResult`](UpdateResult.md)&gt;
 
 Promise resolving to update result with statistics
 
@@ -1081,6 +1571,10 @@ await users.updateMany(
   { role: 'admin' },
   { $set: { badge: 'admin' } }
 );
+
+// With abort signal
+const controller = new AbortController();
+const result = await users.updateMany(filter, update, { signal: controller.signal });
 ```
 
 ***
@@ -1091,10 +1585,10 @@ await users.updateMany(
 updateOne(
    filter, 
    update, 
-options?): Promise<T | null>;
+   options?): Promise<T | null>;
 ```
 
-Defined in: [src/collection-types.ts:411](https://github.com/g5becks/StrataDB/blob/7791c9d2c0eca8b064c87359859d54870cd83af8/src/collection-types.ts#L411)
+Defined in: [src/collection-types.ts:569](https://github.com/g5becks/StrataDb/blob/56b93c15dc2c602cd539356668e05ed574e9a8c7/src/collection-types.ts#L569)
 
 Update a single document matching the query filter or ID.
 
@@ -1104,11 +1598,11 @@ Update a single document matching the query filter or ID.
 
 Document ID or query filter to find the document to update
 
-`string` | [`QueryFilter`](QueryFilter.md)\<`T`\>
+`string` | [`QueryFilter`](QueryFilter.md)&lt;`T`&gt;
 
 ##### update
 
-`Omit`\<`Partial`\<`T`\>, `"_id"` \| `"createdAt"` \| `"updatedAt"`\>
+`Omit`&lt;`Partial`&lt;`T`&gt;, `"_id"` \| `"createdAt"` \| `"updatedAt"`&gt;
 
 Partial document with fields to update
 
@@ -1116,13 +1610,21 @@ Partial document with fields to update
 
 Optional upsert configuration
 
+###### retry?
+
+[`RetryOptions`](RetryOptions.md) \| `false`
+
+###### signal?
+
+`AbortSignal`
+
 ###### upsert?
 
 `boolean`
 
 #### Returns
 
-`Promise`\<`T` \| `null`\>
+`Promise`&lt;`T` \| `null`&gt;
 
 Promise resolving to the updated document, or null if not found
 
@@ -1157,6 +1659,10 @@ await users.updateOne(
   { role: 'user' },
   { upsert: true }
 );
+
+// With abort signal
+const controller = new AbortController();
+await users.updateOne(filter, update, { signal: controller.signal });
 ```
 
 ***
@@ -1164,10 +1670,10 @@ await users.updateOne(
 ### validate()
 
 ```ts
-validate(doc): Promise<T>;
+validate(doc, options?): Promise<T>;
 ```
 
-Defined in: [src/collection-types.ts:869](https://github.com/g5becks/StrataDB/blob/7791c9d2c0eca8b064c87359859d54870cd83af8/src/collection-types.ts#L869)
+Defined in: [src/collection-types.ts:1109](https://github.com/g5becks/StrataDb/blob/56b93c15dc2c602cd539356668e05ed574e9a8c7/src/collection-types.ts#L1109)
 
 Validate a document against the schema (async).
 
@@ -1179,9 +1685,19 @@ Validate a document against the schema (async).
 
 Document to validate
 
+##### options?
+
+###### retry?
+
+[`RetryOptions`](RetryOptions.md) \| `false`
+
+###### signal?
+
+`AbortSignal`
+
 #### Returns
 
-`Promise`\<`T`\>
+`Promise`&lt;`T`&gt;
 
 Promise resolving to true if valid
 
@@ -1211,6 +1727,10 @@ try {
     console.error(`Error: ${err.message}`);
   }
 }
+
+// With abort signal
+const controller = new AbortController();
+await users.validate(doc, { signal: controller.signal });
 ```
 
 ***
@@ -1221,7 +1741,7 @@ try {
 validateSync(doc): T;
 ```
 
-Defined in: [src/collection-types.ts:894](https://github.com/g5becks/StrataDB/blob/7791c9d2c0eca8b064c87359859d54870cd83af8/src/collection-types.ts#L894)
+Defined in: [src/collection-types.ts:1137](https://github.com/g5becks/StrataDb/blob/56b93c15dc2c602cd539356668e05ed574e9a8c7/src/collection-types.ts#L1137)
 
 Validate a document against the schema (sync).
 

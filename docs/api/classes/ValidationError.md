@@ -2,7 +2,7 @@
 
 # Class: ValidationError
 
-Defined in: [src/errors.ts:76](https://github.com/g5becks/StrataDB/blob/7791c9d2c0eca8b064c87359859d54870cd83af8/src/errors.ts#L76)
+Defined in: [src/errors.ts:76](https://github.com/g5becks/StrataDb/blob/56b93c15dc2c602cd539356668e05ed574e9a8c7/src/errors.ts#L76)
 
 Base class for validation-related errors.
 
@@ -39,7 +39,7 @@ new ValidationError(
    value?): ValidationError;
 ```
 
-Defined in: [src/errors.ts:86](https://github.com/g5becks/StrataDB/blob/7791c9d2c0eca8b064c87359859d54870cd83af8/src/errors.ts#L86)
+Defined in: [src/errors.ts:86](https://github.com/g5becks/StrataDb/blob/56b93c15dc2c602cd539356668e05ed574e9a8c7/src/errors.ts#L86)
 
 #### Parameters
 
@@ -71,7 +71,7 @@ Defined in: [src/errors.ts:86](https://github.com/g5becks/StrataDB/blob/7791c9d2
 readonly category: "validation";
 ```
 
-Defined in: [src/errors.ts:77](https://github.com/g5becks/StrataDB/blob/7791c9d2c0eca8b064c87359859d54870cd83af8/src/errors.ts#L77)
+Defined in: [src/errors.ts:77](https://github.com/g5becks/StrataDb/blob/56b93c15dc2c602cd539356668e05ed574e9a8c7/src/errors.ts#L77)
 
 Error category for grouping related error types
 
@@ -103,7 +103,7 @@ The cause of the error.
 readonly code: "VALIDATION_ERROR" = "VALIDATION_ERROR";
 ```
 
-Defined in: [src/errors.ts:78](https://github.com/g5becks/StrataDB/blob/7791c9d2c0eca8b064c87359859d54870cd83af8/src/errors.ts#L78)
+Defined in: [src/errors.ts:78](https://github.com/g5becks/StrataDb/blob/56b93c15dc2c602cd539356668e05ed574e9a8c7/src/errors.ts#L78)
 
 Unique error code for programmatic identification
 
@@ -119,7 +119,7 @@ Unique error code for programmatic identification
 readonly optional field: string;
 ```
 
-Defined in: [src/errors.ts:81](https://github.com/g5becks/StrataDB/blob/7791c9d2c0eca8b064c87359859d54870cd83af8/src/errors.ts#L81)
+Defined in: [src/errors.ts:81](https://github.com/g5becks/StrataDb/blob/56b93c15dc2c602cd539356668e05ed574e9a8c7/src/errors.ts#L81)
 
 Optional field name that failed validation
 
@@ -173,7 +173,7 @@ Defined in: node\_modules/typescript/lib/lib.es5.d.ts:1078
 readonly optional value: unknown;
 ```
 
-Defined in: [src/errors.ts:84](https://github.com/g5becks/StrataDB/blob/7791c9d2c0eca8b064c87359859d54870cd83af8/src/errors.ts#L84)
+Defined in: [src/errors.ts:84](https://github.com/g5becks/StrataDb/blob/56b93c15dc2c602cd539356668e05ed574e9a8c7/src/errors.ts#L84)
 
 The value that failed validation
 

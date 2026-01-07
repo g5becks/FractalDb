@@ -1,12 +1,12 @@
 [stratadb](../index.md) / SchemaBuilder
 
-# Type Alias: SchemaBuilder\<T\>
+# Type Alias: SchemaBuilder&lt;T&gt;
 
 ```ts
 type SchemaBuilder<T> = object;
 ```
 
-Defined in: [src/schema-builder-types.ts:50](https://github.com/g5becks/StrataDB/blob/7791c9d2c0eca8b064c87359859d54870cd83af8/src/schema-builder-types.ts#L50)
+Defined in: [src/schema-builder-types.ts:50](https://github.com/g5becks/StrataDb/blob/56b93c15dc2c602cd539356668e05ed574e9a8c7/src/schema-builder-types.ts#L50)
 
 Fluent builder interface for defining collection schemas.
 
@@ -68,13 +68,13 @@ The document type extending Document
 build(): SchemaDefinition<T>;
 ```
 
-Defined in: [src/schema-builder-types.ts:245](https://github.com/g5becks/StrataDB/blob/7791c9d2c0eca8b064c87359859d54870cd83af8/src/schema-builder-types.ts#L245)
+Defined in: [src/schema-builder-types.ts:242](https://github.com/g5becks/StrataDb/blob/56b93c15dc2c602cd539356668e05ed574e9a8c7/src/schema-builder-types.ts#L242)
 
 Build and return the complete schema definition.
 
 #### Returns
 
-[`SchemaDefinition`](SchemaDefinition.md)\<`T`\>
+[`SchemaDefinition`](SchemaDefinition.md)&lt;`T`&gt;
 
 The immutable schema definition
 
@@ -110,10 +110,10 @@ const users = db.collection<User>('users', schema);
 compoundIndex(
    name, 
    fields, 
-options?): SchemaBuilder<T>;
+   options?): SchemaBuilder<T>;
 ```
 
-Defined in: [src/schema-builder-types.ts:138](https://github.com/g5becks/StrataDB/blob/7791c9d2c0eca8b064c87359859d54870cd83af8/src/schema-builder-types.ts#L138)
+Defined in: [src/schema-builder-types.ts:135](https://github.com/g5becks/StrataDb/blob/56b93c15dc2c602cd539356668e05ed574e9a8c7/src/schema-builder-types.ts#L135)
 
 Define a compound index spanning multiple fields.
 
@@ -127,9 +127,9 @@ Unique name for the index
 
 ##### fields
 
-readonly keyof `T`[]
+readonly (`string` \| keyof `T`)[]
 
-Array of field names (order matters for query optimization)
+Array of field names (order matters, supports dot notation for nested fields)
 
 ##### options?
 
@@ -141,23 +141,27 @@ Index options (unique constraint)
 
 #### Returns
 
-`SchemaBuilder`\<`T`\>
+`SchemaBuilder`&lt;`T`&gt;
 
 This builder instance for method chaining
 
 #### Remarks
 
 Compound indexes improve query performance when filtering by multiple fields together.
+Field names can use dot notation to reference nested properties.
 The order of fields matters - queries must use fields from left to right for the
 index to be effective.
 
 #### Example
 
 ```typescript
-// ✅ Compound index for common query pattern
+// ✅ Compound index for top-level fields
 .compoundIndex('age_status', ['age', 'status'])
 
-// ✅ Unique compound constraint (e.g., no duplicate email per tenant)
+// ✅ Compound index with nested fields
+.compoundIndex('watchlist_active', ['watchlistItem.ticker', 'isActive'])
+
+// ✅ Unique compound constraint
 .compoundIndex('email_tenant', ['email', 'tenantId'], { unique: true })
 
 // Query optimization example:
@@ -175,7 +179,7 @@ index to be effective.
 field<K>(name, options): SchemaBuilder<T>;
 ```
 
-Defined in: [src/schema-builder-types.ts:92](https://github.com/g5becks/StrataDB/blob/7791c9d2c0eca8b064c87359859d54870cd83af8/src/schema-builder-types.ts#L92)
+Defined in: [src/schema-builder-types.ts:85](https://github.com/g5becks/StrataDb/blob/56b93c15dc2c602cd539356668e05ed574e9a8c7/src/schema-builder-types.ts#L85)
 
 Define an indexed field with type checking.
 
@@ -191,7 +195,7 @@ Define an indexed field with type checking.
 
 `K`
 
-The field name from the document type
+The field name (supports dot notation for nested fields like 'profile.bio' or 'watchlistItem.ticker')
 
 ##### options
 
@@ -199,7 +203,7 @@ Field configuration options
 
 ###### default?
 
-`T`\[`K`\]
+`unknown`
 
 Default value when not provided
 
@@ -219,13 +223,13 @@ Whether field can be null
 
 [`JsonPath`](JsonPath.md)
 
-JSON path (defaults to $.\{name\} if omitted)
+JSON path (defaults to $.\{name\} if omitted, or auto-generated from dot notation)
 
 ###### type
 
-[`TypeScriptToSQLite`](TypeScriptToSQLite.md)\<`T`\[`K`\]\>
+`string`
 
-SQLite column type (must match TypeScript type)
+SQLite column type
 
 ###### unique?
 
@@ -235,34 +239,30 @@ Enforce uniqueness constraint
 
 #### Returns
 
-`SchemaBuilder`\<`T`\>
+`SchemaBuilder`&lt;`T`&gt;
 
 This builder instance for method chaining
 
 #### Remarks
 
-The `path` option is optional and defaults to `$.{name}` for top-level fields.
-Only specify `path` when accessing nested properties or creating custom field mappings.
+Field names support dot notation for accessing nested properties.
+When a dot is detected in the name, it automatically becomes the JSON path.
 
-The `type` parameter is constrained to valid SQLite types for the TypeScript type,
-ensuring compile-time type safety between your document definition and database schema.
+For top-level fields, the path defaults to `$.{name}`.
+For nested fields like 'profile.bio', the path becomes '$.profile.bio'.
+For deeply nested fields, any nesting depth is supported.
 
 #### Example
 
 ```typescript
-// ✅ Top-level field (path defaults to $.name)
+// ✅ Top-level fields
 .field('name', { type: 'TEXT', indexed: true })
+.field('email', { type: 'TEXT', indexed: true, unique: true })
 
-// ✅ Nested property with explicit path
-.field('bio', { path: '$.profile.bio', type: 'TEXT', indexed: true })
-
-// ✅ Unique email with nullable constraint
-.field('email', {
-  type: 'TEXT',
-  indexed: true,
-  unique: true,
-  nullable: false
-})
+// ✅ Nested fields with dot notation
+.field('profile.bio', { type: 'TEXT', indexed: true })
+.field('watchlistItem.ticker', { type: 'TEXT', indexed: true })
+.field('user.settings.theme', { type: 'TEXT', indexed: true })
 
 // ✅ Field with default value
 .field('status', {
@@ -270,9 +270,6 @@ ensuring compile-time type safety between your document definition and database 
   indexed: true,
   default: 'active'
 })
-
-// ❌ Compiler error - type mismatch
-.field('name', { type: 'INTEGER' })  // Error: string field cannot use INTEGER
 ```
 
 ***
@@ -283,7 +280,7 @@ ensuring compile-time type safety between your document definition and database 
 timestamps(enabled?): SchemaBuilder<T>;
 ```
 
-Defined in: [src/schema-builder-types.ts:173](https://github.com/g5becks/StrataDB/blob/7791c9d2c0eca8b064c87359859d54870cd83af8/src/schema-builder-types.ts#L173)
+Defined in: [src/schema-builder-types.ts:170](https://github.com/g5becks/StrataDb/blob/56b93c15dc2c602cd539356668e05ed574e9a8c7/src/schema-builder-types.ts#L170)
 
 Enable automatic timestamp management.
 
@@ -297,7 +294,7 @@ Whether to auto-manage createdAt/updatedAt (default: true)
 
 #### Returns
 
-`SchemaBuilder`\<`T`\>
+`SchemaBuilder`&lt;`T`&gt;
 
 This builder instance for method chaining
 
@@ -334,7 +331,7 @@ interface UserWithTimestamps extends User {
 validate(validator): SchemaBuilder<T>;
 ```
 
-Defined in: [src/schema-builder-types.ts:216](https://github.com/g5becks/StrataDB/blob/7791c9d2c0eca8b064c87359859d54870cd83af8/src/schema-builder-types.ts#L216)
+Defined in: [src/schema-builder-types.ts:213](https://github.com/g5becks/StrataDb/blob/56b93c15dc2c602cd539356668e05ed574e9a8c7/src/schema-builder-types.ts#L213)
 
 Add validation function using a type predicate.
 
@@ -348,7 +345,7 @@ Function that validates and narrows the document type
 
 #### Returns
 
-`SchemaBuilder`\<`T`\>
+`SchemaBuilder`&lt;`T`&gt;
 
 This builder instance for method chaining
 

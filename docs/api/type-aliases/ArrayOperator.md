@@ -1,12 +1,12 @@
 [stratadb](../index.md) / ArrayOperator
 
-# Type Alias: ArrayOperator\<T\>
+# Type Alias: ArrayOperator&lt;T&gt;
 
 ```ts
 type ArrayOperator<T> = T extends readonly infer U[] ? object : never;
 ```
 
-Defined in: [src/query-types.ts:207](https://github.com/g5becks/StrataDB/blob/7791c9d2c0eca8b064c87359859d54870cd83af8/src/query-types.ts#L207)
+Defined in: [src/query-types.ts:286](https://github.com/g5becks/StrataDb/blob/56b93c15dc2c602cd539356668e05ed574e9a8c7/src/query-types.ts#L286)
 
 Array-specific query operators for MongoDB-like array operations.
 

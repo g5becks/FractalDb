@@ -1,12 +1,12 @@
 [stratadb](../index.md) / DocumentInput
 
-# Type Alias: DocumentInput\<T\>
+# Type Alias: DocumentInput&lt;T&gt;
 
 ```ts
 type DocumentInput<T> = Simplify<SetOptional<Except<T, "_id">, never> & object>;
 ```
 
-Defined in: [src/core-types.ts:93](https://github.com/g5becks/StrataDB/blob/7791c9d2c0eca8b064c87359859d54870cd83af8/src/core-types.ts#L93)
+Defined in: [src/core-types.ts:93](https://github.com/g5becks/StrataDb/blob/56b93c15dc2c602cd539356668e05ed574e9a8c7/src/core-types.ts#L93)
 
 Document input type for insertion operations.
 

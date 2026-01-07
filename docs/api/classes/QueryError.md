@@ -2,7 +2,7 @@
 
 # Class: QueryError
 
-Defined in: [src/errors.ts:148](https://github.com/g5becks/StrataDB/blob/7791c9d2c0eca8b064c87359859d54870cd83af8/src/errors.ts#L148)
+Defined in: [src/errors.ts:148](https://github.com/g5becks/StrataDb/blob/56b93c15dc2c602cd539356668e05ed574e9a8c7/src/errors.ts#L148)
 
 Base class for query-related errors.
 
@@ -36,7 +36,7 @@ try {
 new QueryError(message, query?): QueryError;
 ```
 
-Defined in: [src/errors.ts:155](https://github.com/g5becks/StrataDB/blob/7791c9d2c0eca8b064c87359859d54870cd83af8/src/errors.ts#L155)
+Defined in: [src/errors.ts:155](https://github.com/g5becks/StrataDb/blob/56b93c15dc2c602cd539356668e05ed574e9a8c7/src/errors.ts#L155)
 
 #### Parameters
 
@@ -64,7 +64,7 @@ Defined in: [src/errors.ts:155](https://github.com/g5becks/StrataDB/blob/7791c9d
 readonly category: "query";
 ```
 
-Defined in: [src/errors.ts:149](https://github.com/g5becks/StrataDB/blob/7791c9d2c0eca8b064c87359859d54870cd83af8/src/errors.ts#L149)
+Defined in: [src/errors.ts:149](https://github.com/g5becks/StrataDb/blob/56b93c15dc2c602cd539356668e05ed574e9a8c7/src/errors.ts#L149)
 
 Error category for grouping related error types
 
@@ -96,7 +96,7 @@ The cause of the error.
 readonly code: "QUERY_ERROR" = "QUERY_ERROR";
 ```
 
-Defined in: [src/errors.ts:150](https://github.com/g5becks/StrataDB/blob/7791c9d2c0eca8b064c87359859d54870cd83af8/src/errors.ts#L150)
+Defined in: [src/errors.ts:150](https://github.com/g5becks/StrataDb/blob/56b93c15dc2c602cd539356668e05ed574e9a8c7/src/errors.ts#L150)
 
 Unique error code for programmatic identification
 
@@ -140,7 +140,7 @@ Defined in: node\_modules/typescript/lib/lib.es5.d.ts:1076
 readonly optional query: string;
 ```
 
-Defined in: [src/errors.ts:153](https://github.com/g5becks/StrataDB/blob/7791c9d2c0eca8b064c87359859d54870cd83af8/src/errors.ts#L153)
+Defined in: [src/errors.ts:153](https://github.com/g5becks/StrataDb/blob/56b93c15dc2c602cd539356668e05ed574e9a8c7/src/errors.ts#L153)
 
 The query that caused the error (if available)
 

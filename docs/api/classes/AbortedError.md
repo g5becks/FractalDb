@@ -1,23 +1,29 @@
-[stratadb](../index.md) / ConnectionError
+[stratadb](../index.md) / AbortedError
 
-# Class: ConnectionError
+# Class: AbortedError
 
-Defined in: [src/errors.ts:295](https://github.com/g5becks/StrataDb/blob/56b93c15dc2c602cd539356668e05ed574e9a8c7/src/errors.ts#L295)
+Defined in: [src/errors.ts:460](https://github.com/g5becks/StrataDb/blob/56b93c15dc2c602cd539356668e05ed574e9a8c7/src/errors.ts#L460)
 
-Error thrown when database connection fails.
+Error thrown when an operation is aborted via AbortSignal.
 
 ## Remarks
 
-Typically thrown during database initialization or when connection is lost.
+This error is thrown when an AbortSignal is triggered during an operation.
+The original abort reason is preserved in the `reason` property.
+
+When used with retry, p-retry will automatically stop retrying when this error is thrown.
 
 ## Example
 
 ```typescript
+const controller = new AbortController();
+setTimeout(() => controller.abort(), 100);
+
 try {
-  const db = new StrataDB({ database: '/invalid/path/db.sqlite' });
+  await users.find({}, { signal: controller.signal });
 } catch (error) {
-  if (error instanceof ConnectionError) {
-    console.log('Failed to connect to database:', error.message);
+  if (error instanceof AbortedError) {
+    console.log('Operation aborted:', error.reason);
   }
 }
 ```
@@ -31,10 +37,10 @@ try {
 ### Constructor
 
 ```ts
-new ConnectionError(message, sqliteCode?): ConnectionError;
+new AbortedError(message, reason?): AbortedError;
 ```
 
-Defined in: [src/errors.ts:302](https://github.com/g5becks/StrataDb/blob/56b93c15dc2c602cd539356668e05ed574e9a8c7/src/errors.ts#L302)
+Defined in: [src/errors.ts:467](https://github.com/g5becks/StrataDb/blob/56b93c15dc2c602cd539356668e05ed574e9a8c7/src/errors.ts#L467)
 
 #### Parameters
 
@@ -42,13 +48,13 @@ Defined in: [src/errors.ts:302](https://github.com/g5becks/StrataDb/blob/56b93c1
 
 `string`
 
-##### sqliteCode?
+##### reason?
 
-`number`
+`unknown`
 
 #### Returns
 
-`ConnectionError`
+`AbortedError`
 
 #### Overrides
 
@@ -62,7 +68,7 @@ Defined in: [src/errors.ts:302](https://github.com/g5becks/StrataDb/blob/56b93c1
 readonly category: "database";
 ```
 
-Defined in: [src/errors.ts:296](https://github.com/g5becks/StrataDb/blob/56b93c15dc2c602cd539356668e05ed574e9a8c7/src/errors.ts#L296)
+Defined in: [src/errors.ts:461](https://github.com/g5becks/StrataDb/blob/56b93c15dc2c602cd539356668e05ed574e9a8c7/src/errors.ts#L461)
 
 Error category for grouping related error types
 
@@ -91,10 +97,10 @@ The cause of the error.
 ### code
 
 ```ts
-readonly code: "CONNECTION_ERROR" = "CONNECTION_ERROR";
+readonly code: "OPERATION_ABORTED" = "OPERATION_ABORTED";
 ```
 
-Defined in: [src/errors.ts:297](https://github.com/g5becks/StrataDb/blob/56b93c15dc2c602cd539356668e05ed574e9a8c7/src/errors.ts#L297)
+Defined in: [src/errors.ts:462](https://github.com/g5becks/StrataDb/blob/56b93c15dc2c602cd539356668e05ed574e9a8c7/src/errors.ts#L462)
 
 Unique error code for programmatic identification
 
@@ -132,15 +138,15 @@ Defined in: node\_modules/typescript/lib/lib.es5.d.ts:1076
 
 ***
 
-### sqliteCode?
+### reason?
 
 ```ts
-readonly optional sqliteCode: number;
+readonly optional reason: unknown;
 ```
 
-Defined in: [src/errors.ts:300](https://github.com/g5becks/StrataDb/blob/56b93c15dc2c602cd539356668e05ed574e9a8c7/src/errors.ts#L300)
+Defined in: [src/errors.ts:465](https://github.com/g5becks/StrataDb/blob/56b93c15dc2c602cd539356668e05ed574e9a8c7/src/errors.ts#L465)
 
-SQLite error code (if available)
+The abort reason from the AbortSignal
 
 ***
 

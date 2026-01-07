@@ -1,12 +1,12 @@
 [stratadb](../index.md) / DocumentUpdate
 
-# Type Alias: DocumentUpdate\<T\>
+# Type Alias: DocumentUpdate&lt;T&gt;
 
 ```ts
 type DocumentUpdate<T> = Simplify<PartialDeep<Except<T, "_id">>>;
 ```
 
-Defined in: [src/core-types.ts:127](https://github.com/g5becks/StrataDB/blob/7791c9d2c0eca8b064c87359859d54870cd83af8/src/core-types.ts#L127)
+Defined in: [src/core-types.ts:127](https://github.com/g5becks/StrataDb/blob/56b93c15dc2c602cd539356668e05ed574e9a8c7/src/core-types.ts#L127)
 
 Document update type for update operations.
 

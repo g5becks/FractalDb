@@ -232,7 +232,7 @@ class SchemaBuilderImpl<T extends Document> implements SchemaBuilder<T> {
  * Creates a new schema builder for defining collection schemas.
  *
  * @typeParam T - The document payload type (without _id, createdAt, updatedAt)
- * @returns A new SchemaBuilder instance for Document<T>
+ * @returns A new SchemaBuilder instance for `Document<T>`
  *
  * @remarks
  * This factory function creates a new `SchemaBuilder<Document<T>>` that provides
@@ -240,7 +240,7 @@ class SchemaBuilderImpl<T extends Document> implements SchemaBuilder<T> {
  * at every step and returns an immutable schema definition when built.
  *
  * **Important**: Pass your payload type (without Document wrapper) to createSchema.
- * The function automatically wraps it with Document<T> which adds _id, createdAt, updatedAt.
+ * The function automatically wraps it with `Document<T>` which adds _id, createdAt, updatedAt.
  *
  * @example
  * ```typescript

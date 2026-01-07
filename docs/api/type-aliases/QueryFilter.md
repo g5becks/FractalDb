@@ -1,15 +1,15 @@
 [stratadb](../index.md) / QueryFilter
 
-# Type Alias: QueryFilter\<T\>
+# Type Alias: QueryFilter&lt;T&gt;
 
 ```ts
 type QueryFilter<T> = Simplify<
   | LogicalOperator<T>
   | { [K in keyof T]?: T[K] | FieldOperator<T[K]> }
-| { [P in DocumentPath<T> as P extends string ? P : never]?: P extends string ? PathValue<T, P> | FieldOperator<PathValue<T, P>> : never }>;
+  | { [P in DocumentPath<T> as P extends string ? P : never]?: P extends string ? PathValue<T, P> | FieldOperator<PathValue<T, P>> : never }>;
 ```
 
-Defined in: [src/query-types.ts:491](https://github.com/g5becks/StrataDB/blob/7791c9d2c0eca8b064c87359859d54870cd83af8/src/query-types.ts#L491)
+Defined in: [src/query-types.ts:570](https://github.com/g5becks/StrataDb/blob/56b93c15dc2c602cd539356668e05ed574e9a8c7/src/query-types.ts#L570)
 
 Complete query filter combining field filters and logical operators.
 

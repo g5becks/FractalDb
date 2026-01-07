@@ -1,12 +1,12 @@
 [stratadb](../index.md) / DocumentPath
 
-# Type Alias: DocumentPath\<T\>
+# Type Alias: DocumentPath&lt;T&gt;
 
 ```ts
 type DocumentPath<T> = Paths<T>;
 ```
 
-Defined in: [src/path-types.ts:46](https://github.com/g5becks/StrataDB/blob/7791c9d2c0eca8b064c87359859d54870cd83af8/src/path-types.ts#L46)
+Defined in: [src/path-types.ts:46](https://github.com/g5becks/StrataDb/blob/56b93c15dc2c602cd539356668e05ed574e9a8c7/src/path-types.ts#L46)
 
 Extracts all valid property paths from a document type.
 

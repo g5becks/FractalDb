@@ -1,12 +1,12 @@
 [stratadb](../index.md) / OrderingOperators
 
-# Type Alias: OrderingOperators\<T\>
+# Type Alias: OrderingOperators&lt;T&gt;
 
 ```ts
 type OrderingOperators<T> = T extends number | Date ? object : never;
 ```
 
-Defined in: [src/query-types.ts:62](https://github.com/g5becks/StrataDB/blob/7791c9d2c0eca8b064c87359859d54870cd83af8/src/query-types.ts#L62)
+Defined in: [src/query-types.ts:62](https://github.com/g5becks/StrataDb/blob/56b93c15dc2c602cd539356668e05ed574e9a8c7/src/query-types.ts#L62)
 
 Ordering comparison operators (greater than, less than).
 

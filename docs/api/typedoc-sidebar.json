@@ -4,6 +4,10 @@
     "collapsed": false,
     "items": [
       {
+        "text": "AbortedError",
+        "link": "/api/classes/AbortedError.md"
+      },
+      {
         "text": "ConnectionError",
         "link": "/api/classes/ConnectionError.md"
       },
@@ -60,6 +64,10 @@
       {
         "text": "CompoundIndex",
         "link": "/api/type-aliases/CompoundIndex.md"
+      },
+      {
+        "text": "CursorSpec",
+        "link": "/api/type-aliases/CursorSpec.md"
       },
       {
         "text": "DatabaseOptions",
@@ -122,12 +130,20 @@
         "link": "/api/type-aliases/MembershipOperators.md"
       },
       {
+        "text": "OmitSpec",
+        "link": "/api/type-aliases/OmitSpec.md"
+      },
+      {
         "text": "OrderingOperators",
         "link": "/api/type-aliases/OrderingOperators.md"
       },
       {
         "text": "PathValue",
         "link": "/api/type-aliases/PathValue.md"
+      },
+      {
+        "text": "ProjectedDocument",
+        "link": "/api/type-aliases/ProjectedDocument.md"
       },
       {
         "text": "ProjectionSpec",
@@ -142,6 +158,30 @@
         "link": "/api/type-aliases/QueryOptions.md"
       },
       {
+        "text": "QueryOptionsBase",
+        "link": "/api/type-aliases/QueryOptionsBase.md"
+      },
+      {
+        "text": "QueryOptionsWithOmit",
+        "link": "/api/type-aliases/QueryOptionsWithOmit.md"
+      },
+      {
+        "text": "QueryOptionsWithoutProjection",
+        "link": "/api/type-aliases/QueryOptionsWithoutProjection.md"
+      },
+      {
+        "text": "QueryOptionsWithSelect",
+        "link": "/api/type-aliases/QueryOptionsWithSelect.md"
+      },
+      {
+        "text": "RetryContext",
+        "link": "/api/type-aliases/RetryContext.md"
+      },
+      {
+        "text": "RetryOptions",
+        "link": "/api/type-aliases/RetryOptions.md"
+      },
+      {
         "text": "SchemaBuilder",
         "link": "/api/type-aliases/SchemaBuilder.md"
       },
@@ -152,6 +192,10 @@
       {
         "text": "SchemaField",
         "link": "/api/type-aliases/SchemaField.md"
+      },
+      {
+        "text": "SelectSpec",
+        "link": "/api/type-aliases/SelectSpec.md"
       },
       {
         "text": "SortSpec",
@@ -168,6 +212,10 @@
       {
         "text": "StringOperator",
         "link": "/api/type-aliases/StringOperator.md"
+      },
+      {
+        "text": "TextSearchSpec",
+        "link": "/api/type-aliases/TextSearchSpec.md"
       },
       {
         "text": "TimestampConfig",
@@ -192,12 +240,20 @@
     "collapsed": false,
     "items": [
       {
+        "text": "createAbortPromise",
+        "link": "/api/functions/createAbortPromise.md"
+      },
+      {
         "text": "createSchema",
         "link": "/api/functions/createSchema.md"
       },
       {
         "text": "dateToTimestamp",
         "link": "/api/functions/dateToTimestamp.md"
+      },
+      {
+        "text": "defaultShouldRetry",
+        "link": "/api/functions/defaultShouldRetry.md"
       },
       {
         "text": "generateId",
@@ -212,8 +268,16 @@
         "link": "/api/functions/isValidTimestamp.md"
       },
       {
+        "text": "mergeRetryOptions",
+        "link": "/api/functions/mergeRetryOptions.md"
+      },
+      {
         "text": "nowTimestamp",
         "link": "/api/functions/nowTimestamp.md"
+      },
+      {
+        "text": "throwIfAborted",
+        "link": "/api/functions/throwIfAborted.md"
       },
       {
         "text": "timestampDiff",
@@ -222,6 +286,10 @@
       {
         "text": "timestampToDate",
         "link": "/api/functions/timestampToDate.md"
+      },
+      {
+        "text": "withRetry",
+        "link": "/api/functions/withRetry.md"
       }
     ]
   }

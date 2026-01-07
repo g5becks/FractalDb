@@ -1,12 +1,12 @@
 [stratadb](../index.md) / PathValue
 
-# Type Alias: PathValue\<T, P\>
+# Type Alias: PathValue&lt;T, P&gt;
 
 ```ts
 type PathValue<T, P> = Get<T, P>;
 ```
 
-Defined in: [src/path-types.ts:79](https://github.com/g5becks/StrataDB/blob/7791c9d2c0eca8b064c87359859d54870cd83af8/src/path-types.ts#L79)
+Defined in: [src/path-types.ts:79](https://github.com/g5becks/StrataDb/blob/56b93c15dc2c602cd539356668e05ed574e9a8c7/src/path-types.ts#L79)
 
 Gets the type at a specific document path.
 

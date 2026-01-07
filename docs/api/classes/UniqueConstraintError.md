@@ -2,7 +2,7 @@
 
 # Class: UniqueConstraintError
 
-Defined in: [src/errors.ts:360](https://github.com/g5becks/StrataDB/blob/7791c9d2c0eca8b064c87359859d54870cd83af8/src/errors.ts#L360)
+Defined in: [src/errors.ts:360](https://github.com/g5becks/StrataDb/blob/56b93c15dc2c602cd539356668e05ed574e9a8c7/src/errors.ts#L360)
 
 Error thrown when unique constraint is violated.
 
@@ -39,7 +39,7 @@ new UniqueConstraintError(
    sqliteCode?): UniqueConstraintError;
 ```
 
-Defined in: [src/errors.ts:373](https://github.com/g5becks/StrataDB/blob/7791c9d2c0eca8b064c87359859d54870cd83af8/src/errors.ts#L373)
+Defined in: [src/errors.ts:373](https://github.com/g5becks/StrataDb/blob/56b93c15dc2c602cd539356668e05ed574e9a8c7/src/errors.ts#L373)
 
 #### Parameters
 
@@ -75,7 +75,7 @@ Defined in: [src/errors.ts:373](https://github.com/g5becks/StrataDB/blob/7791c9d
 readonly category: "database";
 ```
 
-Defined in: [src/errors.ts:361](https://github.com/g5becks/StrataDB/blob/7791c9d2c0eca8b064c87359859d54870cd83af8/src/errors.ts#L361)
+Defined in: [src/errors.ts:361](https://github.com/g5becks/StrataDb/blob/56b93c15dc2c602cd539356668e05ed574e9a8c7/src/errors.ts#L361)
 
 Error category for grouping related error types
 
@@ -107,7 +107,7 @@ The cause of the error.
 readonly code: "UNIQUE_CONSTRAINT_ERROR" = "UNIQUE_CONSTRAINT_ERROR";
 ```
 
-Defined in: [src/errors.ts:362](https://github.com/g5becks/StrataDB/blob/7791c9d2c0eca8b064c87359859d54870cd83af8/src/errors.ts#L362)
+Defined in: [src/errors.ts:362](https://github.com/g5becks/StrataDb/blob/56b93c15dc2c602cd539356668e05ed574e9a8c7/src/errors.ts#L362)
 
 Unique error code for programmatic identification
 
@@ -123,7 +123,7 @@ Unique error code for programmatic identification
 readonly optional field: string;
 ```
 
-Defined in: [src/errors.ts:368](https://github.com/g5becks/StrataDB/blob/7791c9d2c0eca8b064c87359859d54870cd83af8/src/errors.ts#L368)
+Defined in: [src/errors.ts:368](https://github.com/g5becks/StrataDb/blob/56b93c15dc2c602cd539356668e05ed574e9a8c7/src/errors.ts#L368)
 
 The field with unique constraint violation
 
@@ -163,7 +163,7 @@ Defined in: node\_modules/typescript/lib/lib.es5.d.ts:1076
 readonly optional sqliteCode: number;
 ```
 
-Defined in: [src/errors.ts:365](https://github.com/g5becks/StrataDB/blob/7791c9d2c0eca8b064c87359859d54870cd83af8/src/errors.ts#L365)
+Defined in: [src/errors.ts:365](https://github.com/g5becks/StrataDb/blob/56b93c15dc2c602cd539356668e05ed574e9a8c7/src/errors.ts#L365)
 
 SQLite error code (if available)
 
@@ -189,7 +189,7 @@ Defined in: node\_modules/typescript/lib/lib.es5.d.ts:1078
 readonly optional value: unknown;
 ```
 
-Defined in: [src/errors.ts:371](https://github.com/g5becks/StrataDB/blob/7791c9d2c0eca8b064c87359859d54870cd83af8/src/errors.ts#L371)
+Defined in: [src/errors.ts:371](https://github.com/g5becks/StrataDb/blob/56b93c15dc2c602cd539356668e05ed574e9a8c7/src/errors.ts#L371)
 
 The value that violated the unique constraint
 

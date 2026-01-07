@@ -1,12 +1,12 @@
 [stratadb](../index.md) / InsertOneResult
 
-# Type Alias: InsertOneResult\<T\>
+# Type Alias: InsertOneResult&lt;T&gt;
 
 ```ts
 type InsertOneResult<T> = T;
 ```
 
-Defined in: [src/collection-types.ts:22](https://github.com/g5becks/StrataDB/blob/7791c9d2c0eca8b064c87359859d54870cd83af8/src/collection-types.ts#L22)
+Defined in: [src/collection-types.ts:28](https://github.com/g5becks/StrataDb/blob/56b93c15dc2c602cd539356668e05ed574e9a8c7/src/collection-types.ts#L28)
 
 Result of inserting a single document into a collection.
 

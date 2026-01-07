@@ -1,12 +1,12 @@
 [stratadb](../index.md) / SortSpec
 
-# Type Alias: SortSpec\<T\>
+# Type Alias: SortSpec&lt;T&gt;
 
 ```ts
 type SortSpec<T> = { readonly [K in keyof T]?: 1 | -1 };
 ```
 
-Defined in: [src/query-options-types.ts:52](https://github.com/g5becks/StrataDB/blob/7791c9d2c0eca8b064c87359859d54870cd83af8/src/query-options-types.ts#L52)
+Defined in: [src/query-options-types.ts:54](https://github.com/g5becks/StrataDb/blob/56b93c15dc2c602cd539356668e05ed574e9a8c7/src/query-options-types.ts#L54)
 
 Sort specification for query result ordering.
 

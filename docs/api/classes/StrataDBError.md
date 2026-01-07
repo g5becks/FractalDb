@@ -2,7 +2,7 @@
 
 # Abstract Class: StrataDBError
 
-Defined in: [src/errors.ts:35](https://github.com/g5becks/StrataDB/blob/7791c9d2c0eca8b064c87359859d54870cd83af8/src/errors.ts#L35)
+Defined in: [src/errors.ts:35](https://github.com/g5becks/StrataDb/blob/56b93c15dc2c602cd539356668e05ed574e9a8c7/src/errors.ts#L35)
 
 Abstract base class for all StrataDB errors.
 
@@ -45,6 +45,7 @@ try {
 
 ## Extended by
 
+- [`AbortedError`](AbortedError.md)
 - [`ConnectionError`](ConnectionError.md)
 - [`QueryError`](QueryError.md)
 - [`TransactionError`](TransactionError.md)
@@ -59,7 +60,7 @@ try {
 new StrataDBError(message): StrataDBError;
 ```
 
-Defined in: [src/errors.ts:46](https://github.com/g5becks/StrataDB/blob/7791c9d2c0eca8b064c87359859d54870cd83af8/src/errors.ts#L46)
+Defined in: [src/errors.ts:46](https://github.com/g5becks/StrataDb/blob/56b93c15dc2c602cd539356668e05ed574e9a8c7/src/errors.ts#L46)
 
 #### Parameters
 
@@ -85,7 +86,7 @@ Error.constructor
 abstract readonly category: "validation" | "query" | "database" | "transaction";
 ```
 
-Defined in: [src/errors.ts:40](https://github.com/g5becks/StrataDB/blob/7791c9d2c0eca8b064c87359859d54870cd83af8/src/errors.ts#L40)
+Defined in: [src/errors.ts:40](https://github.com/g5becks/StrataDb/blob/56b93c15dc2c602cd539356668e05ed574e9a8c7/src/errors.ts#L40)
 
 Error category for grouping related error types
 
@@ -115,7 +116,7 @@ Error.cause
 abstract readonly code: string;
 ```
 
-Defined in: [src/errors.ts:37](https://github.com/g5becks/StrataDB/blob/7791c9d2c0eca8b064c87359859d54870cd83af8/src/errors.ts#L37)
+Defined in: [src/errors.ts:37](https://github.com/g5becks/StrataDb/blob/56b93c15dc2c602cd539356668e05ed574e9a8c7/src/errors.ts#L37)
 
 Unique error code for programmatic identification
 

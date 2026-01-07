@@ -6,7 +6,7 @@
 type DatabaseOptions = object;
 ```
 
-Defined in: [src/database-types.ts:20](https://github.com/g5becks/StrataDB/blob/7791c9d2c0eca8b064c87359859d54870cd83af8/src/database-types.ts#L20)
+Defined in: [src/database-types.ts:21](https://github.com/g5becks/StrataDb/blob/56b93c15dc2c602cd539356668e05ed574e9a8c7/src/database-types.ts#L21)
 
 Options for creating a StrataDB instance.
 
@@ -29,7 +29,7 @@ const db = new StrataDB(options);
 readonly database: string | SQLiteDatabase;
 ```
 
-Defined in: [src/database-types.ts:25](https://github.com/g5becks/StrataDB/blob/7791c9d2c0eca8b064c87359859d54870cd83af8/src/database-types.ts#L25)
+Defined in: [src/database-types.ts:26](https://github.com/g5becks/StrataDb/blob/56b93c15dc2c602cd539356668e05ed574e9a8c7/src/database-types.ts#L26)
 
 SQLite database path or ':memory:' for in-memory database.
 Can also be an existing bun:sqlite Database instance.
@@ -42,7 +42,7 @@ Can also be an existing bun:sqlite Database instance.
 readonly optional enableCache: boolean;
 ```
 
-Defined in: [src/database-types.ts:75](https://github.com/g5becks/StrataDB/blob/7791c9d2c0eca8b064c87359859d54870cd83af8/src/database-types.ts#L75)
+Defined in: [src/database-types.ts:76](https://github.com/g5becks/StrataDb/blob/56b93c15dc2c602cd539356668e05ed574e9a8c7/src/database-types.ts#L76)
 
 Enable query caching for all collections.
 
@@ -97,7 +97,7 @@ const db = new StrataDB({ database: ':memory:' });
 readonly optional idGenerator: () => string;
 ```
 
-Defined in: [src/database-types.ts:30](https://github.com/g5becks/StrataDB/blob/7791c9d2c0eca8b064c87359859d54870cd83af8/src/database-types.ts#L30)
+Defined in: [src/database-types.ts:31](https://github.com/g5becks/StrataDb/blob/56b93c15dc2c602cd539356668e05ed574e9a8c7/src/database-types.ts#L31)
 
 Custom ID generator function. Defaults to crypto.randomUUID().
 
@@ -113,10 +113,46 @@ Custom ID generator function. Defaults to crypto.randomUUID().
 readonly optional onClose: () => void;
 ```
 
-Defined in: [src/database-types.ts:35](https://github.com/g5becks/StrataDB/blob/7791c9d2c0eca8b064c87359859d54870cd83af8/src/database-types.ts#L35)
+Defined in: [src/database-types.ts:36](https://github.com/g5becks/StrataDb/blob/56b93c15dc2c602cd539356668e05ed574e9a8c7/src/database-types.ts#L36)
 
 Callback invoked when database is closed.
 
 #### Returns
 
 `void`
+
+***
+
+### retry?
+
+```ts
+readonly optional retry: RetryOptions;
+```
+
+Defined in: [src/database-types.ts:97](https://github.com/g5becks/StrataDb/blob/56b93c15dc2c602cd539356668e05ed574e9a8c7/src/database-types.ts#L97)
+
+Default retry configuration for all database operations.
+
+#### Remarks
+
+Provides automatic retry with exponential backoff for transient errors.
+Individual collections and operations can override this setting.
+
+#### Default Value
+
+```ts
+No retries (retries: 0)
+```
+
+#### See
+
+CollectionOptions.retry for per-collection override
+
+#### Example
+
+```typescript
+const db = new StrataDB({
+  database: 'app.db',
+  retry: { retries: 3, minTimeout: 1000, maxTimeout: 30000 }
+});
+```

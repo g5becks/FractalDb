@@ -3,10 +3,10 @@
 # Function: createSchema()
 
 ```ts
-function createSchema<T>(): SchemaBuilder<T>;
+function createSchema<T>(): SchemaBuilder<Document<T>>;
 ```
 
-Defined in: [src/schema-builder.ts:246](https://github.com/g5becks/StrataDB/blob/7791c9d2c0eca8b064c87359859d54870cd83af8/src/schema-builder.ts#L246)
+Defined in: [src/schema-builder.ts:274](https://github.com/g5becks/StrataDb/blob/56b93c15dc2c602cd539356668e05ed574e9a8c7/src/schema-builder.ts#L274)
 
 Creates a new schema builder for defining collection schemas.
 
@@ -14,52 +14,51 @@ Creates a new schema builder for defining collection schemas.
 
 ### T
 
-`T` *extends* [`Document`](../type-aliases/Document.md)
+`T` *extends* `Record`&lt;`string`, `unknown`&gt; = `Record`&lt;`string`, `unknown`&gt;
 
-The document type extending Document
+The document payload type (without _id, createdAt, updatedAt)
 
 ## Returns
 
-[`SchemaBuilder`](../type-aliases/SchemaBuilder.md)\<`T`\>
+[`SchemaBuilder`](../type-aliases/SchemaBuilder.md)&lt;[`Document`](../type-aliases/Document.md)&lt;`T`&gt;&gt;
 
-A new SchemaBuilder instance
+A new SchemaBuilder instance for `Document<T>`
 
 ## Remarks
 
-This factory function creates a new `SchemaBuilder<T>` that provides
+This factory function creates a new `SchemaBuilder<Document<T>>` that provides
 a fluent API for constructing schemas. The builder ensures type safety
 at every step and returns an immutable schema definition when built.
+
+**Important**: Pass your payload type (without Document wrapper) to createSchema.
+The function automatically wraps it with `Document<T>` which adds _id, createdAt, updatedAt.
 
 ## Example
 
 ```typescript
 import { createSchema, type Document } from 'stratadb';
 
-type User = Document<{
+// Define your payload type (no _id needed!)
+type UserPayload = {
   name: string;
   email: string;
   age: number;
   status: 'active' | 'inactive';
-}>;
+};
 
-// ✅ Create and build schema
-const userSchema = createSchema<User>()
+// The full document type includes _id automatically
+type User = Document<UserPayload>;
+
+// ✅ Create schema using payload type
+const userSchema = createSchema<UserPayload>()
   .field('name', { type: 'TEXT', indexed: true })
   .field('email', { type: 'TEXT', indexed: true, unique: true })
   .field('age', { type: 'INTEGER', indexed: true })
   .field('status', { type: 'TEXT', indexed: true })
   .compoundIndex('age_status', ['age', 'status'])
   .timestamps(true)
-  .validate((doc): doc is User => {
-    return typeof doc === 'object' &&
-           doc !== null &&
-           'name' in doc &&
-           typeof doc.name === 'string' &&
-           'email' in doc &&
-           typeof doc.email === 'string';
-  })
   .build();
 
-// ✅ Use with database
+// ✅ Use with database (User type has _id automatically)
 const users = db.collection<User>('users', userSchema);
 ```

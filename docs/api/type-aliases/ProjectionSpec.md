@@ -1,12 +1,12 @@
 [stratadb](../index.md) / ProjectionSpec
 
-# Type Alias: ProjectionSpec\<T\>
+# Type Alias: ProjectionSpec&lt;T&gt;
 
 ```ts
 type ProjectionSpec<T> = { readonly [K in keyof T]?: 1 | 0 };
 ```
 
-Defined in: [src/query-options-types.ts:116](https://github.com/g5becks/StrataDB/blob/7791c9d2c0eca8b064c87359859d54870cd83af8/src/query-options-types.ts#L116)
+Defined in: [src/query-options-types.ts:118](https://github.com/g5becks/StrataDb/blob/56b93c15dc2c602cd539356668e05ed574e9a8c7/src/query-options-types.ts#L118)
 
 Projection specification for field selection in query results.
 

@@ -1,12 +1,12 @@
 [stratadb](../index.md) / FieldOperator
 
-# Type Alias: FieldOperator\<T\>
+# Type Alias: FieldOperator&lt;T&gt;
 
 ```ts
 type FieldOperator<T> = T extends string ? ComparisonOperator<T> & StringOperator & ExistenceOperator : T extends readonly unknown[] ? ComparisonOperator<T> & ArrayOperator<T> & ExistenceOperator : ComparisonOperator<T> & ExistenceOperator;
 ```
 
-Defined in: [src/query-types.ts:295](https://github.com/g5becks/StrataDB/blob/7791c9d2c0eca8b064c87359859d54870cd83af8/src/query-types.ts#L295)
+Defined in: [src/query-types.ts:374](https://github.com/g5becks/StrataDb/blob/56b93c15dc2c602cd539356668e05ed574e9a8c7/src/query-types.ts#L374)
 
 Combined field operators for any field type.
 

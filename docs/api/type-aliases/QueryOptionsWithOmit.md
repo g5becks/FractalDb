@@ -1,0 +1,64 @@
+[stratadb](../index.md) / QueryOptionsWithOmit
+
+# Type Alias: QueryOptionsWithOmit&lt;T, K&gt;
+
+```ts
+type QueryOptionsWithOmit<T, K> = QueryOptionsBase<T> & object;
+```
+
+Defined in: [src/query-options-types.ts:629](https://github.com/g5becks/StrataDb/blob/56b93c15dc2c602cd539356668e05ed574e9a8c7/src/query-options-types.ts#L629)
+
+Query options with `omit` for type-safe field exclusion.
+
+## Type Declaration
+
+### omit
+
+```ts
+readonly omit: readonly K[];
+```
+
+Array of fields to exclude from results.
+
+### projection?
+
+```ts
+readonly optional projection: never;
+```
+
+### select?
+
+```ts
+readonly optional select: never;
+```
+
+## Type Parameters
+
+### T
+
+`T`
+
+The document type being queried
+
+### K
+
+`K` *extends* keyof `T`
+
+The keys to omit (inferred from the omit array)
+
+## Remarks
+
+When using `omit`, the return type excludes the specified fields.
+This provides compile-time type safety.
+
+## Example
+
+```typescript
+// Returns Omit<User, 'password' | 'ssn'>[]
+const users = await collection.find(
+  { status: 'active' },
+  { omit: ['password', 'ssn'] as const }
+);
+users[0].name     // ✅ TypeScript knows this exists
+users[0].password // ❌ TypeScript error: property doesn't exist
+```

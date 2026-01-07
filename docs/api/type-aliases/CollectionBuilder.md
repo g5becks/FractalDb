@@ -1,12 +1,12 @@
 [stratadb](../index.md) / CollectionBuilder
 
-# Type Alias: CollectionBuilder\<T\>
+# Type Alias: CollectionBuilder&lt;T&gt;
 
 ```ts
 type CollectionBuilder<T> = object;
 ```
 
-Defined in: [src/collection-builder.ts:33](https://github.com/g5becks/StrataDB/blob/7791c9d2c0eca8b064c87359859d54870cd83af8/src/collection-builder.ts#L33)
+Defined in: [src/collection-builder.ts:33](https://github.com/g5becks/StrataDb/blob/56b93c15dc2c602cd539356668e05ed574e9a8c7/src/collection-builder.ts#L33)
 
 Fluent builder for creating collections with inline schema definition.
 
@@ -43,13 +43,13 @@ The document type extending Document
 build(): Collection<T>;
 ```
 
-Defined in: [src/collection-builder.ts:94](https://github.com/g5becks/StrataDB/blob/7791c9d2c0eca8b064c87359859d54870cd83af8/src/collection-builder.ts#L94)
+Defined in: [src/collection-builder.ts:94](https://github.com/g5becks/StrataDb/blob/56b93c15dc2c602cd539356668e05ed574e9a8c7/src/collection-builder.ts#L94)
 
 Build and return the collection with the defined schema.
 
 #### Returns
 
-[`Collection`](Collection.md)\<`T`\>
+[`Collection`](Collection.md)&lt;`T`&gt;
 
 The collection instance ready for operations
 
@@ -61,7 +61,7 @@ The collection instance ready for operations
 cache(enabled): CollectionBuilder<T>;
 ```
 
-Defined in: [src/collection-builder.ts:87](https://github.com/g5becks/StrataDB/blob/7791c9d2c0eca8b064c87359859d54870cd83af8/src/collection-builder.ts#L87)
+Defined in: [src/collection-builder.ts:87](https://github.com/g5becks/StrataDb/blob/56b93c15dc2c602cd539356668e05ed574e9a8c7/src/collection-builder.ts#L87)
 
 Enable or disable query caching for this collection.
 
@@ -75,7 +75,7 @@ Whether to enable query caching
 
 #### Returns
 
-`CollectionBuilder`\<`T`\>
+`CollectionBuilder`&lt;`T`&gt;
 
 The builder for method chaining
 
@@ -102,10 +102,10 @@ const users = db.collection<User>('users')
 compoundIndex(
    name, 
    fields, 
-options?): CollectionBuilder<T>;
+   options?): CollectionBuilder<T>;
 ```
 
-Defined in: [src/collection-builder.ts:52](https://github.com/g5becks/StrataDB/blob/7791c9d2c0eca8b064c87359859d54870cd83af8/src/collection-builder.ts#L52)
+Defined in: [src/collection-builder.ts:52](https://github.com/g5becks/StrataDb/blob/56b93c15dc2c602cd539356668e05ed574e9a8c7/src/collection-builder.ts#L52)
 
 Define a compound index spanning multiple fields.
 
@@ -127,7 +127,7 @@ readonly keyof `T`[]
 
 #### Returns
 
-`CollectionBuilder`\<`T`\>
+`CollectionBuilder`&lt;`T`&gt;
 
 ***
 
@@ -137,7 +137,7 @@ readonly keyof `T`[]
 field<K>(name, options): CollectionBuilder<T>;
 ```
 
-Defined in: [src/collection-builder.ts:37](https://github.com/g5becks/StrataDB/blob/7791c9d2c0eca8b064c87359859d54870cd83af8/src/collection-builder.ts#L37)
+Defined in: [src/collection-builder.ts:37](https://github.com/g5becks/StrataDb/blob/56b93c15dc2c602cd539356668e05ed574e9a8c7/src/collection-builder.ts#L37)
 
 Define an indexed field with type checking.
 
@@ -173,7 +173,7 @@ Define an indexed field with type checking.
 
 ###### type
 
-[`TypeScriptToSQLite`](TypeScriptToSQLite.md)\<`T`\[`K`\]\>
+[`TypeScriptToSQLite`](TypeScriptToSQLite.md)&lt;`T`\[`K`\]&gt;
 
 ###### unique?
 
@@ -181,7 +181,7 @@ Define an indexed field with type checking.
 
 #### Returns
 
-`CollectionBuilder`\<`T`\>
+`CollectionBuilder`&lt;`T`&gt;
 
 ***
 
@@ -191,7 +191,7 @@ Define an indexed field with type checking.
 timestamps(enabled?): CollectionBuilder<T>;
 ```
 
-Defined in: [src/collection-builder.ts:61](https://github.com/g5becks/StrataDB/blob/7791c9d2c0eca8b064c87359859d54870cd83af8/src/collection-builder.ts#L61)
+Defined in: [src/collection-builder.ts:61](https://github.com/g5becks/StrataDb/blob/56b93c15dc2c602cd539356668e05ed574e9a8c7/src/collection-builder.ts#L61)
 
 Enable automatic timestamp management.
 
@@ -203,7 +203,7 @@ Enable automatic timestamp management.
 
 #### Returns
 
-`CollectionBuilder`\<`T`\>
+`CollectionBuilder`&lt;`T`&gt;
 
 ***
 
@@ -213,7 +213,7 @@ Enable automatic timestamp management.
 validate(validator): CollectionBuilder<T>;
 ```
 
-Defined in: [src/collection-builder.ts:66](https://github.com/g5becks/StrataDB/blob/7791c9d2c0eca8b064c87359859d54870cd83af8/src/collection-builder.ts#L66)
+Defined in: [src/collection-builder.ts:66](https://github.com/g5becks/StrataDb/blob/56b93c15dc2c602cd539356668e05ed574e9a8c7/src/collection-builder.ts#L66)
 
 Add validation function using a type predicate.
 
@@ -225,4 +225,4 @@ Add validation function using a type predicate.
 
 #### Returns
 
-`CollectionBuilder`\<`T`\>
+`CollectionBuilder`&lt;`T`&gt;

@@ -1,12 +1,12 @@
 [stratadb](../index.md) / QueryOptions
 
-# Type Alias: QueryOptions\<T\>
+# Type Alias: QueryOptions&lt;T&gt;
 
 ```ts
 type QueryOptions<T> = object;
 ```
 
-Defined in: [src/query-options-types.ts:214](https://github.com/g5becks/StrataDB/blob/7791c9d2c0eca8b064c87359859d54870cd83af8/src/query-options-types.ts#L214)
+Defined in: [src/query-options-types.ts:773](https://github.com/g5becks/StrataDb/blob/56b93c15dc2c602cd539356668e05ed574e9a8c7/src/query-options-types.ts#L773)
 
 Complete query options for controlling result set behavior.
 
@@ -16,13 +16,21 @@ Combines all query result control options:
 - `sort`: Order results by one or more fields
 - `limit`: Maximum number of results to return
 - `skip`: Number of results to skip (for pagination)
-- `projection`: Which fields to include/exclude
+- `select`: Array of fields to include (cleaner than projection)
+- `omit`: Array of fields to exclude (cleaner than projection)
+- `projection`: Which fields to include/exclude (MongoDB-style)
+
+**Field selection options (mutually exclusive):**
+- Use `select` to include specific fields: `{ select: ['name', 'email'] }`
+- Use `omit` to exclude specific fields: `{ omit: ['password'] }`
+- Use `projection` for MongoDB-style control: `{ projection: { name: 1 } }`
+- Cannot combine `select`, `omit`, or `projection` in the same query
 
 These options work together to enable:
 - Pagination (limit + skip)
 - Sorting (sort)
-- Field selection (projection)
-- Performance optimization (limit + projection)
+- Field selection (select, omit, or projection)
+- Performance optimization (limit + select/omit)
 
 ## Example
 
@@ -99,6 +107,30 @@ async function fetchPage(page: number, perPage: number = 20) {
     }
   );
 }
+
+// ✅ Using select (cleaner field inclusion)
+const withSelect: QueryOptions<User> = {
+  select: ['name', 'email', 'status'],  // Only these fields + _id
+  sort: { name: 1 }
+};
+
+// ✅ Using omit (exclude sensitive fields)
+const withOmit: QueryOptions<User> = {
+  omit: ['password'],  // All fields except password
+  sort: { createdAt: -1 },
+  limit: 10
+};
+
+// Usage with collection
+const publicUsers = await users.find(
+  { status: 'active' },
+  { select: ['name', 'email'] }
+);
+
+const safeUsers = await users.find(
+  {},
+  { omit: ['password', 'ssn'] }
+);
 ```
 
 ## Type Parameters
@@ -111,15 +143,41 @@ The document type being queried
 
 ## Properties
 
+### cursor?
+
+```ts
+readonly optional cursor: CursorSpec;
+```
+
+Defined in: [src/query-options-types.ts:812](https://github.com/g5becks/StrataDb/blob/56b93c15dc2c602cd539356668e05ed574e9a8c7/src/query-options-types.ts#L812)
+
+Cursor-based pagination configuration.
+Requires `sort` to be set. More efficient than skip/limit for large datasets.
+
+***
+
 ### limit?
 
 ```ts
 readonly optional limit: number;
 ```
 
-Defined in: [src/query-options-types.ts:219](https://github.com/g5becks/StrataDB/blob/7791c9d2c0eca8b064c87359859d54870cd83af8/src/query-options-types.ts#L219)
+Defined in: [src/query-options-types.ts:778](https://github.com/g5becks/StrataDb/blob/56b93c15dc2c602cd539356668e05ed574e9a8c7/src/query-options-types.ts#L778)
 
 Maximum number of documents to return
+
+***
+
+### omit?
+
+```ts
+readonly optional omit: OmitSpec<T>;
+```
+
+Defined in: [src/query-options-types.ts:793](https://github.com/g5becks/StrataDb/blob/56b93c15dc2c602cd539356668e05ed574e9a8c7/src/query-options-types.ts#L793)
+
+Array of fields to exclude from results.
+Mutually exclusive with `select` and `projection`.
 
 ***
 
@@ -129,9 +187,64 @@ Maximum number of documents to return
 readonly optional projection: ProjectionSpec<T>;
 ```
 
-Defined in: [src/query-options-types.ts:225](https://github.com/g5becks/StrataDB/blob/7791c9d2c0eca8b064c87359859d54870cd83af8/src/query-options-types.ts#L225)
+Defined in: [src/query-options-types.ts:799](https://github.com/g5becks/StrataDb/blob/56b93c15dc2c602cd539356668e05ed574e9a8c7/src/query-options-types.ts#L799)
 
-Which fields to include (1) or exclude (0) from results
+Which fields to include (1) or exclude (0) from results.
+Mutually exclusive with `select` and `omit`.
+
+***
+
+### retry?
+
+```ts
+readonly optional retry: RetryOptions | false;
+```
+
+Defined in: [src/query-options-types.ts:825](https://github.com/g5becks/StrataDb/blob/56b93c15dc2c602cd539356668e05ed574e9a8c7/src/query-options-types.ts#L825)
+
+Retry configuration for this operation.
+Overrides collection and database-level retry settings.
+Pass `false` to disable retries for this operation.
+
+***
+
+### search?
+
+```ts
+readonly optional search: TextSearchSpec<T>;
+```
+
+Defined in: [src/query-options-types.ts:806](https://github.com/g5becks/StrataDb/blob/56b93c15dc2c602cd539356668e05ed574e9a8c7/src/query-options-types.ts#L806)
+
+Multi-field text search configuration.
+Searches across specified fields with OR logic (match any field).
+Combined with filter using AND logic.
+
+***
+
+### select?
+
+```ts
+readonly optional select: SelectSpec<T>;
+```
+
+Defined in: [src/query-options-types.ts:787](https://github.com/g5becks/StrataDb/blob/56b93c15dc2c602cd539356668e05ed574e9a8c7/src/query-options-types.ts#L787)
+
+Array of fields to include in results (plus _id).
+Mutually exclusive with `omit` and `projection`.
+
+***
+
+### signal?
+
+```ts
+readonly optional signal: AbortSignal;
+```
+
+Defined in: [src/query-options-types.ts:818](https://github.com/g5becks/StrataDb/blob/56b93c15dc2c602cd539356668e05ed574e9a8c7/src/query-options-types.ts#L818)
+
+AbortSignal for cancelling the operation.
+When the signal is aborted, the operation will throw an AbortedError.
 
 ***
 
@@ -141,7 +254,7 @@ Which fields to include (1) or exclude (0) from results
 readonly optional skip: number;
 ```
 
-Defined in: [src/query-options-types.ts:222](https://github.com/g5becks/StrataDB/blob/7791c9d2c0eca8b064c87359859d54870cd83af8/src/query-options-types.ts#L222)
+Defined in: [src/query-options-types.ts:781](https://github.com/g5becks/StrataDb/blob/56b93c15dc2c602cd539356668e05ed574e9a8c7/src/query-options-types.ts#L781)
 
 Number of documents to skip (for pagination)
 
@@ -153,6 +266,6 @@ Number of documents to skip (for pagination)
 readonly optional sort: SortSpec<T>;
 ```
 
-Defined in: [src/query-options-types.ts:216](https://github.com/g5becks/StrataDB/blob/7791c9d2c0eca8b064c87359859d54870cd83af8/src/query-options-types.ts#L216)
+Defined in: [src/query-options-types.ts:775](https://github.com/g5becks/StrataDb/blob/56b93c15dc2c602cd539356668e05ed574e9a8c7/src/query-options-types.ts#L775)
 
 Sort order for results (MongoDB-style: 1 = asc, -1 = desc)

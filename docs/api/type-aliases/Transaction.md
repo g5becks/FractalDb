@@ -6,7 +6,7 @@
 type Transaction = object;
 ```
 
-Defined in: [src/database-types.ts:155](https://github.com/g5becks/StrataDB/blob/7791c9d2c0eca8b064c87359859d54870cd83af8/src/database-types.ts#L155)
+Defined in: [src/database-types.ts:201](https://github.com/g5becks/StrataDb/blob/56b93c15dc2c602cd539356668e05ed574e9a8c7/src/database-types.ts#L201)
 
 Transaction interface for atomic multi-operation execution.
 
@@ -46,7 +46,7 @@ tx.commit(); // Must call commit, otherwise rollback on scope exit
 dispose: void;
 ```
 
-Defined in: [src/database-types.ts:182](https://github.com/g5becks/StrataDB/blob/7791c9d2c0eca8b064c87359859d54870cd83af8/src/database-types.ts#L182)
+Defined in: [src/database-types.ts:228](https://github.com/g5becks/StrataDb/blob/56b93c15dc2c602cd539356668e05ed574e9a8c7/src/database-types.ts#L228)
 
 Disposes the transaction (rolls back if not committed).
 Enables `using tx = db.transaction()` syntax.
@@ -63,7 +63,7 @@ Enables `using tx = db.transaction()` syntax.
 collection<T>(name, schema): Collection<T>;
 ```
 
-Defined in: [src/database-types.ts:163](https://github.com/g5becks/StrataDB/blob/7791c9d2c0eca8b064c87359859d54870cd83af8/src/database-types.ts#L163)
+Defined in: [src/database-types.ts:209](https://github.com/g5becks/StrataDb/blob/56b93c15dc2c602cd539356668e05ed574e9a8c7/src/database-types.ts#L209)
 
 Gets a collection within this transaction.
 
@@ -83,13 +83,13 @@ Collection name
 
 ##### schema
 
-[`SchemaDefinition`](SchemaDefinition.md)\<`T`\>
+[`SchemaDefinition`](SchemaDefinition.md)&lt;`T`&gt;
 
 Schema definition for the collection
 
 #### Returns
 
-[`Collection`](Collection.md)\<`T`\>
+[`Collection`](Collection.md)&lt;`T`&gt;
 
 Collection bound to this transaction
 
@@ -101,7 +101,7 @@ Collection bound to this transaction
 commit(): void;
 ```
 
-Defined in: [src/database-types.ts:171](https://github.com/g5becks/StrataDB/blob/7791c9d2c0eca8b064c87359859d54870cd83af8/src/database-types.ts#L171)
+Defined in: [src/database-types.ts:217](https://github.com/g5becks/StrataDb/blob/56b93c15dc2c602cd539356668e05ed574e9a8c7/src/database-types.ts#L217)
 
 Commits all changes made within this transaction.
 
@@ -117,7 +117,7 @@ Commits all changes made within this transaction.
 rollback(): void;
 ```
 
-Defined in: [src/database-types.ts:176](https://github.com/g5becks/StrataDB/blob/7791c9d2c0eca8b064c87359859d54870cd83af8/src/database-types.ts#L176)
+Defined in: [src/database-types.ts:222](https://github.com/g5becks/StrataDb/blob/56b93c15dc2c602cd539356668e05ed574e9a8c7/src/database-types.ts#L222)
 
 Rolls back all changes made within this transaction.
 
