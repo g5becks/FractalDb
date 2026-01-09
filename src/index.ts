@@ -36,6 +36,24 @@
 // biome-ignore lint/performance/noBarrelFile: library entry point requires re-exports
 export { createAbortPromise, throwIfAborted } from "./abort-utils.js"
 export type { CollectionBuilder } from "./collection-builder.js"
+// Collection event types
+export {
+  CollectionEventEmitter,
+  type CollectionEventMap,
+  type CollectionEventName,
+  type DeleteEvent,
+  type DeleteManyEvent,
+  type DropEvent,
+  type ErrorEvent,
+  type FindOneAndDeleteEvent,
+  type FindOneAndReplaceEvent,
+  type FindOneAndUpdateEvent,
+  type InsertEvent,
+  type InsertManyEvent,
+  type ReplaceEvent,
+  type UpdateEvent,
+  type UpdateManyEvent,
+} from "./collection-events.js"
 // Collection types
 export type {
   Collection,
