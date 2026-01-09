@@ -1331,7 +1331,15 @@ export class SQLiteCollection<T extends Document> implements Collection<T> {
         ) {
           const stmt = this.db.prepare(`DELETE FROM ${this.name} WHERE _id = ?`)
           const result = stmt.run(normalizedFilter._id as string)
-          return Promise.resolve(result.changes > 0)
+          const deleted = result.changes > 0
+
+          // Emit delete event after successful operation
+          this.emitEvent("delete", () => ({
+            filter,
+            deleted,
+          }))
+
+          return Promise.resolve(deleted)
         }
 
         // For complex filters: find first match, then delete by ID
@@ -1352,7 +1360,15 @@ export class SQLiteCollection<T extends Document> implements Collection<T> {
 
         const stmt = this.db.prepare(`DELETE FROM ${this.name} WHERE _id = ?`)
         const result = stmt.run(row._id)
-        return Promise.resolve(result.changes > 0)
+        const deleted = result.changes > 0
+
+        // Emit delete event after successful operation
+        this.emitEvent("delete", () => ({
+          filter,
+          deleted,
+        }))
+
+        return Promise.resolve(deleted)
       },
       this.buildRetryOptions(options?.retry, options?.signal)
     )
@@ -1668,8 +1684,16 @@ export class SQLiteCollection<T extends Document> implements Collection<T> {
           const result = stmt.run(...params)
           this.db.exec("COMMIT")
 
+          const deletedCount = result.changes
+
+          // Emit deleteMany event after successful operation
+          this.emitEvent("deleteMany", () => ({
+            filter,
+            deletedCount,
+          }))
+
           return Promise.resolve({
-            deletedCount: result.changes,
+            deletedCount,
           })
         } catch (error) {
           this.db.exec("ROLLBACK")
