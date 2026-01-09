@@ -1045,4 +1045,256 @@ describe("Collection Events - Registration Methods", () => {
       expect(events[1].document?.age).toBe(21)
     })
   })
+
+  describe("Delete Events", () => {
+    it("should emit 'delete' event when deleteOne succeeds", async () => {
+      const events: Array<{
+        filter: string | QueryFilter<TestUser>
+        deleted: boolean
+      }> = []
+      collection.on("delete", (event) => events.push(event))
+
+      const inserted = await collection.insertOne({
+        name: "Alice",
+        email: "alice@example.com",
+        age: 25,
+      })
+
+      await collection.deleteOne(inserted._id)
+
+      expect(events).toHaveLength(1)
+      expect(events[0].filter).toBe(inserted._id)
+      expect(events[0].deleted).toBe(true)
+    })
+
+    it("should emit 'delete' event with deleted: false when document not found", async () => {
+      const events: Array<{
+        filter: string | QueryFilter<TestUser>
+        deleted: boolean
+      }> = []
+      collection.on("delete", (event) => events.push(event))
+
+      await collection.deleteOne("nonexistent-id")
+
+      expect(events).toHaveLength(1)
+      expect(events[0].filter).toBe("nonexistent-id")
+      expect(events[0].deleted).toBe(false)
+    })
+
+    it("should emit delete event with QueryFilter when filter is object", async () => {
+      const events: Array<{
+        filter: string | QueryFilter<TestUser>
+        deleted: boolean
+      }> = []
+      collection.on("delete", (event) => events.push(event))
+
+      await collection.insertOne({
+        name: "Bob",
+        email: "bob@example.com",
+        age: 30,
+      })
+
+      const filter = { email: "bob@example.com" }
+      await collection.deleteOne(filter)
+
+      expect(events).toHaveLength(1)
+      expect(events[0].filter).toEqual(filter)
+      expect(events[0].deleted).toBe(true)
+    })
+
+    it("should emit delete event after document is removed", async () => {
+      let deletedFlag = false
+      collection.on("delete", (event) => {
+        deletedFlag = event.deleted
+      })
+
+      const inserted = await collection.insertOne({
+        name: "Charlie",
+        email: "charlie@example.com",
+        age: 28,
+      })
+
+      await collection.deleteOne(inserted._id)
+
+      expect(deletedFlag).toBe(true)
+      const found = await collection.findOne(inserted._id)
+      expect(found).toBeNull()
+    })
+
+    it("should emit 'deleteMany' event when deleteMany succeeds", async () => {
+      const events: Array<{
+        filter: QueryFilter<TestUser>
+        deletedCount: number
+      }> = []
+      collection.on("deleteMany", (event) => events.push(event))
+
+      await collection.insertMany([
+        { name: "User1", email: "user1@example.com", age: 20 },
+        { name: "User2", email: "user2@example.com", age: 20 },
+        { name: "User3", email: "user3@example.com", age: 25 },
+      ])
+
+      const filter = { age: 20 }
+      await collection.deleteMany(filter)
+
+      expect(events).toHaveLength(1)
+      expect(events[0].filter).toEqual(filter)
+      expect(events[0].deletedCount).toBe(2)
+    })
+
+    it("should emit 'deleteMany' with zero count when no documents match", async () => {
+      const events: Array<{
+        filter: QueryFilter<TestUser>
+        deletedCount: number
+      }> = []
+      collection.on("deleteMany", (event) => events.push(event))
+
+      const filter = { age: 999 }
+      await collection.deleteMany(filter)
+
+      expect(events).toHaveLength(1)
+      expect(events[0].deletedCount).toBe(0)
+    })
+
+    it("should emit deleteMany event after all documents are removed", async () => {
+      let deletedCount = 0
+      collection.on("deleteMany", (event) => {
+        deletedCount = event.deletedCount
+      })
+
+      await collection.insertMany([
+        { name: "A", email: "a@example.com", age: 10 },
+        { name: "B", email: "b@example.com", age: 10 },
+        { name: "C", email: "c@example.com", age: 10 },
+      ])
+
+      await collection.deleteMany({ age: 10 })
+
+      expect(deletedCount).toBe(3)
+      const remaining = await collection.find({ age: 10 })
+      expect(remaining).toHaveLength(0)
+    })
+
+    it("should emit 'findOneAndDelete' event when document is found and deleted", async () => {
+      const events: Array<{
+        filter: string | QueryFilter<TestUser>
+        document: TestUser | null
+      }> = []
+      collection.on("findOneAndDelete", (event) => events.push(event))
+
+      const inserted = await collection.insertOne({
+        name: "Dave",
+        email: "dave@example.com",
+        age: 35,
+      })
+
+      await collection.findOneAndDelete(inserted._id)
+
+      expect(events).toHaveLength(1)
+      expect(events[0].filter).toBe(inserted._id)
+      expect(events[0].document).not.toBeNull()
+      expect(events[0].document?.name).toBe("Dave")
+    })
+
+    it("should emit 'findOneAndDelete' with null document when not found", async () => {
+      const events: Array<{
+        filter: string | QueryFilter<TestUser>
+        document: TestUser | null
+      }> = []
+      collection.on("findOneAndDelete", (event) => events.push(event))
+
+      await collection.findOneAndDelete("nonexistent-id")
+
+      expect(events).toHaveLength(1)
+      expect(events[0].document).toBeNull()
+    })
+
+    it("should emit findOneAndDelete with QueryFilter", async () => {
+      const events: Array<{
+        filter: string | QueryFilter<TestUser>
+        document: TestUser | null
+      }> = []
+      collection.on("findOneAndDelete", (event) => events.push(event))
+
+      await collection.insertOne({
+        name: "Eve",
+        email: "eve@example.com",
+        age: 22,
+      })
+
+      const filter = { email: "eve@example.com" }
+      await collection.findOneAndDelete(filter)
+
+      expect(events).toHaveLength(1)
+      expect(events[0].filter).toEqual(filter)
+      expect(events[0].document?.name).toBe("Eve")
+    })
+
+    it("should emit findOneAndDelete event after document is removed", async () => {
+      let deletedDoc: TestUser | null = null
+      collection.on("findOneAndDelete", (event) => {
+        deletedDoc = event.document
+      })
+
+      const inserted = await collection.insertOne({
+        name: "Frank",
+        email: "frank@example.com",
+        age: 40,
+      })
+
+      await collection.findOneAndDelete(inserted._id)
+
+      expect(deletedDoc).not.toBeNull()
+      expect(deletedDoc?.name).toBe("Frank")
+      const found = await collection.findOne(inserted._id)
+      expect(found).toBeNull()
+    })
+
+    it("should not emit delete events when no listeners registered", async () => {
+      const inserted = await collection.insertOne({
+        name: "Silent",
+        email: "silent@example.com",
+        age: 33,
+      })
+
+      // No listeners registered
+      await collection.deleteOne(inserted._id)
+
+      await collection.insertMany([
+        { name: "S1", email: "s1@example.com", age: 11 },
+        { name: "S2", email: "s2@example.com", age: 11 },
+      ])
+      await collection.deleteMany({ age: 11 })
+
+      // Should complete without error
+      const found = await collection.findOne(inserted._id)
+      expect(found).toBeNull()
+    })
+
+    it("should emit multiple delete events for multiple deleteOne calls", async () => {
+      const events: Array<{
+        filter: string | QueryFilter<TestUser>
+        deleted: boolean
+      }> = []
+      collection.on("delete", (event) => events.push(event))
+
+      const doc1 = await collection.insertOne({
+        name: "Multi1",
+        email: "multi1@example.com",
+        age: 10,
+      })
+      const doc2 = await collection.insertOne({
+        name: "Multi2",
+        email: "multi2@example.com",
+        age: 20,
+      })
+
+      await collection.deleteOne(doc1._id)
+      await collection.deleteOne(doc2._id)
+
+      expect(events).toHaveLength(2)
+      expect(events[0].deleted).toBe(true)
+      expect(events[1].deleted).toBe(true)
+    })
+  })
 })
