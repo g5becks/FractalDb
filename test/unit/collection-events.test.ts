@@ -735,4 +735,314 @@ describe("Collection Events - Registration Methods", () => {
       expect(events[2].document.name).toBe("Third")
     })
   })
+
+  describe("Update Events", () => {
+    it("should emit 'update' event when updateOne succeeds", async () => {
+      const events: Array<{
+        filter: string | QueryFilter<TestUser>
+        update: Partial<TestUser>
+        document: TestUser | null
+        upserted: boolean
+      }> = []
+      collection.on("update", (event) => events.push(event))
+
+      // Insert a document first
+      const inserted = await collection.insertOne({
+        name: "Alice",
+        email: "alice@example.com",
+        age: 25,
+      })
+
+      // Update it
+      await collection.updateOne(inserted._id, { age: 26 })
+
+      expect(events).toHaveLength(1)
+      expect(events[0].filter).toBe(inserted._id)
+      expect(events[0].update).toEqual({ age: 26 })
+      expect(events[0].document?.age).toBe(26)
+      expect(events[0].upserted).toBe(false)
+    })
+
+    it("should emit 'update' event with upserted flag when upsert creates document", async () => {
+      const events: Array<{
+        filter: string | QueryFilter<TestUser>
+        update: Partial<TestUser>
+        document: TestUser | null
+        upserted: boolean
+      }> = []
+      collection.on("update", (event) => events.push(event))
+
+      await collection.updateOne(
+        "new-user-id",
+        { name: "Bob", email: "bob@example.com", age: 30 },
+        { upsert: true }
+      )
+
+      expect(events).toHaveLength(1)
+      expect(events[0].filter).toBe("new-user-id")
+      expect(events[0].document?.name).toBe("Bob")
+      expect(events[0].upserted).toBe(true)
+    })
+
+    it("should include updated document in update event payload", async () => {
+      const events: Array<{
+        filter: string | QueryFilter<TestUser>
+        update: Partial<TestUser>
+        document: TestUser | null
+        upserted: boolean
+      }> = []
+      collection.on("update", (event) => events.push(event))
+
+      const inserted = await collection.insertOne({
+        name: "Charlie",
+        email: "charlie@example.com",
+        age: 28,
+      })
+
+      await collection.updateOne(inserted._id, { age: 29, name: "Charles" })
+
+      expect(events).toHaveLength(1)
+      expect(events[0].document).not.toBeNull()
+      expect(events[0].document?._id).toBe(inserted._id)
+      expect(events[0].document?.name).toBe("Charles")
+      expect(events[0].document?.age).toBe(29)
+      expect(events[0].document?.email).toBe("charlie@example.com")
+    })
+
+    it("should emit update event with QueryFilter when filter is object", async () => {
+      const events: Array<{
+        filter: string | QueryFilter<TestUser>
+        update: Partial<TestUser>
+        document: TestUser | null
+        upserted: boolean
+      }> = []
+      collection.on("update", (event) => events.push(event))
+
+      await collection.insertOne({
+        name: "Dave",
+        email: "dave@example.com",
+        age: 35,
+      })
+
+      const filter = { email: "dave@example.com" }
+      await collection.updateOne(filter, { age: 36 })
+
+      expect(events).toHaveLength(1)
+      expect(events[0].filter).toEqual(filter)
+      expect(events[0].update).toEqual({ age: 36 })
+    })
+
+    it("should emit update event after document is persisted", async () => {
+      let updatedDoc: TestUser | null = null
+      collection.on("update", (event) => {
+        updatedDoc = event.document
+      })
+
+      const inserted = await collection.insertOne({
+        name: "Eve",
+        email: "eve@example.com",
+        age: 22,
+      })
+
+      await collection.updateOne(inserted._id, { age: 23 })
+
+      // Verify the document was persisted before event fired
+      expect(updatedDoc).not.toBeNull()
+      const found = await collection.findOne(inserted._id)
+      expect(found?.age).toBe(23)
+      expect(updatedDoc?.age).toBe(23)
+    })
+
+    it("should emit 'updateMany' event when updateMany succeeds", async () => {
+      const events: Array<{
+        filter: QueryFilter<TestUser>
+        update: Partial<TestUser>
+        matchedCount: number
+        modifiedCount: number
+      }> = []
+      collection.on("updateMany", (event) => events.push(event))
+
+      // Insert multiple documents
+      await collection.insertMany([
+        { name: "User1", email: "user1@example.com", age: 20 },
+        { name: "User2", email: "user2@example.com", age: 20 },
+        { name: "User3", email: "user3@example.com", age: 25 },
+      ])
+
+      // Update documents matching filter
+      const filter = { age: 20 }
+      await collection.updateMany(filter, { age: 21 })
+
+      expect(events).toHaveLength(1)
+      expect(events[0].filter).toEqual(filter)
+      expect(events[0].update).toEqual({ age: 21 })
+      expect(events[0].matchedCount).toBe(2)
+      expect(events[0].modifiedCount).toBe(2)
+    })
+
+    it("should emit 'updateMany' with zero counts when no documents match", async () => {
+      const events: Array<{
+        filter: QueryFilter<TestUser>
+        update: Partial<TestUser>
+        matchedCount: number
+        modifiedCount: number
+      }> = []
+      collection.on("updateMany", (event) => events.push(event))
+
+      const filter = { age: 999 }
+      await collection.updateMany(filter, { age: 1000 })
+
+      expect(events).toHaveLength(1)
+      expect(events[0].matchedCount).toBe(0)
+      expect(events[0].modifiedCount).toBe(0)
+    })
+
+    it("should emit updateMany event after all documents are persisted", async () => {
+      let eventFired = false
+      collection.on("updateMany", () => {
+        eventFired = true
+      })
+
+      await collection.insertMany([
+        { name: "A", email: "a@example.com", age: 10 },
+        { name: "B", email: "b@example.com", age: 10 },
+        { name: "C", email: "c@example.com", age: 10 },
+      ])
+
+      await collection.updateMany({ age: 10 }, { age: 11 })
+
+      expect(eventFired).toBe(true)
+      const updated = await collection.find({ age: 11 })
+      expect(updated).toHaveLength(3)
+    })
+
+    it("should emit 'findOneAndUpdate' event when document is found and updated", async () => {
+      const events: Array<{
+        filter: string | QueryFilter<TestUser>
+        update: Partial<TestUser>
+        document: TestUser | null
+        upserted: boolean
+      }> = []
+      collection.on("findOneAndUpdate", (event) => events.push(event))
+
+      const inserted = await collection.insertOne({
+        name: "Frank",
+        email: "frank@example.com",
+        age: 40,
+      })
+
+      await collection.findOneAndUpdate(inserted._id, { age: 41 })
+
+      expect(events).toHaveLength(1)
+      expect(events[0].filter).toBe(inserted._id)
+      expect(events[0].update).toEqual({ age: 41 })
+      expect(events[0].document?.age).toBe(41)
+      expect(events[0].upserted).toBe(false)
+    })
+
+    it("should emit 'findOneAndUpdate' with 'before' document when returnDocument is 'before'", async () => {
+      const events: Array<{
+        filter: string | QueryFilter<TestUser>
+        update: Partial<TestUser>
+        document: TestUser | null
+        upserted: boolean
+      }> = []
+      collection.on("findOneAndUpdate", (event) => events.push(event))
+
+      const inserted = await collection.insertOne({
+        name: "Grace",
+        email: "grace@example.com",
+        age: 50,
+      })
+
+      await collection.findOneAndUpdate(
+        inserted._id,
+        { age: 51 },
+        { returnDocument: "before" }
+      )
+
+      expect(events).toHaveLength(1)
+      expect(events[0].document?.age).toBe(50) // Original age
+    })
+
+    it("should emit 'findOneAndUpdate' with upserted flag when upsert creates document", async () => {
+      const events: Array<{
+        filter: string | QueryFilter<TestUser>
+        update: Partial<TestUser>
+        document: TestUser | null
+        upserted: boolean
+      }> = []
+      collection.on("findOneAndUpdate", (event) => events.push(event))
+
+      await collection.findOneAndUpdate(
+        "new-id",
+        { name: "Heidi", email: "heidi@example.com", age: 27 },
+        { upsert: true, returnDocument: "after" }
+      )
+
+      expect(events).toHaveLength(1)
+      expect(events[0].upserted).toBe(true)
+      expect(events[0].document?.name).toBe("Heidi")
+    })
+
+    it("should emit 'findOneAndUpdate' with null document when not found and no upsert", async () => {
+      const events: Array<{
+        filter: string | QueryFilter<TestUser>
+        update: Partial<TestUser>
+        document: TestUser | null
+        upserted: boolean
+      }> = []
+      collection.on("findOneAndUpdate", (event) => events.push(event))
+
+      await collection.findOneAndUpdate("nonexistent-id", { age: 100 })
+
+      expect(events).toHaveLength(1)
+      expect(events[0].document).toBeNull()
+      expect(events[0].upserted).toBe(false)
+    })
+
+    it("should not emit update events when no listeners registered", async () => {
+      const inserted = await collection.insertOne({
+        name: "Silent",
+        email: "silent@example.com",
+        age: 33,
+      })
+
+      // No listeners registered
+      await collection.updateOne(inserted._id, { age: 34 })
+      await collection.updateMany({ age: 34 }, { age: 35 })
+
+      // Should complete without error
+      const found = await collection.findOne(inserted._id)
+      expect(found?.age).toBe(35)
+    })
+
+    it("should emit multiple update events for multiple updateOne calls", async () => {
+      const events: Array<{
+        filter: string | QueryFilter<TestUser>
+        update: Partial<TestUser>
+        document: TestUser | null
+        upserted: boolean
+      }> = []
+      collection.on("update", (event) => events.push(event))
+
+      const doc1 = await collection.insertOne({
+        name: "Multi1",
+        email: "multi1@example.com",
+        age: 10,
+      })
+      const doc2 = await collection.insertOne({
+        name: "Multi2",
+        email: "multi2@example.com",
+        age: 20,
+      })
+
+      await collection.updateOne(doc1._id, { age: 11 })
+      await collection.updateOne(doc2._id, { age: 21 })
+
+      expect(events).toHaveLength(2)
+      expect(events[0].document?.age).toBe(11)
+      expect(events[1].document?.age).toBe(21)
+    })
+  })
 })

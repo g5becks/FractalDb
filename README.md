@@ -30,7 +30,7 @@ Unlike MongoDB or other client-server databases, StrataDB runs **in-process** wi
 bun add stratadb
 ```
 
-Requires [Bun](https://bun.sh) runtime.
+Requires [Bun](https://bun.com) runtime.
 
 > **Note:** StrataDB is ESM-only. It does not provide CommonJS exports.
 
@@ -178,13 +178,13 @@ db.collection<User>('users')
 
 ## Documentation
 
-See the [documentation](https://g5becks.github.io/StrataDB/) for complete guides:
+See the [documentation](https://g5becks.github.io/StrataDb/) for complete guides:
 
-- [Getting Started](https://g5becks.github.io/StrataDB/guide/getting-started)
-- [Collections](https://g5becks.github.io/StrataDB/guide/collections)
-- [Queries](https://g5becks.github.io/StrataDB/guide/queries)
-- [Schemas](https://g5becks.github.io/StrataDB/guide/schemas)
-- [Transactions](https://g5becks.github.io/StrataDB/guide/transactions)
+- [Getting Started](https://g5becks.github.io/StrataDb/guide/getting-started)
+- [Collections](https://g5becks.github.io/StrataDb/guide/collections)
+- [Queries](https://g5becks.github.io/StrataDb/guide/queries)
+- [Schemas](https://g5becks.github.io/StrataDb/guide/schemas)
+- [Transactions](https://g5becks.github.io/StrataDb/guide/transactions)
 
 ## Development
 

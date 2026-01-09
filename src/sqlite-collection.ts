@@ -1583,6 +1583,14 @@ export class SQLiteCollection<T extends Document> implements Collection<T> {
         const matchedCount = rows.length
 
         if (matchedCount === 0) {
+          // Emit updateMany event even when no matches
+          this.emitEvent("updateMany", () => ({
+            filter,
+            update: update as Partial<T>,
+            matchedCount: 0,
+            modifiedCount: 0,
+          }))
+
           return Promise.resolve({
             matchedCount: 0,
             modifiedCount: 0,
