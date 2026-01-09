@@ -12,6 +12,7 @@
  * @packageDocumentation
  */
 
+import { EventEmitter } from "node:events"
 import type { Document } from "./core-types.js"
 import type { QueryFilter } from "./query-types.js"
 
@@ -330,3 +331,96 @@ export type ErrorEvent = {
   /** Additional context about the operation */
   readonly context?: unknown
 }
+
+/**
+ * Map of event names to their payload types for a collection.
+ *
+ * @typeParam T - The document type extending Document
+ *
+ * @remarks
+ * This type defines all available events for a collection and their
+ * corresponding payload types. Each event is mapped to a tuple containing
+ * the event payload type, following the EventEmitter pattern.
+ *
+ * The event map enables type-safe event emission and listening:
+ * - TypeScript can validate event names
+ * - Event handler parameters are automatically typed
+ * - Autocomplete works for both event names and payload properties
+ *
+ * @example
+ * ```typescript
+ * // Type-safe event listening
+ * collection.on('insert', (event) => {
+ *   // event is automatically typed as InsertEvent<T>
+ *   console.log(event.document._id)
+ * })
+ *
+ * collection.on('updateMany', (event) => {
+ *   // event is automatically typed as UpdateManyEvent<T>
+ *   console.log(`Modified ${event.modifiedCount} documents`)
+ * })
+ * ```
+ */
+export type CollectionEventMap<T extends Document> = {
+  insert: [InsertEvent<T>]
+  insertMany: [InsertManyEvent<T>]
+  update: [UpdateEvent<T>]
+  updateMany: [UpdateManyEvent<T>]
+  replace: [ReplaceEvent<T>]
+  delete: [DeleteEvent<T>]
+  deleteMany: [DeleteManyEvent<T>]
+  findOneAndDelete: [FindOneAndDeleteEvent<T>]
+  findOneAndUpdate: [FindOneAndUpdateEvent<T>]
+  findOneAndReplace: [FindOneAndReplaceEvent<T>]
+  drop: [DropEvent]
+  error: [ErrorEvent]
+}
+
+/**
+ * Type-safe event names for collections.
+ *
+ * @remarks
+ * Union type of all valid event names that can be used with collection
+ * event listeners. This ensures that only valid event names can be passed
+ * to methods like `on()`, `once()`, `off()`, etc.
+ *
+ * @example
+ * ```typescript
+ * const eventName: CollectionEventName = 'insert' // Valid
+ * const invalid: CollectionEventName = 'invalid' // Type error
+ * ```
+ */
+export type CollectionEventName = keyof CollectionEventMap<Document>
+
+/**
+ * Typed EventEmitter for collection events.
+ *
+ * @typeParam T - The document type extending Document
+ *
+ * @remarks
+ * This class extends Node.js EventEmitter with type-safe event handling
+ * for collection operations. It uses the CollectionEventMap to provide
+ * full TypeScript type safety for event names and payloads.
+ *
+ * The emitter is used internally by SQLiteCollection and should not be
+ * instantiated directly by users. Collections automatically create and
+ * manage their event emitters lazily (on first listener registration).
+ *
+ * @example
+ * ```typescript
+ * // Used internally by SQLiteCollection
+ * private _emitter?: CollectionEventEmitter<T>
+ *
+ * // Lazily initialized on first listener registration
+ * on<K extends CollectionEventName>(event: K, listener: (...args: CollectionEventMap<T>[K]) => void) {
+ *   if (!this._emitter) {
+ *     this._emitter = new CollectionEventEmitter<T>()
+ *   }
+ *   this._emitter.on(event, listener)
+ *   return this
+ * }
+ * ```
+ */
+export class CollectionEventEmitter<T extends Document> extends EventEmitter<
+  CollectionEventMap<T>
+> {}
