@@ -1361,4 +1361,11 @@ export type Collection<T extends Document> = {
   listeners<E extends CollectionEventName>(
     event: E
   ): ((...args: CollectionEventMap<T>[E]) => void)[]
+
+  /**
+   * Cleans up event emitter resources.
+   * Called internally when collection is dropped or database is closed.
+   * @internal
+   */
+  cleanupEvents(): void
 }

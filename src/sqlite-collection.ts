@@ -2051,10 +2051,25 @@ export class SQLiteCollection<T extends Document> implements Collection<T> {
           name: this.name,
         }))
 
+        // Clean up event resources after emitting drop event
+        this.cleanupEvents()
+
         return Promise.resolve()
       },
       this.buildRetryOptions(options?.retry, options?.signal)
     )
+  }
+
+  /**
+   * Cleans up event emitter resources.
+   * Called internally when collection is dropped or database is closed.
+   * @internal
+   */
+  cleanupEvents(): void {
+    if (this._emitter) {
+      this._emitter.removeAllListeners()
+      this._emitter = null
+    }
   }
 
   /**
