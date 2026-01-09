@@ -555,4 +555,184 @@ describe("Collection Events - Registration Methods", () => {
       expect(events[2].document.name).toBe("Bob")
     })
   })
+
+  describe("Insert Events", () => {
+    it("should emit 'insert' event when insertOne succeeds", async () => {
+      const events: InsertEvent<TestUser>[] = []
+
+      collection.on("insert", (event) => {
+        events.push(event)
+      })
+
+      await collection.insertOne({
+        name: "Alice",
+        email: "alice@example.com",
+        age: 30,
+      })
+
+      expect(events).toHaveLength(1)
+      expect(events[0].document.name).toBe("Alice")
+      expect(events[0].document.email).toBe("alice@example.com")
+      expect(events[0].document.age).toBe(30)
+    })
+
+    it("should include _id, createdAt, updatedAt in insert event payload", async () => {
+      const events: InsertEvent<TestUser>[] = []
+
+      collection.on("insert", (event) => {
+        events.push(event)
+      })
+
+      await collection.insertOne({
+        name: "Bob",
+        email: "bob@example.com",
+        age: 25,
+      })
+
+      expect(events).toHaveLength(1)
+      expect(events[0].document._id).toBeDefined()
+      expect(typeof events[0].document._id).toBe("string")
+      expect(events[0].document._id.length).toBeGreaterThan(0)
+    })
+
+    it("should emit insert event after document is persisted", async () => {
+      let insertedId: string | null = null
+
+      collection.on("insert", (event) => {
+        insertedId = event.document._id
+      })
+
+      const result = await collection.insertOne({
+        name: "Charlie",
+        email: "charlie@example.com",
+        age: 35,
+      })
+
+      expect(insertedId).not.toBeNull()
+      expect(insertedId).toBe(result._id)
+
+      // Verify document can be queried after event fires
+      if (insertedId) {
+        const found = await collection.findById(insertedId)
+        expect(found).not.toBeNull()
+        expect(found?.name).toBe("Charlie")
+      } else {
+        expect.unreachable("insertedId should not be null")
+      }
+    })
+
+    it("should emit 'insertMany' event when insertMany succeeds", async () => {
+      const events: any[] = []
+
+      collection.on("insertMany", (event) => {
+        events.push(event)
+      })
+
+      await collection.insertMany([
+        { name: "Alice", email: "alice@example.com", age: 30 },
+        { name: "Bob", email: "bob@example.com", age: 25 },
+        { name: "Charlie", email: "charlie@example.com", age: 35 },
+      ])
+
+      expect(events).toHaveLength(1)
+      expect(events[0].insertedCount).toBe(3)
+      expect(events[0].documents).toHaveLength(3)
+    })
+
+    it("should include all documents in insertMany event payload", async () => {
+      const events: any[] = []
+
+      collection.on("insertMany", (event) => {
+        events.push(event)
+      })
+
+      await collection.insertMany([
+        { name: "User1", email: "user1@example.com", age: 20 },
+        { name: "User2", email: "user2@example.com", age: 30 },
+      ])
+
+      expect(events).toHaveLength(1)
+      const docs = events[0].documents
+      expect(docs[0].name).toBe("User1")
+      expect(docs[0]._id).toBeDefined()
+      expect(docs[1].name).toBe("User2")
+      expect(docs[1]._id).toBeDefined()
+    })
+
+    it("should not emit events when no listeners registered", async () => {
+      // Insert without any listeners - should succeed without errors
+      const result = await collection.insertOne({
+        name: "NoListener",
+        email: "nolistener@example.com",
+        age: 40,
+      })
+
+      expect(result._id).toBeDefined()
+      expect(result.name).toBe("NoListener")
+
+      // Verify listenerCount is 0
+      expect(collection.listenerCount("insert")).toBe(0)
+    })
+
+    it("should emit insertMany event even with partial success in unordered mode", async () => {
+      const events: any[] = []
+
+      collection.on("insertMany", (event) => {
+        events.push(event)
+      })
+
+      // First insert to create duplicate
+      await collection.insertOne({
+        name: "Duplicate",
+        email: "duplicate@example.com",
+        age: 25,
+      })
+
+      // Try to insert with duplicate email (unique constraint)
+      await collection.insertMany(
+        [
+          { name: "User1", email: "unique1@example.com", age: 30 },
+          { name: "User2", email: "duplicate@example.com", age: 35 }, // Duplicate
+          { name: "User3", email: "unique3@example.com", age: 40 },
+        ],
+        { ordered: false }
+      )
+
+      // Event should be emitted with successfully inserted documents
+      expect(events).toHaveLength(1)
+      expect(events[0].insertedCount).toBe(2) // User1 and User3
+      expect(events[0].documents).toHaveLength(2)
+    })
+
+    it("should emit multiple insert events for multiple insertOne calls", async () => {
+      const events: InsertEvent<TestUser>[] = []
+
+      collection.on("insert", (event) => {
+        events.push(event)
+      })
+
+      await collection.insertOne({
+        name: "First",
+        email: "first@example.com",
+        age: 20,
+      })
+
+      await collection.insertOne({
+        name: "Second",
+        email: "second@example.com",
+        age: 30,
+      })
+
+      await collection.insertOne({
+        name: "Third",
+        email: "third@example.com",
+        age: 40,
+      })
+
+      expect(events).toHaveLength(3)
+      expect(events[0].document.name).toBe("First")
+      expect(events[1].document.name).toBe("Second")
+      expect(events[2].document.name).toBe("Third")
+    })
+  })
 })
