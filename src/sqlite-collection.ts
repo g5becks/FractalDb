@@ -1051,6 +1051,9 @@ export class SQLiteCollection<T extends Document> implements Collection<T> {
           )
           stmt.run(docId, body, now, now)
 
+          // Emit insert event after successful operation
+          this.emitEvent("insert", () => ({ document: fullDoc }))
+
           return Promise.resolve(fullDoc)
         } catch (error) {
           // Handle unique constraint violations
@@ -1459,6 +1462,12 @@ export class SQLiteCollection<T extends Document> implements Collection<T> {
             }
           }
         }
+
+        // Emit insertMany event after successful operation
+        this.emitEvent("insertMany", () => ({
+          documents: insertedDocs,
+          insertedCount: insertedDocs.length,
+        }))
 
         return Promise.resolve({
           documents: insertedDocs,
