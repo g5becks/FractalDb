@@ -1925,4 +1925,59 @@ export class SQLiteCollection<T extends Document> implements Collection<T> {
 
     throw new ValidationError("Document validation failed", undefined, doc)
   }
+
+  // ===== Event Methods (stub implementations - to be completed in task-190-191) =====
+
+  on<E extends import("./collection-events.js").CollectionEventName>(
+    _event: E,
+    _listener: (
+      ...args: import("./collection-events.js").CollectionEventMap<T>[E]
+    ) => void
+  ): Collection<T> {
+    // TODO: Implement in task-190
+    return this
+  }
+
+  once<E extends import("./collection-events.js").CollectionEventName>(
+    _event: E,
+    _listener: (
+      ...args: import("./collection-events.js").CollectionEventMap<T>[E]
+    ) => void
+  ): Collection<T> {
+    // TODO: Implement in task-191
+    return this
+  }
+
+  off<E extends import("./collection-events.js").CollectionEventName>(
+    _event: E,
+    _listener: (
+      ...args: import("./collection-events.js").CollectionEventMap<T>[E]
+    ) => void
+  ): Collection<T> {
+    // TODO: Implement in task-191
+    return this
+  }
+
+  removeAllListeners(
+    _event?: import("./collection-events.js").CollectionEventName
+  ): Collection<T> {
+    // TODO: Implement in task-191
+    return this
+  }
+
+  listenerCount(
+    _event: import("./collection-events.js").CollectionEventName
+  ): number {
+    // TODO: Implement in task-191
+    return 0
+  }
+
+  listeners<E extends import("./collection-events.js").CollectionEventName>(
+    _event: E
+  ): ((
+    ...args: import("./collection-events.js").CollectionEventMap<T>[E]
+  ) => void)[] {
+    // TODO: Implement in task-191
+    return []
+  }
 }
