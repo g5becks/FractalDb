@@ -5,6 +5,82 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.0] - 2026-01-09
+
+### Added
+
+- **Collection Events** - EventEmitter support for reactive document lifecycle events:
+  ```typescript
+  const users = db.collection('users', schema)
+  
+  // Listen for document changes
+  users.on('insert', (event) => {
+    console.log('New user:', event.document._id)
+    auditLog.record('user.created', event.document)
+  })
+  
+  users.on('update', (event) => {
+    cache.invalidate(`user:${event.document?._id}`)
+  })
+  
+  users.on('delete', (event) => {
+    console.log('User deleted:', event.deleted)
+  })
+  
+  // One-time listeners
+  users.once('insert', (event) => {
+    console.log('First user created!')
+  })
+  
+  // Remove listeners
+  users.off('insert', myListener)
+  users.removeAllListeners('update')
+  ```
+
+- **Event Types** - Full TypeScript support for type-safe event payloads:
+  - `insert` - Fired after `insertOne()` with `{ document }`
+  - `insertMany` - Fired after `insertMany()` with `{ documents, insertedCount }`
+  - `update` - Fired after `updateOne()` with `{ filter, update, document, upserted }`
+  - `updateMany` - Fired after `updateMany()` with `{ filter, update, matchedCount, modifiedCount }`
+  - `replace` - Fired after `replaceOne()` with `{ filter, document }`
+  - `delete` - Fired after `deleteOne()` with `{ filter, deleted }`
+  - `deleteMany` - Fired after `deleteMany()` with `{ filter, deletedCount }`
+  - `findOneAndDelete` - Fired after `findOneAndDelete()` with `{ filter, document }`
+  - `findOneAndUpdate` - Fired after `findOneAndUpdate()` with `{ filter, update, document, upserted }`
+  - `findOneAndReplace` - Fired after `findOneAndReplace()` with `{ filter, document, upserted }`
+  - `drop` - Fired after `drop()` with `{ name }`
+  - `error` - Fired on operation errors with `{ operation, error, context }`
+
+- **Event API Methods** - Standard EventEmitter interface on collections:
+  - `on(event, listener)` - Register event listener
+  - `once(event, listener)` - Register one-time listener
+  - `off(event, listener)` - Remove event listener
+  - `removeAllListeners(event?)` - Remove all listeners
+  - `listenerCount(event)` - Get listener count
+  - `listeners(event)` - Get all listeners for event
+
+- **New exported types**:
+  - `InsertEvent<T>`, `InsertManyEvent<T>` - Insert event payloads
+  - `UpdateEvent<T>`, `UpdateManyEvent<T>` - Update event payloads
+  - `DeleteEvent<T>`, `DeleteManyEvent<T>` - Delete event payloads
+  - `ReplaceEvent<T>` - Replace event payload
+  - `FindOneAndDeleteEvent<T>`, `FindOneAndUpdateEvent<T>`, `FindOneAndReplaceEvent<T>` - Atomic operation payloads
+  - `DropEvent`, `ErrorEvent` - Drop and error event payloads
+  - `CollectionEventMap<T>` - Type map for all events
+  - `CollectionEventName` - Union type of event names
+  - `CollectionEventEmitter<T>` - Typed EventEmitter class
+
+### Performance
+
+- **Lazy initialization** - EventEmitter only created when first listener is registered
+- **Zero overhead** - No performance impact when events are not used
+- **Optimized emission** - Listener count checked before creating payload objects
+
+### Resource Management
+
+- Event listeners automatically cleaned up when collection is dropped
+- Database `close()` cleans up all collection event listeners
+
 ## [0.4.0] - 2026-01-06
 
 ### Added
