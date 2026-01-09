@@ -4,6 +4,7 @@ import type { InsertEvent } from "../../src/collection-events.js"
 import type { Document } from "../../src/core-types.js"
 import { createSchema } from "../../src/schema-builder.js"
 import { SQLiteCollection } from "../../src/sqlite-collection.js"
+import { Strata } from "../../src/stratadb.js"
 
 type TestUser = Document<{
   name: string
@@ -1789,6 +1790,163 @@ describe("Collection Events - Registration Methods", () => {
 
       collection.removeAllListeners("insert")
       expect(collection.listenerCount("insert")).toBe(0)
+    })
+
+    describe("Event Cleanup", () => {
+      it("should clear all listeners after drop()", async () => {
+        collection.on("insert", () => {
+          // Empty listener for testing
+        })
+        collection.on("update", () => {
+          // Empty listener for testing
+        })
+        collection.on("delete", () => {
+          // Empty listener for testing
+        })
+
+        expect(collection.listenerCount("insert")).toBeGreaterThan(0)
+        expect(collection.listenerCount("update")).toBeGreaterThan(0)
+        expect(collection.listenerCount("delete")).toBeGreaterThan(0)
+
+        await collection.drop()
+
+        expect(collection.listenerCount("insert")).toBe(0)
+        expect(collection.listenerCount("update")).toBe(0)
+        expect(collection.listenerCount("delete")).toBe(0)
+      })
+
+      it("should fire drop event before cleanup", async () => {
+        let dropEventFired = false
+        let listenerCountAtEventTime = -1
+
+        collection.on("drop", () => {
+          dropEventFired = true
+          listenerCountAtEventTime = collection.listenerCount("drop")
+        })
+
+        await collection.drop()
+
+        expect(dropEventFired).toBe(true)
+        expect(listenerCountAtEventTime).toBe(1) // Listener still exists during event
+        expect(collection.listenerCount("drop")).toBe(0) // Cleaned up after event
+      })
+
+      it("should allow new listeners after drop (emitter recreated on next on())", async () => {
+        collection.on("insert", () => {
+          // Empty listener for testing
+        })
+        await collection.drop()
+
+        expect(collection.listenerCount("insert")).toBe(0)
+
+        // Re-register listener (emitter recreated)
+        collection.on("insert", () => {
+          // Empty listener for testing
+        })
+        expect(collection.listenerCount("insert")).toBe(1)
+      })
+
+      it("should clean up collection listeners on database close", () => {
+        const db2 = new Strata({ database: ":memory:" })
+        const schema2 = createSchema<TestUser>()
+          .field("name", { type: "TEXT", indexed: true })
+          .field("email", { type: "TEXT", indexed: true, unique: true })
+          .field("age", { type: "INTEGER", indexed: true })
+          .build()
+        const collection2 = db2.collection<TestUser>("users", schema2)
+
+        const events: Array<{ document: TestUser }> = []
+        collection2.on("insert", (event) => events.push(event))
+
+        expect(collection2.listenerCount("insert")).toBe(1)
+
+        db2.close()
+
+        expect(collection2.listenerCount("insert")).toBe(0)
+      })
+
+      it("should not throw error when dropping collection with no listeners", async () => {
+        // No listeners registered
+        await collection.drop()
+
+        // Should complete without error
+        expect(true).toBe(true)
+      })
+
+      it("should not throw error when closing database with no event listeners", () => {
+        // No listeners registered on any collection
+        db.close()
+
+        // Should complete without error
+        expect(true).toBe(true)
+      })
+
+      it("should clean up multiple collections on database close", () => {
+        const db2 = new Strata({ database: ":memory:" })
+        const schema2 = createSchema<TestUser>()
+          .field("name", { type: "TEXT", indexed: true })
+          .field("email", { type: "TEXT", indexed: true, unique: true })
+          .field("age", { type: "INTEGER", indexed: true })
+          .build()
+        const collection1 = db2.collection<TestUser>("users1", schema2)
+        const collection2 = db2.collection<TestUser>("users2", schema2)
+
+        collection1.on("insert", () => {
+          // Empty listener for testing
+        })
+        collection2.on("insert", () => {
+          // Empty listener for testing
+        })
+        collection2.on("update", () => {
+          // Empty listener for testing
+        })
+
+        expect(collection1.listenerCount("insert")).toBe(1)
+        expect(collection2.listenerCount("insert")).toBe(1)
+        expect(collection2.listenerCount("update")).toBe(1)
+
+        db2.close()
+
+        expect(collection1.listenerCount("insert")).toBe(0)
+        expect(collection2.listenerCount("insert")).toBe(0)
+        expect(collection2.listenerCount("update")).toBe(0)
+      })
+
+      it("should handle cleanup when listeners exist on dropped collection", async () => {
+        const insertEvents: Array<{ document: TestUser }> = []
+        const updateEvents: Array<{
+          filter: string | QueryFilter<TestUser>
+          update: Partial<TestUser>
+          document: TestUser | null
+          upserted: boolean
+        }> = []
+
+        collection.on("insert", (event) => insertEvents.push(event))
+        collection.on("update", (event) => updateEvents.push(event))
+
+        await collection.drop()
+
+        // Verify all listener counts are 0
+        expect(collection.listenerCount("insert")).toBe(0)
+        expect(collection.listenerCount("update")).toBe(0)
+        expect(collection.listenerCount("delete")).toBe(0)
+        expect(collection.listenerCount("drop")).toBe(0)
+      })
+
+      it("should verify listeners() returns empty array after cleanup", async () => {
+        collection.on("insert", () => {
+          // Empty listener for testing
+        })
+        collection.on("insert", () => {
+          // Empty listener for testing
+        })
+
+        expect(collection.listeners("insert")).toHaveLength(2)
+
+        await collection.drop()
+
+        expect(collection.listeners("insert")).toHaveLength(0)
+      })
     })
   })
 })
