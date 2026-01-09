@@ -31,6 +31,7 @@ export default defineConfigWithTheme<ThemeConfig>({
             { text: "Documents", link: "/guide/documents" },
             { text: "Schemas", link: "/guide/schemas" },
             { text: "Collections", link: "/guide/collections" },
+            { text: "Events", link: "/guide/events" },
             { text: "Queries", link: "/guide/queries" },
           ],
         },
