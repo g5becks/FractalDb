@@ -1,6 +1,11 @@
 import type { Database as SQLiteDatabase, SQLQueryBindings } from "bun:sqlite"
 import stringify from "fast-safe-stringify"
 import { throwIfAborted } from "./abort-utils.js"
+import {
+  CollectionEventEmitter,
+  type CollectionEventMap,
+  type CollectionEventName,
+} from "./collection-events.js"
 import type {
   Collection,
   DeleteResult,
@@ -112,6 +117,55 @@ export class SQLiteCollection<T extends Document> implements Collection<T> {
 
   /** Merged retry options for this collection */
   private readonly retryOptions: RetryOptions | undefined
+
+  /** Lazily initialized event emitter for collection events */
+  private _emitter: CollectionEventEmitter<T> | null = null
+
+  /**
+   * Lazy getter for the event emitter.
+   * Creates the emitter only when first accessed.
+   */
+  private get emitter(): CollectionEventEmitter<T> {
+    if (!this._emitter) {
+      this._emitter = new CollectionEventEmitter<T>()
+    }
+    return this._emitter
+  }
+
+  /**
+   * Optimized event emission helper.
+   *
+   * @param event - The event name to emit
+   * @param createPayload - Factory function that creates the event payload
+   *
+   * @remarks
+   * This method implements performance optimizations:
+   * 1. Early return if no emitter exists (no listeners registered)
+   * 2. Early return if no listeners for this specific event
+   * 3. Deferred payload creation using factory function pattern
+   *
+   * The factory pattern ensures payload objects are only created when
+   * listeners actually exist, avoiding unnecessary object allocation.
+   */
+  private emitEvent<E extends CollectionEventName>(
+    event: E,
+    createPayload: () => CollectionEventMap<T>[E][0]
+  ): void {
+    // Fast path: no emitter means no listeners at all
+    if (!this._emitter) {
+      return
+    }
+
+    // Fast path: no listeners for this specific event
+    if (this._emitter.listenerCount(event) === 0) {
+      return
+    }
+
+    // Only create payload if listeners exist
+    const payload = createPayload()
+    // @ts-expect-error - EventEmitter's emit typing is complex with tuple types
+    this._emitter.emit(event, payload)
+  }
 
   /**
    * Builds retry options for an operation, merging collection and operation-level options.
@@ -1928,56 +1982,55 @@ export class SQLiteCollection<T extends Document> implements Collection<T> {
 
   // ===== Event Methods (stub implementations - to be completed in task-190-191) =====
 
-  on<E extends import("./collection-events.js").CollectionEventName>(
-    _event: E,
-    _listener: (
-      ...args: import("./collection-events.js").CollectionEventMap<T>[E]
-    ) => void
+  on<E extends CollectionEventName>(
+    event: E,
+    listener: (...args: CollectionEventMap<T>[E]) => void
   ): Collection<T> {
-    // TODO: Implement in task-190
+    // @ts-expect-error - EventEmitter's generic typing is complex with tuple types
+    this.emitter.on(event, listener)
     return this
   }
 
-  once<E extends import("./collection-events.js").CollectionEventName>(
-    _event: E,
-    _listener: (
-      ...args: import("./collection-events.js").CollectionEventMap<T>[E]
-    ) => void
+  once<E extends CollectionEventName>(
+    event: E,
+    listener: (...args: CollectionEventMap<T>[E]) => void
   ): Collection<T> {
-    // TODO: Implement in task-191
+    // @ts-expect-error - EventEmitter's generic typing is complex with tuple types
+    this.emitter.once(event, listener)
     return this
   }
 
-  off<E extends import("./collection-events.js").CollectionEventName>(
-    _event: E,
-    _listener: (
-      ...args: import("./collection-events.js").CollectionEventMap<T>[E]
-    ) => void
+  off<E extends CollectionEventName>(
+    event: E,
+    listener: (...args: CollectionEventMap<T>[E]) => void
   ): Collection<T> {
-    // TODO: Implement in task-191
+    if (this._emitter) {
+      // @ts-expect-error - EventEmitter's generic typing is complex with tuple types
+      this._emitter.off(event, listener)
+    }
     return this
   }
 
-  removeAllListeners(
-    _event?: import("./collection-events.js").CollectionEventName
-  ): Collection<T> {
-    // TODO: Implement in task-191
+  removeAllListeners(event?: CollectionEventName): Collection<T> {
+    if (this._emitter) {
+      this._emitter.removeAllListeners(event)
+    }
     return this
   }
 
-  listenerCount(
-    _event: import("./collection-events.js").CollectionEventName
-  ): number {
-    // TODO: Implement in task-191
-    return 0
+  listenerCount(event: CollectionEventName): number {
+    if (!this._emitter) {
+      return 0
+    }
+    return this._emitter.listenerCount(event)
   }
 
-  listeners<E extends import("./collection-events.js").CollectionEventName>(
-    _event: E
-  ): ((
-    ...args: import("./collection-events.js").CollectionEventMap<T>[E]
-  ) => void)[] {
-    // TODO: Implement in task-191
-    return []
+  listeners<E extends CollectionEventName>(
+    event: E
+  ): ((...args: CollectionEventMap<T>[E]) => void)[] {
+    if (!this._emitter) {
+      return []
+    }
+    return this._emitter.listeners(event)
   }
 }
