@@ -233,6 +233,33 @@ await users.find({}, { retry: false })
 
 See [Retries & Cancellation](/guide/retries-and-cancellation) for complete documentation.
 
+## Events
+
+Collections emit events when documents are created, updated, or deleted. This enables reactive patterns like audit logging, cache invalidation, and real-time notifications.
+
+```typescript
+// Listen for insert events
+users.on('insert', (event) => {
+  console.log('New user:', event.document._id)
+})
+
+// Listen for update events
+users.on('update', (event) => {
+  console.log('User updated:', event.document?.name)
+})
+
+// Listen for delete events
+users.on('delete', (event) => {
+  console.log('User deleted:', event.deleted)
+})
+
+// Remove listeners when done
+users.off('insert', listener)
+users.removeAllListeners()
+```
+
+See the [Events Guide](/guide/events) for complete documentation on all available events, event payloads, and advanced patterns.
+
 ## Validation
 
 ```typescript
