@@ -207,6 +207,11 @@ export class Strata implements StrataDBInterface {
    * Closes the database connection.
    */
   close(): void {
+    // Clean up event listeners for all collections
+    for (const collection of this.collections.values()) {
+      collection.cleanupEvents()
+    }
+
     this.onCloseCallback?.()
     this.sqliteDb.close()
   }
