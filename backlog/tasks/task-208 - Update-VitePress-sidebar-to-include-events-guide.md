@@ -1,7 +1,7 @@
 ---
 id: task-208
 title: Update VitePress sidebar to include events guide
-status: To Do
+status: Done
 assignee: []
 created_date: '2026-01-09 15:56'
 labels:

@@ -1,7 +1,7 @@
 ---
 id: task-205
 title: Add unit tests for replace and atomic operation events
-status: To Do
+status: Done
 assignee: []
 created_date: '2026-01-09 15:49'
 labels:

@@ -1,7 +1,7 @@
 ---
 id: task-204
 title: Add unit tests for delete events
-status: To Do
+status: Done
 assignee: []
 created_date: '2026-01-09 15:47'
 labels:

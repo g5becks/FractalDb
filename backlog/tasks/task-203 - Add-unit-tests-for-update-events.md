@@ -1,7 +1,7 @@
 ---
 id: task-203
 title: Add unit tests for update events
-status: To Do
+status: Done
 assignee: []
 created_date: '2026-01-09 15:45'
 labels:

@@ -1,7 +1,7 @@
 ---
 id: task-211
 title: Add cleanup method to SQLiteCollection for event resources
-status: To Do
+status: Done
 assignee: []
 created_date: '2026-01-09 16:18'
 labels:

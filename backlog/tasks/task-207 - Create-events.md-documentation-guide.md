@@ -1,7 +1,7 @@
 ---
 id: task-207
 title: Create events.md documentation guide
-status: To Do
+status: Done
 assignee: []
 created_date: '2026-01-09 15:54'
 labels:

@@ -1,7 +1,7 @@
 ---
 id: task-209
 title: Update collections.md to mention events feature
-status: To Do
+status: Done
 assignee: []
 created_date: '2026-01-09 15:58'
 labels:

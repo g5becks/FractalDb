@@ -1,7 +1,7 @@
 ---
 id: task-213
 title: Add unit tests for event cleanup
-status: To Do
+status: Done
 assignee: []
 created_date: '2026-01-09 16:22'
 labels:

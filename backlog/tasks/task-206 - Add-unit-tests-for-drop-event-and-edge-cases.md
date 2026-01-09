@@ -1,7 +1,7 @@
 ---
 id: task-206
 title: Add unit tests for drop event and edge cases
-status: To Do
+status: Done
 assignee: []
 created_date: '2026-01-09 15:51'
 labels:

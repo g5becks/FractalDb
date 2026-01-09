@@ -1,7 +1,7 @@
 ---
 id: task-212
 title: Add event cleanup on database close
-status: To Do
+status: Done
 assignee: []
 created_date: '2026-01-09 16:20'
 labels:
