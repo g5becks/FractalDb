@@ -1828,16 +1828,44 @@ export class SQLiteCollection<T extends Document> implements Collection<T> {
             const inserted = await this.insertOne(
               update as Omit<T, "_id" | "createdAt" | "updatedAt">
             )
-            return returnDoc === "after" ? inserted : null
+            const resultDoc = returnDoc === "after" ? inserted : null
+
+            // Emit findOneAndUpdate event with upserted flag
+            this.emitEvent("findOneAndUpdate", () => ({
+              filter,
+              update: update as Partial<T>,
+              document: resultDoc,
+              upserted: true,
+            }))
+
+            return resultDoc
           }
+
+          // Emit findOneAndUpdate event with null document
+          this.emitEvent("findOneAndUpdate", () => ({
+            filter,
+            update: update as Partial<T>,
+            document: null,
+            upserted: false,
+          }))
+
           return null
         }
 
         // Update by _id
         const before = existing
         const afterUpdate = await this.updateOne(existing._id, update)
+        const resultDoc = returnDoc === "before" ? before : afterUpdate
 
-        return returnDoc === "before" ? before : afterUpdate
+        // Emit findOneAndUpdate event after successful operation
+        this.emitEvent("findOneAndUpdate", () => ({
+          filter,
+          update: update as Partial<T>,
+          document: resultDoc,
+          upserted: false,
+        }))
+
+        return resultDoc
       },
       this.buildRetryOptions(options?.retry, options?.signal)
     )
