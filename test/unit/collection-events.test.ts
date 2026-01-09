@@ -1297,4 +1297,280 @@ describe("Collection Events - Registration Methods", () => {
       expect(events[1].deleted).toBe(true)
     })
   })
+
+  describe("Replace and Atomic Operation Events", () => {
+    it("should emit 'replace' event when replaceOne succeeds", async () => {
+      const events: Array<{
+        filter: string | QueryFilter<TestUser>
+        document: TestUser | null
+      }> = []
+      collection.on("replace", (event) => events.push(event))
+
+      const inserted = await collection.insertOne({
+        name: "Alice",
+        email: "alice@example.com",
+        age: 25,
+      })
+
+      await collection.replaceOne(inserted._id, {
+        name: "Alice Updated",
+        email: "alice.new@example.com",
+        age: 26,
+      })
+
+      expect(events).toHaveLength(1)
+      expect(events[0].filter).toBe(inserted._id)
+      expect(events[0].document).not.toBeNull()
+      expect(events[0].document?.name).toBe("Alice Updated")
+    })
+
+    it("should emit 'replace' event with null when document not found", async () => {
+      const events: Array<{
+        filter: string | QueryFilter<TestUser>
+        document: TestUser | null
+      }> = []
+      collection.on("replace", (event) => events.push(event))
+
+      await collection.replaceOne("nonexistent-id", {
+        name: "Bob",
+        email: "bob@example.com",
+        age: 30,
+      })
+
+      expect(events).toHaveLength(1)
+      expect(events[0].filter).toBe("nonexistent-id")
+      expect(events[0].document).toBeNull()
+    })
+
+    it("should emit replace event with QueryFilter when filter is object", async () => {
+      const events: Array<{
+        filter: string | QueryFilter<TestUser>
+        document: TestUser | null
+      }> = []
+      collection.on("replace", (event) => events.push(event))
+
+      await collection.insertOne({
+        name: "Charlie",
+        email: "charlie@example.com",
+        age: 28,
+      })
+
+      const filter = { email: "charlie@example.com" }
+      await collection.replaceOne(filter, {
+        name: "Charles",
+        email: "charles@example.com",
+        age: 29,
+      })
+
+      expect(events).toHaveLength(1)
+      expect(events[0].filter).toEqual(filter)
+      expect(events[0].document?.name).toBe("Charles")
+    })
+
+    it("should emit replace event after document is replaced", async () => {
+      let replacedDoc: TestUser | null = null
+      collection.on("replace", (event) => {
+        replacedDoc = event.document
+      })
+
+      const inserted = await collection.insertOne({
+        name: "Dave",
+        email: "dave@example.com",
+        age: 35,
+      })
+
+      await collection.replaceOne(inserted._id, {
+        name: "David",
+        email: "david@example.com",
+        age: 36,
+      })
+
+      expect(replacedDoc).not.toBeNull()
+      const found = await collection.findOne(inserted._id)
+      expect(found?.name).toBe("David")
+      expect(replacedDoc?.name).toBe("David")
+    })
+
+    it("should emit 'findOneAndReplace' event when document is found and replaced", async () => {
+      const events: Array<{
+        filter: string | QueryFilter<TestUser>
+        document: TestUser | null
+        upserted: boolean
+      }> = []
+      collection.on("findOneAndReplace", (event) => events.push(event))
+
+      const inserted = await collection.insertOne({
+        name: "Eve",
+        email: "eve@example.com",
+        age: 22,
+      })
+
+      await collection.findOneAndReplace(inserted._id, {
+        name: "Eva",
+        email: "eva@example.com",
+        age: 23,
+      })
+
+      expect(events).toHaveLength(1)
+      expect(events[0].filter).toBe(inserted._id)
+      expect(events[0].document?.name).toBe("Eva")
+      expect(events[0].upserted).toBe(false)
+    })
+
+    it("should emit 'findOneAndReplace' with 'before' document when returnDocument is 'before'", async () => {
+      const events: Array<{
+        filter: string | QueryFilter<TestUser>
+        document: TestUser | null
+        upserted: boolean
+      }> = []
+      collection.on("findOneAndReplace", (event) => events.push(event))
+
+      const inserted = await collection.insertOne({
+        name: "Frank",
+        email: "frank@example.com",
+        age: 40,
+      })
+
+      await collection.findOneAndReplace(
+        inserted._id,
+        {
+          name: "Francis",
+          email: "francis@example.com",
+          age: 41,
+        },
+        { returnDocument: "before" }
+      )
+
+      expect(events).toHaveLength(1)
+      expect(events[0].document?.name).toBe("Frank") // Original name
+      expect(events[0].document?.age).toBe(40) // Original age
+    })
+
+    it("should emit 'findOneAndReplace' with upserted flag when upsert creates document", async () => {
+      const events: Array<{
+        filter: string | QueryFilter<TestUser>
+        document: TestUser | null
+        upserted: boolean
+      }> = []
+      collection.on("findOneAndReplace", (event) => events.push(event))
+
+      await collection.findOneAndReplace(
+        "new-id",
+        {
+          name: "Grace",
+          email: "grace@example.com",
+          age: 27,
+        },
+        { upsert: true, returnDocument: "after" }
+      )
+
+      expect(events).toHaveLength(1)
+      expect(events[0].upserted).toBe(true)
+      expect(events[0].document?.name).toBe("Grace")
+    })
+
+    it("should emit 'findOneAndReplace' with null document when not found and no upsert", async () => {
+      const events: Array<{
+        filter: string | QueryFilter<TestUser>
+        document: TestUser | null
+        upserted: boolean
+      }> = []
+      collection.on("findOneAndReplace", (event) => events.push(event))
+
+      await collection.findOneAndReplace("nonexistent-id", {
+        name: "Heidi",
+        email: "heidi@example.com",
+        age: 50,
+      })
+
+      expect(events).toHaveLength(1)
+      expect(events[0].document).toBeNull()
+      expect(events[0].upserted).toBe(false)
+    })
+
+    it("should emit findOneAndReplace with QueryFilter", async () => {
+      const events: Array<{
+        filter: string | QueryFilter<TestUser>
+        document: TestUser | null
+        upserted: boolean
+      }> = []
+      collection.on("findOneAndReplace", (event) => events.push(event))
+
+      await collection.insertOne({
+        name: "Ivan",
+        email: "ivan@example.com",
+        age: 33,
+      })
+
+      const filter = { email: "ivan@example.com" }
+      await collection.findOneAndReplace(filter, {
+        name: "Ivan Updated",
+        email: "ivan.new@example.com",
+        age: 34,
+      })
+
+      expect(events).toHaveLength(1)
+      expect(events[0].filter).toEqual(filter)
+      expect(events[0].document?.name).toBe("Ivan Updated")
+    })
+
+    it("should not emit replace events when no listeners registered", async () => {
+      const inserted = await collection.insertOne({
+        name: "Silent",
+        email: "silent@example.com",
+        age: 33,
+      })
+
+      // No listeners registered
+      await collection.replaceOne(inserted._id, {
+        name: "Silent Updated",
+        email: "silent.new@example.com",
+        age: 34,
+      })
+
+      await collection.findOneAndReplace(inserted._id, {
+        name: "Silent Final",
+        email: "silent.final@example.com",
+        age: 35,
+      })
+
+      // Should complete without error
+      const found = await collection.findOne(inserted._id)
+      expect(found?.name).toBe("Silent Final")
+    })
+
+    it("should emit multiple replace events for multiple replaceOne calls", async () => {
+      const events: Array<{
+        filter: string | QueryFilter<TestUser>
+        document: TestUser | null
+      }> = []
+      collection.on("replace", (event) => events.push(event))
+
+      const doc1 = await collection.insertOne({
+        name: "Multi1",
+        email: "multi1@example.com",
+        age: 10,
+      })
+      const doc2 = await collection.insertOne({
+        name: "Multi2",
+        email: "multi2@example.com",
+        age: 20,
+      })
+
+      await collection.replaceOne(doc1._id, {
+        name: "Multi1 Replaced",
+        email: "multi1.new@example.com",
+        age: 11,
+      })
+      await collection.replaceOne(doc2._id, {
+        name: "Multi2 Replaced",
+        email: "multi2.new@example.com",
+        age: 21,
+      })
+
+      expect(events).toHaveLength(2)
+      expect(events[0].document?.name).toBe("Multi1 Replaced")
+      expect(events[1].document?.name).toBe("Multi2 Replaced")
+    })
+  })
 })
