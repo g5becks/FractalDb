@@ -1764,12 +1764,24 @@ export class SQLiteCollection<T extends Document> implements Collection<T> {
         throwIfAborted(options?.signal)
 
         if (!doc) {
+          // Emit findOneAndDelete event with null document
+          this.emitEvent("findOneAndDelete", () => ({
+            filter,
+            document: null,
+          }))
+
           return null
         }
 
         // Delete by ID
         const stmt = this.db.prepare(`DELETE FROM ${this.name} WHERE _id = ?`)
         stmt.run(doc._id)
+
+        // Emit findOneAndDelete event after successful operation
+        this.emitEvent("findOneAndDelete", () => ({
+          filter,
+          document: doc,
+        }))
 
         return doc
       },
