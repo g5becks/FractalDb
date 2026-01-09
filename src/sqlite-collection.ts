@@ -2037,6 +2037,12 @@ export class SQLiteCollection<T extends Document> implements Collection<T> {
       () => {
         throwIfAborted(options?.signal)
         this.db.exec(`DROP TABLE IF EXISTS ${this.name}`)
+
+        // Emit drop event after successful operation
+        this.emitEvent("drop", () => ({
+          name: this.name,
+        }))
+
         return Promise.resolve()
       },
       this.buildRetryOptions(options?.retry, options?.signal)
