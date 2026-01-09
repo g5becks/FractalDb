@@ -1908,16 +1908,41 @@ export class SQLiteCollection<T extends Document> implements Collection<T> {
           // Handle upsert
           if (options?.upsert) {
             const inserted = await this.insertOne(replacement)
-            return returnDoc === "after" ? inserted : null
+            const resultDoc = returnDoc === "after" ? inserted : null
+
+            // Emit findOneAndReplace event with upserted flag
+            this.emitEvent("findOneAndReplace", () => ({
+              filter,
+              document: resultDoc,
+              upserted: true,
+            }))
+
+            return resultDoc
           }
+
+          // Emit findOneAndReplace event with null document
+          this.emitEvent("findOneAndReplace", () => ({
+            filter,
+            document: null,
+            upserted: false,
+          }))
+
           return null
         }
 
         // Replace by _id
         const before = existing
         const afterReplace = await this.replaceOne(existing._id, replacement)
+        const resultDoc = returnDoc === "before" ? before : afterReplace
 
-        return returnDoc === "before" ? before : afterReplace
+        // Emit findOneAndReplace event after successful operation
+        this.emitEvent("findOneAndReplace", () => ({
+          filter,
+          document: resultDoc,
+          upserted: false,
+        }))
+
+        return resultDoc
       },
       this.buildRetryOptions(options?.retry, options?.signal)
     )
