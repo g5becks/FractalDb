@@ -1134,8 +1134,21 @@ export class SQLiteCollection<T extends Document> implements Collection<T> {
         const signalOpt = options?.signal
           ? { signal: options.signal }
           : undefined
-        // biome-ignore lint/suspicious/noExplicitAny: Type assertion needed for flexible filter merging
-        return this.insertOne({ ...filterFields, ...update } as any, signalOpt)
+        const upsertDoc = { ...filterFields, ...update } as Omit<
+          T,
+          "_id" | "createdAt" | "updatedAt"
+        >
+        const inserted = await this.insertOne(upsertDoc, signalOpt)
+
+        // Emit update event with upserted flag
+        this.emitEvent("update", () => ({
+          filter,
+          update: update as Partial<T>,
+          document: inserted,
+          upserted: true,
+        }))
+
+        return inserted
       }
       return null
     }
@@ -1167,6 +1180,14 @@ export class SQLiteCollection<T extends Document> implements Collection<T> {
         `UPDATE ${this.name} SET body = jsonb(?), updatedAt = ? WHERE _id = ?`
       )
       .run(mergedBody, now, mergedDocId)
+
+    // Emit update event after successful operation
+    this.emitEvent("update", () => ({
+      filter,
+      update: update as Partial<T>,
+      document: mergedDoc,
+      upserted: false,
+    }))
 
     return mergedDoc
   }
@@ -1586,6 +1607,14 @@ export class SQLiteCollection<T extends Document> implements Collection<T> {
           this.db.exec("ROLLBACK")
           throw error
         }
+
+        // Emit updateMany event after successful operation
+        this.emitEvent("updateMany", () => ({
+          filter,
+          update: update as Partial<T>,
+          matchedCount,
+          modifiedCount: updatedDocs.length,
+        }))
 
         return Promise.resolve({
           matchedCount,
