@@ -1259,6 +1259,12 @@ export class SQLiteCollection<T extends Document> implements Collection<T> {
         throwIfAborted(options?.signal)
 
         if (!row) {
+          // Emit replace event with null document
+          this.emitEvent("replace", () => ({
+            filter,
+            document: null,
+          }))
+
           return Promise.resolve(null)
         }
 
@@ -1287,6 +1293,12 @@ export class SQLiteCollection<T extends Document> implements Collection<T> {
             `UPDATE ${this.name} SET body = jsonb(?), updatedAt = ? WHERE _id = ?`
           )
           .run(body, now, replaceDocId)
+
+        // Emit replace event after successful operation
+        this.emitEvent("replace", () => ({
+          filter,
+          document: fullDoc,
+        }))
 
         return Promise.resolve(fullDoc)
       },
