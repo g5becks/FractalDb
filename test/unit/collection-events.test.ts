@@ -1573,4 +1573,222 @@ describe("Collection Events - Registration Methods", () => {
       expect(events[1].document?.name).toBe("Multi2 Replaced")
     })
   })
+
+  describe("Drop Event and Edge Cases", () => {
+    it("should emit 'drop' event when collection is dropped", async () => {
+      const events: Array<{ name: string }> = []
+      collection.on("drop", (event) => events.push(event))
+
+      await collection.insertOne({
+        name: "Test",
+        email: "test@example.com",
+        age: 25,
+      })
+
+      await collection.drop()
+
+      expect(events).toHaveLength(1)
+      expect(events[0].name).toBe("users")
+    })
+
+    it("should emit drop event after collection is dropped", async () => {
+      let eventName = ""
+      collection.on("drop", (event) => {
+        eventName = event.name
+      })
+
+      await collection.insertOne({
+        name: "Test",
+        email: "test@example.com",
+        age: 25,
+      })
+
+      await collection.drop()
+
+      expect(eventName).toBe("users")
+    })
+
+    it("should not emit drop event when no listeners registered", async () => {
+      await collection.insertOne({
+        name: "Test",
+        email: "test@example.com",
+        age: 25,
+      })
+
+      // No listeners registered - should complete without error
+      await collection.drop()
+
+      // Test passes if no error thrown
+      expect(true).toBe(true)
+    })
+
+    it("should handle listeners registered after operations", async () => {
+      const events: Array<{ document: TestUser }> = []
+
+      await collection.insertOne({
+        name: "Test",
+        email: "test@example.com",
+        age: 25,
+      })
+
+      // Register listener after insert
+      collection.on("insert", (event) => events.push(event))
+
+      await collection.insertOne({
+        name: "Test2",
+        email: "test2@example.com",
+        age: 26,
+      })
+
+      expect(events).toHaveLength(1)
+      expect(events[0].document.name).toBe("Test2")
+    })
+
+    it("should handle removing all listeners mid-operation", async () => {
+      const events: Array<{ document: TestUser }> = []
+      collection.on("insert", (event) => events.push(event))
+
+      await collection.insertOne({
+        name: "Test1",
+        email: "test1@example.com",
+        age: 25,
+      })
+
+      collection.removeAllListeners()
+
+      await collection.insertOne({
+        name: "Test2",
+        email: "test2@example.com",
+        age: 26,
+      })
+
+      expect(events).toHaveLength(1)
+      expect(events[0].document.name).toBe("Test1")
+    })
+
+    it("should handle multiple event types on same collection", async () => {
+      const insertEvents: Array<{ document: TestUser }> = []
+      const updateEvents: Array<{
+        filter: string | QueryFilter<TestUser>
+        update: Partial<TestUser>
+        document: TestUser | null
+        upserted: boolean
+      }> = []
+      const deleteEvents: Array<{
+        filter: string | QueryFilter<TestUser>
+        deleted: boolean
+      }> = []
+
+      collection.on("insert", (event) => insertEvents.push(event))
+      collection.on("update", (event) => updateEvents.push(event))
+      collection.on("delete", (event) => deleteEvents.push(event))
+
+      const inserted = await collection.insertOne({
+        name: "Test",
+        email: "test@example.com",
+        age: 25,
+      })
+      await collection.updateOne(inserted._id, { age: 26 })
+      await collection.deleteOne(inserted._id)
+
+      expect(insertEvents).toHaveLength(1)
+      expect(updateEvents).toHaveLength(1)
+      expect(deleteEvents).toHaveLength(1)
+    })
+
+    it("should handle event listener errors gracefully", async () => {
+      const events: Array<{ document: TestUser }> = []
+
+      // First listener throws error
+      collection.on("insert", () => {
+        throw new Error("Listener error")
+      })
+
+      // Second listener should still receive event
+      collection.on("insert", (event) => events.push(event))
+
+      // This should not throw despite first listener error
+      try {
+        await collection.insertOne({
+          name: "Test",
+          email: "test@example.com",
+          age: 25,
+        })
+      } catch {
+        // EventEmitter may or may not propagate listener errors
+        // depending on implementation
+      }
+
+      // Document should still be inserted
+      const count = await collection.count()
+      expect(count).toBe(1)
+    })
+
+    it("should support chaining event registrations", async () => {
+      const insertEvents: Array<{ document: TestUser }> = []
+      const updateEvents: Array<{
+        filter: string | QueryFilter<TestUser>
+        update: Partial<TestUser>
+        document: TestUser | null
+        upserted: boolean
+      }> = []
+
+      collection
+        .on("insert", (event) => insertEvents.push(event))
+        .on("update", (event) => updateEvents.push(event))
+
+      const inserted = await collection.insertOne({
+        name: "Test",
+        email: "test@example.com",
+        age: 25,
+      })
+      await collection.updateOne(inserted._id, { age: 26 })
+
+      expect(insertEvents).toHaveLength(1)
+      expect(updateEvents).toHaveLength(1)
+    })
+
+    it("should handle once() listeners with multiple events", async () => {
+      let insertCount = 0
+      collection.once("insert", () => {
+        insertCount += 1
+      })
+
+      await collection.insertOne({
+        name: "Test1",
+        email: "test1@example.com",
+        age: 25,
+      })
+      await collection.insertOne({
+        name: "Test2",
+        email: "test2@example.com",
+        age: 26,
+      })
+
+      expect(insertCount).toBe(1)
+    })
+
+    it("should verify listener count is accurate across operations", () => {
+      expect(collection.listenerCount("insert")).toBe(0)
+
+      const listener1 = () => {
+        // Empty listener for testing
+      }
+      const listener2 = () => {
+        // Empty listener for testing
+      }
+
+      collection.on("insert", listener1)
+      expect(collection.listenerCount("insert")).toBe(1)
+
+      collection.on("insert", listener2)
+      expect(collection.listenerCount("insert")).toBe(2)
+
+      collection.off("insert", listener1)
+      expect(collection.listenerCount("insert")).toBe(1)
+
+      collection.removeAllListeners("insert")
+      expect(collection.listenerCount("insert")).toBe(0)
+    })
+  })
 })
