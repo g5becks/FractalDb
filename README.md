@@ -23,6 +23,7 @@ Unlike MongoDB or other client-server databases, StrataDB runs **in-process** wi
 - **Field Projection** - Clean `select`/`omit` helpers for controlling returned fields
 - **Operation Cancellation** - AbortSignal support for canceling long-running operations
 - **Automatic Retries** - Configurable retry logic for transient failures
+- **Collection Events** - EventEmitter support for reactive document lifecycle events
 
 ## Installation
 
@@ -159,6 +160,43 @@ await users.find(
 )
 ```
 
+## Collection Events
+
+React to document changes with type-safe event listeners:
+
+```typescript
+const users = db.collection('users', schema)
+
+// Listen for inserts
+users.on('insert', (event) => {
+  console.log('New user:', event.document._id)
+  auditLog.record('user.created', event.document)
+})
+
+// Listen for updates
+users.on('update', (event) => {
+  if (event.document) {
+    cache.invalidate(`user:${event.document._id}`)
+  }
+})
+
+// Listen for deletes
+users.on('delete', (event) => {
+  console.log('User deleted:', event.deleted)
+})
+
+// One-time listener
+users.once('insert', (event) => {
+  console.log('First user created!')
+})
+
+// Remove listeners
+users.off('insert', myListener)
+users.removeAllListeners('update')
+```
+
+Available events: `insert`, `insertMany`, `update`, `updateMany`, `replace`, `delete`, `deleteMany`, `findOneAndDelete`, `findOneAndUpdate`, `findOneAndReplace`, `drop`, `error`
+
 ## Type Safety
 
 TypeScript validates schema types against field definitions:
@@ -184,6 +222,7 @@ See the [documentation](https://g5becks.github.io/StrataDb/) for complete guides
 - [Collections](https://g5becks.github.io/StrataDb/guide/collections)
 - [Queries](https://g5becks.github.io/StrataDb/guide/queries)
 - [Schemas](https://g5becks.github.io/StrataDb/guide/schemas)
+- [Events](https://g5becks.github.io/StrataDb/guide/events)
 - [Transactions](https://g5becks.github.io/StrataDb/guide/transactions)
 
 ## Development
